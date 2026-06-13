@@ -299,7 +299,7 @@ def render_coming_soon(frame_path, plan, meta, out):
 
 
 # ---------------------------------------------------------------- TEASER
-def build_teaser(mp4, beats_ts, src_dur, outro_jpg, bug_png, out, target=30):
+def build_teaser(mp4, beats_ts, src_dur, outro_jpg, bug_png, out, target=30, music=None):
     """Assemble a `target`-second vertical teaser: N drama beats + a brand end card.
     Short targets (<=18s, e.g. 13s) use 3 fast beats + a 2.6s card; long use 4 beats + 3.5s."""
     short = target <= 18
@@ -314,23 +314,27 @@ def build_teaser(mp4, beats_ts, src_dur, outro_jpg, bug_png, out, target=30):
         chosen = bts
     blen = round(drama/len(chosen), 2)
     segs = [(round(max(0, min(t, src_dur-blen-0.2)), 2), blen) for t in chosen]
-    fc, labels = [], []
+    total = round(sum(ln for _, ln in segs) + outro, 2)
+    # strip source watermark (ReelShort 'R' sits top-right or bottom-right depending on the show)
+    DL = "delogo=x=864:y=26:w=156:h=150,delogo=x=864:y=1638:w=156:h=150"
+    fc, vlabels = [], []
     for i, (s, ln) in enumerate(segs):
-        fc.append(f"[1:v]trim={s}:{s+ln},setpts=PTS-STARTPTS,scale=1080:1920,setsar=1,fps=25,format=yuv420p[v{i}];")
-        fo = round(ln-0.18, 2)
-        fc.append(f"[1:a]atrim={s}:{s+ln},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.08,afade=t=out:st={fo}:d=0.12[a{i}];")
-        labels += [f"[v{i}]", f"[a{i}]"]
+        fc.append(f"[1:v]trim={s}:{s+ln},setpts=PTS-STARTPTS,scale=1080:1920,setsar=1,{DL},fps=25,format=yuv420p[v{i}];")
+        vlabels.append(f"[v{i}]")
     fc.append("[0:v]scale=1080:1920,setsar=1,fps=25,format=yuv420p[ov];")
-    fc.append(f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{outro},asetpts=PTS-STARTPTS[oa];")
-    fc.append("".join(labels)+"[ov][oa]concat=n="+str(len(segs)+1)+":v=1:a=1[vc][ac];")
+    fc.append("".join(vlabels) + "[ov]concat=n=" + str(len(segs)+1) + ":v=1:a=0[vc];")
     drama_dur = round(sum(ln for _, ln in segs), 2)
-    fc.append(f"[vc][2:v]overlay=40:48:enable='lt(t,{drama_dur})'[vout]")
+    fc.append(f"[vc][2:v]overlay=40:48:enable='lt(t,{drama_dur})'[vout];")
+    # NO original audio (it may be sexually explicit / TikTok-flaggable) — replace with a dramatic BGM bed
+    fo = round(total-0.6, 2)
+    fc.append(f"[3:a]aloop=loop=-1:size=2000000000,atrim=0:{total},asetpts=PTS-STARTPTS,"
+              f"afade=t=in:st=0:d=0.3,afade=t=out:st={fo}:d=0.6,volume=0.85[aout]")
     fpath = out+".filter.txt"; open(fpath, "w").write("\n".join(fc))
     r = run(["ffmpeg", "-nostdin", "-loglevel", "error",
              "-loop", "1", "-t", str(outro), "-i", outro_jpg,
-             "-i", mp4, "-i", bug_png,
+             "-i", mp4, "-i", bug_png, "-i", music,
              "-filter_complex_script", fpath,
-             "-map", "[vout]", "-map", "[ac]",
+             "-map", "[vout]", "-map", "[aout]", "-shortest",
              "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p", "-r", "25",
              "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out, "-y"])
     os.remove(fpath)
@@ -353,6 +357,7 @@ def main():
     ap.add_argument("--no-ai", action="store_true")
     ap.add_argument("--plan", default=None, help="reuse a saved plan.json (skips AI)")
     ap.add_argument("--dur", type=int, default=13, help="teaser length in seconds (default 13; <=18 = fast 3-beat cut)")
+    ap.add_argument("--music", default=None, help="BGM track (defaults to a rotating track in music/)")
     a = ap.parse_args()
 
     meta = {"title": a.title, "ep": a.ep, "sub": a.sub, "handle": a.handle, "genre": a.genre}
@@ -392,7 +397,13 @@ def main():
     cover = render_cover(cov_src, plan, meta, os.path.join(outdir, "cover.jpg"))
     outro = render_coming_soon(cov_src, plan, meta, os.path.join(work, "outro.jpg"))
     bug = os.path.join(work, "bug.png"); B.logo_bug(430).save(bug)
-    teaser = build_teaser(a.mp4, beats_ts, info["dur"], outro, bug, os.path.join(outdir, "teaser.mp4"), target=a.dur)
+    import glob as _g
+    tracks = sorted(_g.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music", "*.mp3")))
+    music = a.music or (tracks[hash(a.title) % len(tracks)] if tracks else None)
+    if not music:
+        raise SystemExit("No BGM track found — put a .mp3 in nuvelle_kit/music/ (the teaser replaces explicit audio with music).")
+    print("[music]", os.path.basename(music))
+    teaser = build_teaser(a.mp4, beats_ts, info["dur"], outro, bug, os.path.join(outdir, "teaser.mp4"), target=a.dur, music=music)
 
     tags = " ".join(plan["hashtags"])
     cap = f"{plan['caption']}\n\n{tags}\n"

@@ -60,6 +60,16 @@ def run_job(job_id, src_path, title, ep, dur, beats=None):
             except Exception: pass
 
 
+def download_and_run(job_id, url, title, ep, dur, beats=None):
+    """Background: download the URL then render (so /gen returns immediately)."""
+    try:
+        JOBS[job_id]["status"] = "downloading"
+        src = fetch_url_to_mp4(url, job_id)
+    except Exception as e:
+        JOBS[job_id]["status"] = "error"; JOBS[job_id]["log"] = "download: " + str(e)[:300]; return
+    run_job(job_id, src, title, ep, dur, beats=beats)
+
+
 def fetch_url_to_mp4(url, job_id):
     """Download an m3u8/mp4 URL to a local mp4 for the pipeline."""
     dst = os.path.join(TMP, f"{job_id}.mp4")
@@ -147,7 +157,8 @@ class H(BaseHTTPRequestHandler):
                 url = body.get("video_url", "")
                 if not url: return self._json({"error": "no video_url"}, 400)
                 JOBS[jid]["status"] = "downloading"
-                src = fetch_url_to_mp4(url, jid)
+                threading.Thread(target=download_and_run, args=(jid, url, title, ep, int(dur)), kwargs={"beats": beats}, daemon=True).start()
+                return self._json({"job_id": jid})
             threading.Thread(target=run_job, args=(jid, src, title, ep, int(dur)), kwargs={"beats": beats}, daemon=True).start()
             return self._json({"job_id": jid})
         except Exception as e:
