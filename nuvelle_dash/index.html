@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nuvelle Scout — AI Shorts 选品 Dashboard</title>
+<meta name="theme-color" content="#0b0d16">
+<link rel="icon" href="icons/favicon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<style>
+:root{--bg:#0b0d16;--bg2:#10131f;--card:#151826;--line:#222840;--ink:#eef0f8;--dim:#9aa2c0;--faint:#6b7290;
+  --p1:#b25cff;--p2:#ff5fbf;--grad:linear-gradient(92deg,#b25cff,#ff5fbf);--ok:#5fd39a;--fire:#ff8f4d;--no:#ff7a7a}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:#06070d;color:var(--ink);font-family:'Space Grotesk',Inter,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}img{display:block}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+/* gate */
+#gate{position:fixed;inset:0;z-index:100;background:radial-gradient(120% 90% at 50% 0,#1a1030,#06070d);display:flex;align-items:center;justify-content:center;padding:22px}
+#gate .box{max-width:380px;width:100%;text-align:center}
+#gate h1{font-size:27px;font-weight:700;letter-spacing:-.02em;margin-top:14px}
+#gate h1 em{font-style:normal;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#gate p{color:var(--dim);font-size:14px;margin:10px 0 20px}
+#gate input{width:100%;background:#0c0f1a;border:1px solid var(--line);border-radius:12px;padding:13px 15px;color:#fff;font-family:inherit;font-size:15px;margin-bottom:10px}
+#gate button{width:100%;background:var(--grad);color:#fff;border:none;font-weight:700;font-size:15px;padding:14px;border-radius:12px;cursor:pointer}
+#gate .err{color:var(--no);font-size:12.5px;height:16px;margin-top:6px}
+/* app */
+#app{display:none}
+header{position:sticky;top:0;z-index:30;background:rgba(11,13,22,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+header .wrap{display:flex;align-items:center;gap:13px;height:60px}
+.brand{display:flex;align-items:center;gap:9px}.brand b{font-weight:600;font-size:19px}.brand .tag{font-size:10px;color:var(--p2);border:1px solid #a14bff44;border-radius:20px;padding:2px 7px}
+.sp{flex:1}
+.hstat{display:flex;gap:16px;font-size:12px;color:var(--dim)}.hstat b{color:#fff}
+.out{color:var(--faint);font-size:12px;cursor:pointer}
+nav{border-bottom:1px solid var(--line);background:#0b0d16;position:sticky;top:60px;z-index:29}
+nav .wrap{display:flex;gap:4px}
+nav button{background:none;border:none;color:var(--dim);font-family:inherit;font-size:14px;font-weight:600;padding:14px 16px;border-bottom:2px solid transparent;cursor:pointer}
+nav button.on{color:#fff;border-bottom-color:var(--p2)}
+.view{display:none;padding:26px 0 80px}.view.on{display:block}
+/* swipe — two column: video left, controls right */
+.swwrap{display:grid;grid-template-columns:1fr 400px;gap:24px;align-items:start;max-width:1060px;margin:0 auto}
+.swstage{position:sticky;top:130px}
+.vidwrap{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);background:#000;aspect-ratio:9/16;max-height:74vh;margin:0 auto}
+.pv{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;opacity:0;transition:opacity .12s}
+.pv.show{opacity:1}
+.badges{position:absolute;top:12px;left:12px;right:12px;z-index:4;display:flex;gap:8px}
+.badges .plat{font-size:11px;font-weight:700;color:#fff;background:#0009;backdrop-filter:blur(6px);border:1px solid #fff3;border-radius:20px;padding:4px 11px}
+.badges .rank{font-size:11px;font-weight:700;color:#fff;background:var(--grad);border-radius:20px;padding:4px 11px}
+.badges .novid{font-size:10.5px;color:#ffc16b;background:#0b0d16cc;border:1px solid #ffc16b44;border-radius:20px;padding:4px 9px}
+.unmute{position:absolute;bottom:14px;right:14px;z-index:5;width:44px;height:44px;border-radius:50%;background:#0b0d16cc;border:1px solid #fff3;color:#fff;font-size:17px;cursor:pointer;backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center}
+.markBtn{position:absolute;bottom:14px;left:14px;z-index:5;font-size:13px;font-weight:600;color:#fff;background:var(--grad);border:none;border-radius:30px;padding:9px 15px;cursor:pointer;box-shadow:0 6px 20px -6px #ff5fbf}
+.prog{color:var(--faint);font-size:12.5px;margin-top:12px;text-align:center}.prog b{color:var(--p2)}
+.swpanel{background:#0d0f17;border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.swpanel h3{font-size:20px;font-weight:600;line-height:1.2}
+.swpanel .gen{font-size:12px;color:var(--faint);margin:7px 0 0}
+.swpanel .syn{font-size:13px;color:var(--dim);margin-top:10px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.plabel{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin:18px 0 9px;display:flex;justify-content:space-between}
+.plabel span{color:var(--p2);font-weight:600;text-transform:none;letter-spacing:0}
+.tastes{display:flex;flex-wrap:wrap;gap:7px}
+.tchip{font-size:12px;color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:6px 11px;cursor:pointer;background:#0e1119}
+.tchip.on{color:#fff;background:#a14bff22;border-color:#a14bff66}
+.addtag{display:flex;gap:7px;margin-top:9px}
+.addtag input{flex:1;background:#0c0f1a;border:1px solid var(--line);border-radius:10px;padding:8px 11px;color:#fff;font-family:inherit;font-size:12.5px}
+.addtag button{background:#1a1d2a;border:1px solid var(--line);color:#fff;border-radius:10px;padding:0 14px;font-size:12.5px;cursor:pointer}
+.hlchips{display:flex;flex-wrap:wrap;gap:8px}
+.hlc{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:#fff;background:#0e1119;border:1px solid #a14bff44;border-radius:10px;padding:4px 6px}
+.hlc img{width:26px;height:34px;object-fit:cover;border-radius:4px}
+.hlc b{color:var(--no);cursor:pointer;font-weight:700}
+.hlempty{font-size:12px;color:var(--faint)}
+.verdicts{display:flex;gap:9px;margin-top:18px}
+.vb{flex:1;border:1px solid var(--line);border-radius:13px;padding:14px 0;font-size:14px;font-weight:600;cursor:pointer;background:#0e1119;transition:.15s;text-align:center}
+.vb:hover{transform:translateY(-2px)}
+.vb.pass{color:var(--no)}.vb.ok{color:var(--ok)}.vb.fire{color:var(--fire)}
+.genbtn{width:100%;margin-top:11px;background:var(--grad);color:#fff;border:none;border-radius:13px;padding:14px;font-size:14.5px;font-weight:700;cursor:pointer}
+.genbox{background:#0c0f1a;border:1px solid #a14bff44;border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:13.5px;color:#dfe3ee}
+.genbox small{color:var(--dim)}.genbox code{background:#11141f;border-radius:5px;padding:1px 6px;font-size:11.5px;color:#ff8fd0}
+.genres video{width:100%;border-radius:10px;margin:10px 0;background:#000}
+.genres .grow{display:flex;gap:8px;flex-wrap:wrap}
+.dl{font-size:12px;font-weight:600;color:#fff;background:#1a1d2a;border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer}
+.kbd{color:var(--faint);font-size:11.5px;margin-top:13px;text-align:center}.kbd b{color:#cbd}
+.done{text-align:center;color:var(--dim);padding:50px 20px}.done b{color:#fff;font-size:18px}
+@media(max-width:820px){.swwrap{grid-template-columns:1fr}.swstage{position:static}.vidwrap{max-height:62vh}}
+/* PK */
+.pkwrap{max-width:760px;margin:0 auto;text-align:center}
+.pkrow{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-top:14px}
+.pkcard{border-radius:16px;overflow:hidden;border:1px solid var(--line);cursor:pointer;background:#11141f;transition:.15s}
+.pkcard:hover{border-color:var(--p2);transform:translateY(-3px)}
+.pkcard .cov{aspect-ratio:2/3;background:linear-gradient(160deg,#2a1a4a,#3a1530);position:relative}
+.pkcard .cov img{width:100%;height:100%;object-fit:cover}
+.pkcard .nm{padding:11px 12px;font-size:13.5px;font-weight:600;text-align:left;line-height:1.25}
+.pkcard .pl{padding:0 12px 11px;font-size:11px;color:var(--faint);text-align:left}
+.vs{font-weight:800;color:var(--p2);font-size:20px}
+/* board */
+.boardhead{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.seg{display:flex;gap:4px;background:#0e1119;border:1px solid var(--line);border-radius:11px;padding:4px}
+.seg button{background:none;border:none;color:var(--dim);font-family:inherit;font-size:13px;font-weight:600;padding:7px 13px;border-radius:8px;cursor:pointer}
+.seg button.on{color:#fff;background:#a14bff22}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:15px}
+.bc{border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#11141f}
+.bc .cov{aspect-ratio:2/3;position:relative;background:linear-gradient(160deg,#2a1a4a,#3a1530)}
+.bc .cov img{width:100%;height:100%;object-fit:cover}
+.bc .score{position:absolute;top:9px;left:9px;font-weight:700;font-size:15px;color:#fff;background:#0009;backdrop-filter:blur(6px);border:1px solid #fff3;border-radius:10px;padding:3px 9px}
+.bc .score.hi{background:var(--grad);border:none}
+.bc .ct{position:absolute;top:9px;right:9px;font-size:10.5px;color:#fff;background:#0009;backdrop-filter:blur(5px);border-radius:20px;padding:3px 8px}
+.bc .body{padding:11px 13px}.bc h4{font-size:13.5px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bc .vd{display:flex;gap:8px;font-size:11px;color:var(--dim);margin:7px 0 9px}
+.bc .vd .f{color:var(--fire)}.bc .vd .o{color:var(--ok)}.bc .vd .p{color:var(--no)}
+.bc .mk{width:100%;font-size:12px;font-weight:600;padding:8px 0;border-radius:9px;border:none;background:var(--grad);color:#fff;cursor:pointer}
+.empty{color:var(--dim);font-size:14px;padding:40px 20px;text-align:center;grid-column:1/-1}
+.demo{display:inline-block;font-size:10px;font-weight:700;color:#ffc16b;background:#ffc16b18;border:1px solid #ffc16b33;border-radius:20px;padding:2px 8px}
+.toast{position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(20px);background:#1c2030;border:1px solid var(--line);color:#fff;font-size:13px;padding:11px 18px;border-radius:30px;opacity:0;transition:.25s;z-index:200;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:640px){.hstat{display:none}.verdicts .vb{font-size:13px}}
+</style></head><body>
+
+<!-- LOGIN -->
+<div id="gate"><div class="box">
+  <svg width="52" height="52" viewBox="0 0 72 72"><defs>
+    <linearGradient id="a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b25cff"/><stop offset="1" stop-color="#ff5fbf"/></linearGradient>
+    <linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff5fbf"/><stop offset="1" stop-color="#ff96d0"/></linearGradient>
+    <linearGradient id="c" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd0e8"/><stop offset="1" stop-color="#ff96d0"/></linearGradient></defs>
+    <polygon points="16,15 27,15 27,57 16,57" fill="url(#a)"/><polygon points="16,15 27,15 56,57 45,57" fill="url(#b)"/>
+    <polygon points="27,15 33,15 56,52 50,52" fill="url(#c)"/><polygon points="45,15 56,15 56,57 45,57" fill="url(#a)"/></svg>
+  <h1>Nuvelle <em>Scout</em></h1>
+  <p>AI Shorts 选品 Dashboard · internal</p>
+  <input id="u" placeholder="username" autocomplete="username">
+  <input id="p" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()">
+  <button onclick="login()">Sign in</button>
+  <div class="err" id="err"></div>
+</div></div>
+
+<!-- APP -->
+<div id="app">
+<header><div class="wrap">
+  <div class="brand">
+    <svg width="25" height="25" viewBox="0 0 72 72">
+      <polygon points="16,15 27,15 27,57 16,57" fill="url(#a)"/><polygon points="16,15 27,15 56,57 45,57" fill="url(#b)"/>
+      <polygon points="27,15 33,15 56,52 50,52" fill="url(#c)"/><polygon points="45,15 56,15 56,57 45,57" fill="url(#a)"/></svg>
+    <b>Nuvelle</b><span class="tag">SCOUT</span>
+  </div>
+  <div class="sp"></div>
+  <div class="hstat"><span><b id="hLib">0</b> in library</span><span><b id="hVotes">0</b> rated</span><span><b id="hPicks">0</b> picks</span></div>
+  <span class="out" onclick="logout()" style="margin-left:14px">Sign out</span>
+</div></header>
+<nav><div class="wrap">
+  <button class="on" data-v="swipe" onclick="go('swipe')">🃏 Swipe</button>
+  <button data-v="pk" onclick="go('pk')">⚔️ PK</button>
+  <button data-v="board" onclick="go('board')">🏆 选品看板</button>
+</div></nav>
+
+<div class="wrap">
+  <!-- SWIPE -->
+  <div class="view on" id="v-swipe"><div class="swwrap" id="swArea"></div></div>
+  <!-- PK -->
+  <div class="view" id="v-pk"><div class="pkwrap">
+    <p class="prog">Pick the one more likely to <b>blow up</b> in the US. <span id="pkCount"></span></p>
+    <div id="pkArea"></div>
+  </div></div>
+  <!-- BOARD -->
+  <div class="view" id="v-board">
+    <div class="boardhead">
+      <h2 style="font-size:20px;font-weight:600">选品看板</h2>
+      <div class="seg" id="boardSeg">
+        <button class="on" data-f="top" onclick="setBoard('top')">🔥 Top Picks</button>
+        <button data-f="contested" onclick="setBoard('contested')">⚖️ Contested</button>
+        <button data-f="all" onclick="setBoard('all')">All Rated</button>
+      </div>
+      <span class="demo">Nuvelle Score = 0.45 taste + 0.35 momentum + 0.20 genre-fit</span>
+    </div>
+    <div class="bgrid" id="boardGrid"></div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TASTE=["🪝 Strong hook","🖼 Killer cover","✨ Fresh premise","👧 Female-appeal","😴 Slow start","🔁 Overdone"];
+const PACKS={"my wife":"my_wife","the ceo's secret wife":"the_ceo_s_secret_wife","the wrong bride":"the_wrong_bride","midnight vows":"midnight_vows"};
+let DATA=[], state=null;
+const LS="nuvelle_scout";
+function load(){try{return JSON.parse(localStorage.getItem(LS))}catch(e){return null}}
+function persist(){localStorage.setItem(LS,JSON.stringify(state))}
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),1500)}
+
+function login(){
+  const u=document.getElementById("u").value.trim(),p=document.getElementById("p").value;
+  if(u==="admin"&&p==="admin"){state=load()||{votes:{},pks:[],auth:1};persist();boot();}
+  else document.getElementById("err").textContent="Wrong username or password.";
+}
+function logout(){location.reload()}
+async function boot(){
+  document.getElementById("gate").style.display="none";
+  document.getElementById("app").style.display="block";
+  if(!DATA.length){
+    const r=await fetch("seed_dramas.json");const raw=await r.json();
+    DATA=raw.map((x,i)=>({id:i,...x}));
+    // playable-video first, then cover, then the rest — so 审片 starts with watchable dramas
+    DATA.sort((a,b)=>((b.video_url?2:0)+(b.cover_image_url?1:0))-((a.video_url?2:0)+(a.cover_image_url?1:0)));
+  }
+  document.getElementById("hLib").textContent=DATA.length;
+  refreshStats();renderSwipe();renderBoard();
+}
+function refreshStats(){
+  const v=Object.keys(state.votes).length;
+  document.getElementById("hVotes").textContent=v;
+  document.getElementById("hPicks").textContent=Object.values(state.votes).filter(x=>x.verdict==="fire").length;
+}
+function cover(d){return d.cover_image_url?`<img src="${d.cover_image_url}" referrerpolicy="no-referrer" onerror="this.style.display='none'">`:"";}
+
+/* ---- SWIPE (mode A) ---- */
+/* ===== SWIPE: double-buffered fast-switch + two-column + tags + highlights + generate ===== */
+const BACKEND_KEY="nuvelle_promo_backend";
+function backend(){return localStorage.getItem(BACKEND_KEY)||"";}  /* "" = same-origin (works when served by promo_server on localhost:8799) */
+let queue=[],qPtr=0,vis=0,hlsArr=[null,null],muteState=true,built=false;
+let swCur=null,swTags=[],customTags=[],highlights=[];
+
+function buildSwDom(){
+  document.getElementById("swArea").innerHTML=`
+    <div class="swstage">
+      <div class="vidwrap">
+        <video class="pv show" playsinline loop muted crossorigin="anonymous"></video>
+        <video class="pv" playsinline loop muted crossorigin="anonymous"></video>
+        <div class="badges" id="swBadges"></div>
+        <button class="unmute" id="unmuteBtn" onclick="toggleMute()">🔇</button>
+        <button class="markBtn" onclick="markHighlight()">📸 Mark highlight</button>
+      </div>
+      <div class="prog" id="swProg"></div>
+    </div>
+    <div class="swpanel" id="swPanel"></div>`;
+  built=true;
+}
+function pv(k){return document.querySelectorAll("#swArea .pv")[k];}
+function loadHls(k,url,autoplay){
+  const v=pv(k);if(!v)return;
+  if(hlsArr[k]){try{hlsArr[k].destroy()}catch(e){}hlsArr[k]=null;}
+  v.muted=muteState;
+  if(v.canPlayType("application/vnd.apple.mpegurl")){v.src=url;}
+  else if(window.Hls&&Hls.isSupported()){
+    const h=new Hls({maxBufferLength:6,maxMaxBufferLength:12,startFragPrefetch:true,abrEwmaDefaultEstimate:2500000});
+    h.loadSource(url);h.attachMedia(v);hlsArr[k]=h;
+  } else v.src=url;
+  if(autoplay)v.play().catch(()=>{});
+}
+function nextDrama(){return queue[qPtr];}
+function renderSwipe(){
+  if(!built)buildSwDom();
+  queue=DATA.filter(d=>!state.votes[d.id]);qPtr=0;vis=0;
+  if(!queue.length){document.getElementById("swArea").innerHTML=`<div class="done"><b>All caught up 🎉</b><br>Every drama rated — check 选品看板.</div>`;built=false;return;}
+  showCard(true);
+}
+function showCard(initial){
+  const d=queue[qPtr];if(!d){renderSwipe();return;}
+  swCur=d;swTags=[];customTags=[];highlights=[];
+  const va=pv(vis),vb=pv(1-vis);
+  va.classList.add("show");vb.classList.remove("show");
+  va.poster=d.cover_image_url||"";
+  if(d.video_url){ if(initial)loadHls(vis,d.video_url,true); else {va.currentTime=0;va.muted=muteState;va.play().catch(()=>{});} }
+  else { if(hlsArr[vis]){try{hlsArr[vis].destroy()}catch(e){}hlsArr[vis]=null;} va.removeAttribute("src");va.load(); }
+  document.getElementById("swBadges").innerHTML=`<span class="plat">${d.platform||'—'}</span>${d.chart_rank?`<span class="rank">#${d.chart_rank}</span>`:''}${d.video_url?'':'<span class="novid">cover only</span>'}`;
+  document.getElementById("swProg").innerHTML=`Rated <b>${Object.keys(state.votes).length}</b> / ${DATA.length} · ${queue.length} left in queue`;
+  renderPanel(d);
+  const nx=queue[qPtr+1];               // preload next into hidden buffer
+  if(nx&&nx.video_url)loadHls(1-vis,nx.video_url,false);
+}
+function suggestTags(d){
+  const g=((d.genre||"")+" "+(d.synopsis_or_hook||"")).toLowerCase();
+  const M=[["revenge","💢 Revenge"],["werewolf","🐺 Werewolf"],["alpha","🐺 Fated mates"],["luna","🐺 Werewolf"],["ceo","💼 Billionaire"],["billionaire","💼 Billionaire"],["pregnant","🤰 Secret baby"],["triplet","🤰 Secret baby"],["marriage","💍 Marriage"],["divorce","⚔️ Divorce revenge"],["hidden","🎭 Hidden identity"],["disguise","🎭 Hidden identity"],["campus","🎓 Campus"],["mafia","🔫 Mafia"],["bodyguard","🛡 Bodyguard"],["reborn","🔮 Reborn"],["enemy","💢 Enemies-to-lovers"],["cinderella","✨ Rags to riches"],["forbidden","🚫 Forbidden"],["possessive","🔥 Possessive"]];
+  const out=[];for(const [k,t] of M)if(g.includes(k)&&!out.includes(t))out.push(t);return out.slice(0,5);
+}
+function renderPanel(d){
+  const sug=suggestTags(d);
+  const tagBtn=t=>`<span class="tchip ${swTags.includes(t)?'on':''}" onclick="toggleTaste('${t.replace(/'/g,"")}')">${t}</span>`;
+  document.getElementById("swPanel").innerHTML=`
+    <h3>${d.title||'Untitled'}</h3>
+    ${d.genre?`<div class="gen">${d.genre}</div>`:''}
+    ${d.synopsis_or_hook?`<div class="syn">${d.synopsis_or_hook}</div>`:''}
+    ${sug.length?`<div class="plabel">✨ Suggested tags</div><div class="tastes">${sug.map(tagBtn).join("")}</div>`:''}
+    <div class="plabel">Taste tags</div>
+    <div class="tastes" id="tasteWrap">${TASTE.map(tagBtn).join("")}${customTags.map(tagBtn).join("")}</div>
+    <div class="addtag"><input id="newTag" placeholder="+ add your own tag" onkeydown="if(event.key==='Enter')addTag()"><button onclick="addTag()">Add</button></div>
+    <div class="plabel">🎬 Highlights for promo <span id="hlInfo">${highlights.length?highlights.length+" marked":"watch & mark hot moments"}</span></div>
+    <div class="hlchips" id="hlChips"></div>
+    <div class="verdicts">
+      <div class="vb pass" onclick="vote('pass')">👎 Pass</div>
+      <div class="vb ok" onclick="vote('ok')">👍 Solid</div>
+      <div class="vb fire" onclick="vote('fire')">🔥 Blow up</div>
+    </div>
+    <button class="genbtn" onclick="generatePromo()">🎬 One-click promo (promo_shorts)</button>
+    <div class="kbd">⌨ ← Pass · ↓ Solid · → Blow up · <b>H</b> = mark highlight</div>`;
+  renderHl();
+}
+function renderHl(){
+  const c=document.getElementById("hlChips");if(!c)return;
+  c.innerHTML=highlights.map((h,i)=>`<span class="hlc"><img src="${h.thumb||''}">${h.t.toFixed(1)}s<b onclick="delHl(${i})">✕</b></span>`).join("")
+    ||`<span class="hlempty">none yet — hit 📸 / H on a hot frame</span>`;
+  const info=document.getElementById("hlInfo");if(info)info.textContent=highlights.length?highlights.length+" marked":"watch & mark hot moments";
+}
+function markHighlight(){
+  const v=pv(vis);if(!v||!swCur||!swCur.video_url)return toast("No video to mark");
+  const t=v.currentTime||0;let thumb="";
+  try{const cv=document.createElement("canvas");cv.width=120;cv.height=160;cv.getContext("2d").drawImage(v,0,0,120,160);thumb=cv.toDataURL("image/jpeg",0.6);}catch(e){}
+  highlights.push({t,thumb});renderHl();toast("Highlight @ "+t.toFixed(1)+"s ✓");
+}
+function delHl(i){highlights.splice(i,1);renderHl();}
+function toggleMute(){const v=pv(vis);if(!v)return;muteState=!muteState;v.muted=muteState;if(!muteState)v.play().catch(()=>{});
+  const b=document.getElementById("unmuteBtn");if(b)b.textContent=muteState?"🔇":"🔊";}
+function toggleTaste(t){const k=swTags.indexOf(t);if(k<0)swTags.push(t);else swTags.splice(k,1);
+  document.querySelectorAll("#swPanel .tchip").forEach(c=>c.classList.toggle("on",swTags.includes(c.textContent)));}
+function addTag(){const i=document.getElementById("newTag");if(!i)return;const t=i.value.trim();if(!t)return;
+  if(!customTags.includes(t))customTags.push(t);if(!swTags.includes(t))swTags.push(t);i.value="";renderPanel(swCur);}
+function vote(v){if(!swCur)return;
+  state.votes[swCur.id]={verdict:v,tags:swTags.slice(),highlights:highlights.map(h=>h.t),ts:Date.now()};
+  persist();refreshStats();renderBoard();
+  qPtr++;
+  if(qPtr>=queue.length){renderSwipe();return;}
+  vis=1-vis;showCard(false);     // preloaded buffer becomes visible = instant switch
+}
+document.addEventListener("keydown",e=>{
+  if(!document.getElementById("v-swipe").classList.contains("on")||!swCur)return;
+  if(e.target.tagName==="INPUT")return;
+  if(e.key==="ArrowLeft")vote("pass");else if(e.key==="ArrowDown"){e.preventDefault();vote("ok");}
+  else if(e.key==="ArrowRight")vote("fire");else if(e.key==="h"||e.key==="H"){markHighlight();}});
+
+/* ---- one-click promo (calls promo_shorts backend) ---- */
+async function generatePromo(){
+  if(!swCur)return;
+  if(!swCur.video_url)return toast("This drama has no video to generate from");
+  const beats=highlights.map(h=>h.t).sort((a,b)=>a-b);
+  toast("Generating… (downloading + rendering ~1-2 min)");
+  const panel=document.getElementById("swPanel");
+  const old=panel.innerHTML;
+  panel.insertAdjacentHTML("afterbegin",`<div class="genbox" id="genBox">⏳ Generating promo for <b>${swCur.title}</b>…<br><small>via promo_shorts · ${beats.length?beats.length+" highlights":"auto beats"}</small></div>`);
+  try{
+    const r=await fetch(backend()+"/gen",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({video_url:swCur.video_url,title:swCur.title||"Promo",ep:1,dur:13,beats})});
+    const j=await r.json();if(!j.job_id)throw new Error(j.error||"failed");
+    poll(j.job_id);
+  }catch(e){
+    document.getElementById("genBox").innerHTML=`⚠️ Can't reach the generator.<br><small>Run <code>python3 promo_server.py</code> locally and open this dashboard at <b>${backend()}</b>, or set the backend URL.</small> <button onclick="setBackend()">Set backend</button>`;
+  }
+}
+async function poll(id){
+  for(let i=0;i<120;i++){
+    await new Promise(r=>setTimeout(r,3000));
+    let j;try{j=await(await fetch(backend()+"/job?id="+id)).json();}catch(e){continue;}
+    const box=document.getElementById("genBox");if(!box)return;
+    if(j.status==="done"){
+      box.innerHTML=`<div class="genres"><b>✅ Promo ready</b>
+        <video src="${backend()+j.files.teaser}" controls autoplay muted loop></video>
+        <div class="grow"><a class="dl" href="${backend()+j.files.teaser}" download>⬇ 13s video</a>
+          <a class="dl" href="${backend()+j.files.cover}" download>⬇ cover</a>
+          <button class="dl" onclick="copyCap(\`${(j.caption||'').replace(/[\\\`]/g,'')}\`)">📋 caption + tags</button></div></div>`;
+      return;
+    } else if(j.status==="error"){box.innerHTML="⚠️ Generation failed. "+(j.log||"").slice(-160);return;}
+    else box.innerHTML=`⏳ ${j.status}…`;
+  }
+}
+function copyCap(t){navigator.clipboard?.writeText(t);toast("Caption copied ✓");}
+function setBackend(){const u=prompt("Promo generator URL:",backend());if(u){localStorage.setItem(BACKEND_KEY,u.replace(/\/$/,''));toast("Backend set ✓");}}
+
+/* ---- PK (mode B) ---- */
+let pkPair=null;
+function renderPK(){
+  const pool=DATA.filter(d=>d.cover_image_url);
+  if(pool.length<2){document.getElementById("pkArea").innerHTML='<div class="empty">Need more covers.</div>';return;}
+  const a=pool[Math.floor(seededRand()*pool.length)];let b=a;let guard=0;
+  while(b.id===a.id&&guard++<50)b=pool[Math.floor(seededRand()*pool.length)];
+  pkPair=[a,b];
+  document.getElementById("pkCount").textContent=`(${state.pks.length} duels)`;
+  document.getElementById("pkArea").innerHTML=`<div class="pkrow">
+    ${[a,b].map(d=>`<div class="pkcard" onclick="pkPick(${d.id})"><div class="cov">${cover(d)}</div>
+      <div class="nm">${d.title||'Untitled'}</div><div class="pl">${d.platform||''}</div></div>`).join('<div class="vs">VS</div>')}
+  </div>`;
+}
+let _seed=Date.now()%100000;
+function seededRand(){_seed=(_seed*9301+49297)%233280;return _seed/233280;}
+function pkPick(winId){if(!pkPair)return;const [a,b]=pkPair;const loseId=winId===a.id?b.id:a.id;
+  state.pks.push({win:winId,lose:loseId,ts:Date.now()});persist();
+  // PK win counts as a soft 'fire' boost in scoring
+  toast("Logged ✓");renderPK();renderBoard();}
+
+/* ---- BOARD ---- */
+function momentum(d){if(d.chart_rank){const r=parseInt(d.chart_rank)||50;return Math.max(0,1-(r-1)/60);}return d.signal?0.55:0.4;}
+function tasteScore(d){const v=state.votes[d.id];let t=null;
+  if(v)t=v.verdict==="fire"?1:v.verdict==="ok"?0.5:0;
+  // fold PK wins
+  const w=state.pks.filter(p=>p.win===d.id).length,l=state.pks.filter(p=>p.lose===d.id).length;
+  if(w+l>0){const pk=w/(w+l);t=(t==null)?pk:(t*0.7+pk*0.3);}
+  return t;}
+function nuvelle(d){const t=tasteScore(d);if(t==null)return null;return Math.round(100*(0.45*t+0.35*momentum(d)+0.20*0.6));}
+let boardFilter="top";
+function setBoard(f){boardFilter=f;document.querySelectorAll("#boardSeg button").forEach(b=>b.classList.toggle("on",b.dataset.f===f));renderBoard();}
+function renderBoard(){
+  if(!DATA.length)return;
+  let items=DATA.map(d=>({d,score:nuvelle(d),t:tasteScore(d)})).filter(x=>x.score!=null);
+  if(boardFilter==="top")items=items.filter(x=>x.t>=0.5).sort((a,b)=>b.score-a.score);
+  else if(boardFilter==="contested")items=items.filter(x=>{const v=state.votes[x.d.id];const w=state.pks.filter(p=>p.win===x.d.id).length,l=state.pks.filter(p=>p.lose===x.d.id).length;return (w>0&&l>0)||(v&&v.verdict==="ok");}).sort((a,b)=>b.score-a.score);
+  else items.sort((a,b)=>b.score-a.score);
+  const g=document.getElementById("boardGrid");
+  if(!items.length){g.innerHTML='<div class="empty">No dramas here yet — go rate some in Swipe.</div>';return;}
+  g.innerHTML=items.slice(0,60).map(({d,score,t})=>{
+    const v=state.votes[d.id],vd=v?(v.verdict==="fire"?'<span class="f">🔥 Blow up</span>':v.verdict==="ok"?'<span class="o">👍 Solid</span>':'<span class="p">👎 Pass</span>'):'';
+    const pack=PACKS[(d.title||'').toLowerCase()];
+    return `<div class="bc"><div class="cov">${cover(d)}
+        <span class="score ${score>=70?'hi':''}">${score}</span><span class="ct">${d.platform||''}</span></div>
+      <div class="body"><h4>${d.title||'Untitled'}</h4><div class="vd">${vd}</div>
+        <button class="mk" onclick="${pack?`makePack('${pack}')`:`queuePack('${(d.title||'').replace(/'/g,'')}')`}">🎬 ${pack?'Material pack ready':'Queue for material'}</button>
+      </div></div>`;}).join("");
+}
+function makePack(slug){window.open("https://cps.nuvelle.ai","_blank");toast("Pack ready in CPS portal ✓");}
+function queuePack(t){toast("Queued for nuvelle_kit → 13s pack");}
+
+function go(v){document.querySelectorAll(".view").forEach(e=>e.classList.remove("on"));
+  document.getElementById("v-"+v).classList.add("on");
+  document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
+  if(v==="pk")renderPK();if(v==="board")renderBoard();scrollTo(0,0);}
+
+/* auto-resume if already signed in */
+state=load();if(state&&state.auth)boot();
+</script>
+</body></html>

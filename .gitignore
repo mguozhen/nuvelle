@@ -1,0 +1,9 @@
+.vercel/
+out/
+_work/
+_uploads/
+node_modules/
+*.log
+.env
+.DS_Store
+__pycache__/
