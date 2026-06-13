@@ -15,6 +15,16 @@ DASH = os.path.join(os.path.dirname(HERE), "nuvelle_dash")  # serve the Scout da
 OUT = os.path.join(HERE, "out")
 TMP = os.path.join(HERE, "_uploads"); os.makedirs(TMP, exist_ok=True)
 JOBS = {}  # id -> {status, log, slug, files}
+VOTES_FILE = os.path.join(HERE, "votes.json")
+try:
+    VOTES = json.load(open(VOTES_FILE))   # {drama_id(str): [{taster, verdict, tags, ts}]}
+except Exception:
+    VOTES = {}
+_vlock = threading.Lock()
+def save_votes():
+    with _vlock:
+        try: json.dump(VOTES, open(VOTES_FILE, "w"))
+        except Exception: pass
 
 
 def slugify(t):
@@ -42,16 +52,16 @@ def run_job(job_id, src_path, title, ep, dur, beats=None, prompt=""):
             cp = os.path.join(d, "caption.txt")
             if os.path.exists(cp):
                 cap = open(cp).read()
-            tt_safe, tt_notes = True, ""
+            tt_safe, tt_notes, cover_warn = True, "", ""
             pj = os.path.join(d, "plan.json")
             if os.path.exists(pj):
                 try:
-                    pl = json.load(open(pj)); tt_safe = pl.get("tt_safe", True); tt_notes = pl.get("tt_notes", "")
+                    pl = json.load(open(pj)); tt_safe = pl.get("tt_safe", True); tt_notes = pl.get("tt_notes", ""); cover_warn = pl.get("cover_warn", "")
                 except Exception: pass
             j.update(status="done", slug=slug,
                      files={"teaser": f"/file?slug={slug}&n=teaser.mp4",
                             "cover": f"/file?slug={slug}&n=cover.jpg"},
-                     caption=cap, title=title, tt_safe=tt_safe, tt_notes=tt_notes)
+                     caption=cap, title=title, tt_safe=tt_safe, tt_notes=tt_notes, cover_warn=cover_warn)
         else:
             j["status"] = "error"
     except Exception as e:
@@ -110,6 +120,9 @@ class H(BaseHTTPRequestHandler):
         u = urllib.parse.urlparse(self.path); q = urllib.parse.parse_qs(u.query)
         if u.path == "/health":
             return self._json({"ok": True, "service": "nuvelle-promo-shorts"})
+        if u.path == "/votes":   # shared vote store for multi-reviewer dedup
+            return self._json({"rated": list(VOTES.keys()), "votes": VOTES,
+                               "count": sum(len(v) for v in VOTES.values())})
         if u.path == "/job":
             jid = q.get("id", [""])[0]
             return self._json(JOBS.get(jid, {"status": "unknown"}))
@@ -136,7 +149,18 @@ class H(BaseHTTPRequestHandler):
         self._json({"error": "not found"}, 404)
 
     def do_POST(self):
-        if urllib.parse.urlparse(self.path).path != "/gen":
+        path = urllib.parse.urlparse(self.path).path
+        if path == "/vote":   # record a reviewer's rating (multi-user dedup + consensus)
+            ln = int(self.headers.get("Content-Length", 0))
+            try: b = json.loads(self.rfile.read(ln) or b"{}")
+            except Exception: return self._json({"error": "bad json"}, 400)
+            did = str(b.get("drama_id"))
+            if did and did != "None":
+                VOTES.setdefault(did, []).append({"taster": b.get("taster", "anon"), "verdict": b.get("verdict"),
+                                                  "tags": b.get("tags", []), "ts": b.get("ts")})
+                save_votes()
+            return self._json({"ok": True, "rated": len(VOTES)})
+        if path != "/gen":
             return self._json({"error": "not found"}, 404)
         ctype = self.headers.get("Content-Type", "")
         jid = uuid.uuid4().hex[:10]; JOBS[jid] = {"status": "queued", "log": ""}

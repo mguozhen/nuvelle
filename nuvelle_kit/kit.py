@@ -88,8 +88,10 @@ def gen_poster_art(art_prompt, out):
     """Generate a cinematic vertical key-art poster via nano-banana (gemini-2.5-flash-image)."""
     prompt = ((art_prompt or "cinematic vertical movie poster").strip()
               + " Vertical 9:16 premium cinematic short-drama movie poster, photorealistic, dramatic cinematic lighting,"
-              + " rich color grade, glossy magazine quality, shallow depth of field, fully clothed, tasteful,"
-              + " NO text, no letters, no title, no watermark, no logo.")
+              + " rich color grade, glossy magazine quality, shallow depth of field, fully clothed, tasteful."
+              + " COMPOSITION: place the main subject(s) in the LOWER 60% of the frame; keep the TOP THIRD as darker,"
+              + " clean negative space (sky / wall / shadow) reserved for a title overlay; faces fully visible, sharp and"
+              + " UNOBSTRUCTED, not cropped, in the middle band. NO text, no letters, no title, no watermark, no logo.")
     body = json.dumps({"model": "gemini-2.5-flash-image",
                        "messages": [{"role": "user", "content": prompt}]}).encode()
     req = urllib.request.Request(FLATKEY, data=body,
@@ -104,6 +106,22 @@ def gen_poster_art(art_prompt, out):
         raise RuntimeError("no image returned")
     open(out, "wb").write(base64.b64decode(m.group(1)))
     return out
+
+
+def check_cover(cover_path):
+    """QA the finished cover: does the headline text cover a face, and is the layout clean/friendly?"""
+    try:
+        raw = ai_vision(cover_path,
+            'You are a QA checker for a TikTok drama cover. Return STRICT JSON only: '
+            '{"face_covered":bool,"friendly":bool,"note":"<short>"}. '
+            'face_covered = true if the overlaid headline/title text overlaps or hides ANY person\'s face. '
+            'friendly = true if the layout is clean and readable (text not clipped at edges, good contrast, balanced).',
+            max_tokens=120)
+        m = re.search(r"\{.*\}", raw, re.S)
+        j = json.loads(m.group(0))
+        return bool(j.get("face_covered")), bool(j.get("friendly", True)), str(j.get("note", ""))[:120]
+    except Exception:
+        return False, True, ""
 
 
 def plan_with_ai(sheet, frames, meta, steer=""):
@@ -344,24 +362,24 @@ def build_teaser(mp4, beats_ts, src_dur, outro_jpg, bug_png, out, target=30, mus
     total = round(sum(ln for _, ln in segs) + outro, 2)
     # strip source watermark (ReelShort 'R' sits top-right or bottom-right depending on the show)
     DL = "delogo=x=864:y=26:w=156:h=150,delogo=x=864:y=1638:w=156:h=150"
-    fc, vlabels = [], []
+    # KEEP ORIGINAL AUDIO of the (safe) beats — dialogue + conflict are the hook that drives clicks.
+    fc, labels = [], []
     for i, (s, ln) in enumerate(segs):
         fc.append(f"[1:v]trim={s}:{s+ln},setpts=PTS-STARTPTS,scale=1080:1920,setsar=1,{DL},fps=25,format=yuv420p[v{i}];")
-        vlabels.append(f"[v{i}]")
+        fo = round(ln-0.15, 2)
+        fc.append(f"[1:a]atrim={s}:{s+ln},asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.06,afade=t=out:st={fo}:d=0.1[a{i}];")
+        labels += [f"[v{i}]", f"[a{i}]"]
     fc.append("[0:v]scale=1080:1920,setsar=1,fps=25,format=yuv420p[ov];")
-    fc.append("".join(vlabels) + "[ov]concat=n=" + str(len(segs)+1) + ":v=1:a=0[vc];")
+    fc.append(f"anullsrc=channel_layout=stereo:sample_rate=44100,atrim=0:{outro},asetpts=PTS-STARTPTS[oa];")
+    fc.append("".join(labels) + f"[ov][oa]concat=n={len(segs)+1}:v=1:a=1[vc][ac];")
     drama_dur = round(sum(ln for _, ln in segs), 2)
-    fc.append(f"[vc][2:v]overlay=40:48:enable='lt(t,{drama_dur})'[vout];")
-    # NO original audio (it may be sexually explicit / TikTok-flaggable) — replace with a dramatic BGM bed
-    fo = round(total-0.6, 2)
-    fc.append(f"[3:a]aloop=loop=-1:size=2000000000,atrim=0:{total},asetpts=PTS-STARTPTS,"
-              f"afade=t=in:st=0:d=0.3,afade=t=out:st={fo}:d=0.6,volume=0.85[aout]")
+    fc.append(f"[vc][2:v]overlay=40:48:enable='lt(t,{drama_dur})'[vout]")
     fpath = out+".filter.txt"; open(fpath, "w").write("\n".join(fc))
     r = run(["ffmpeg", "-nostdin", "-loglevel", "error",
              "-loop", "1", "-t", str(outro), "-i", outro_jpg,
-             "-i", mp4, "-i", bug_png, "-i", music,
+             "-i", mp4, "-i", bug_png,
              "-filter_complex_script", fpath,
-             "-map", "[vout]", "-map", "[aout]", "-shortest",
+             "-map", "[vout]", "-map", "[ac]",
              "-c:v", "libx264", "-crf", "20", "-preset", "medium", "-pix_fmt", "yuv420p", "-r", "25",
              "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out, "-y"])
     os.remove(fpath)
@@ -431,15 +449,16 @@ def main():
             print("[art] poster gen failed -> frame:", str(e)[:120])
     base = art_path if poster_ok else cov_src
     cover = render_cover(base, plan, meta, os.path.join(outdir, "cover.jpg"), is_art=poster_ok)
+    # 图文完整性 QA: flag if the headline covers a face or the layout isn't clean
+    plan["cover_warn"] = ""
+    if not a.no_ai:
+        fcov, friendly, note = check_cover(cover)
+        if fcov or not friendly:
+            plan["cover_warn"] = note or ("text covers the subject's face" if fcov else "layout not clean")
+            print("⚠️ [cover-qa]", plan["cover_warn"])
     outro = render_coming_soon(base, plan, meta, os.path.join(work, "outro.jpg"))
     bug = os.path.join(work, "bug.png"); B.logo_bug(430).save(bug)
-    import glob as _g
-    tracks = sorted(_g.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music", "*.mp3")))
-    music = a.music or (tracks[hash(a.title) % len(tracks)] if tracks else None)
-    if not music:
-        raise SystemExit("No BGM track found — put a .mp3 in nuvelle_kit/music/ (the teaser replaces explicit audio with music).")
-    print("[music]", os.path.basename(music))
-    teaser = build_teaser(a.mp4, beats_ts, info["dur"], outro, bug, os.path.join(outdir, "teaser.mp4"), target=a.dur, music=music)
+    teaser = build_teaser(a.mp4, beats_ts, info["dur"], outro, bug, os.path.join(outdir, "teaser.mp4"), target=a.dur, music=a.music)
 
     tags = " ".join(plan["hashtags"])
     cap = f"{plan['caption']}\n\n{tags}\n"

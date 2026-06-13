@@ -206,10 +206,14 @@ function load(){try{return JSON.parse(localStorage.getItem(LS))}catch(e){return 
 function persist(){localStorage.setItem(LS,JSON.stringify(state))}
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.classList.add("on");clearTimeout(t._);t._=setTimeout(()=>t.classList.remove("on"),1500)}
 
+let remoteRated=new Set();
 function login(){
   const u=document.getElementById("u").value.trim(),p=document.getElementById("p").value;
-  if(u==="admin"&&p==="admin"){state=load()||{votes:{},pks:[],auth:1};persist();boot();}
-  else document.getElementById("err").textContent="Wrong username or password.";
+  if(u==="admin"&&p==="admin"){
+    state=load()||{votes:{},pks:[],auth:1};
+    if(!state.taster){state.taster=(prompt("Your reviewer name (shown to the team)","reviewer")||"reviewer").slice(0,30);}
+    persist();boot();
+  } else document.getElementById("err").textContent="Wrong username or password.";
 }
 function logout(){location.reload()}
 async function boot(){
@@ -221,6 +225,7 @@ async function boot(){
     // playable-video first, then cover, then the rest — so 审片 starts with watchable dramas
     DATA.sort((a,b)=>((b.video_url?2:0)+(b.cover_image_url?1:0))-((a.video_url?2:0)+(a.cover_image_url?1:0)));
   }
+  try{const rv=await(await fetch(backend()+"/votes",{cache:"no-store"})).json();remoteRated=new Set((rv.rated||[]).map(String));}catch(e){}
   document.getElementById("hLib").textContent=DATA.length;
   state.history=state.history||[];
   const lc=document.getElementById("libCount");if(lc)lc.textContent=state.history.length?"("+state.history.length+")":"";
@@ -271,7 +276,7 @@ function loadHls(k,url,autoplay){
 function nextDrama(){return queue[qPtr];}
 function renderSwipe(){
   if(!built)buildSwDom();
-  queue=DATA.filter(d=>!state.votes[d.id]);qPtr=0;vis=0;
+  queue=DATA.filter(d=>!state.votes[d.id]&&!remoteRated.has(String(d.id)));qPtr=0;vis=0;
   if(!queue.length){document.getElementById("swArea").innerHTML=`<div class="done"><b>All caught up 🎉</b><br>Every drama rated — check 选品看板.</div>`;built=false;return;}
   showCard(true);
 }
@@ -285,7 +290,7 @@ function showCard(initial){
   if(d.video_url){ if(initial)loadHls(vis,d.video_url,true); else {va.currentTime=0;va.muted=muteState;va.play().catch(()=>{});} }
   else { if(hlsArr[vis]){try{hlsArr[vis].destroy()}catch(e){}hlsArr[vis]=null;} va.removeAttribute("src");va.load(); }
   document.getElementById("swBadges").innerHTML=`<span class="plat">${d.platform||'—'}</span>${d.chart_rank?`<span class="rank">#${d.chart_rank}</span>`:''}${d.video_url?'':'<span class="novid">cover only</span>'}`;
-  document.getElementById("swProg").innerHTML=`Rated <b>${Object.keys(state.votes).length}</b> / ${DATA.length} · ${queue.length} left in queue`;
+  document.getElementById("swProg").innerHTML=`Rated <b>${Object.keys(state.votes).length}</b> / ${DATA.length} · ${Math.max(0,queue.length-qPtr)} left in queue`;
   renderPanel(d);
   const nx=queue[qPtr+1];               // preload next into hidden buffer
   if(nx&&nx.video_url)loadHls(1-vis,nx.video_url,false);
@@ -341,6 +346,9 @@ function addTag(){const i=document.getElementById("newTag");if(!i)return;const t
 function vote(v){if(!swCur)return;
   state.votes[swCur.id]={verdict:v,tags:swTags.slice(),highlights:highlights.map(h=>h.t),ts:Date.now()};
   persist();refreshStats();renderBoard();
+  remoteRated.add(String(swCur.id));   // dedup for this session
+  fetch(backend()+"/vote",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({drama_id:swCur.id,taster:state.taster||"anon",verdict:v,tags:swTags.slice(),ts:Date.now()})}).catch(()=>{});
   qPtr++;
   if(qPtr>=queue.length){renderSwipe();return;}
   vis=1-vis;showCard(false);     // preloaded buffer becomes visible = instant switch
@@ -384,7 +392,8 @@ async function pollGen(id,ctx){
     const box=document.getElementById("genBox");if(!box)return;
     if(j.status==="done"){
       const teaser=backend()+j.files.teaser,cover=backend()+j.files.cover;
-      const warn=(j.tt_safe===false)?`<div class="ttwarn">⚠️ TikTok risk — review before posting. ${j.tt_notes||''}</div>`:`<div class="ttok">✅ TikTok-safe (AI poster + safe beats + BGM, no watermark)</div>`;
+      let warn=(j.tt_safe===false)?`<div class="ttwarn">⚠️ TikTok risk — review before posting. ${j.tt_notes||''}</div>`:`<div class="ttok">✅ TikTok-safe (AI poster + safe beats + original audio, no watermark)</div>`;
+      if(j.cover_warn)warn+=`<div class="ttwarn">🖼 Cover QA: ${j.cover_warn} — 🔄 regenerate for a cleaner layout</div>`;
       box.innerHTML=`<div class="genres"><b>✅ Promo ready · saved to Library</b>${warn}
         <video src="${teaser}" controls autoplay muted loop></video>
         <div class="grow"><a class="dl" href="${teaser}" download>⬇ 13s</a><a class="dl" href="${cover}" download>⬇ cover</a>
