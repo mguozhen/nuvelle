@@ -21,12 +21,14 @@ def slugify(t):
     return re.sub(r"[^a-z0-9]+", "_", (t or "promo").lower()).strip("_") or "promo"
 
 
-def run_job(job_id, src_path, title, ep, dur, beats=None):
+def run_job(job_id, src_path, title, ep, dur, beats=None, prompt=""):
     j = JOBS[job_id]
     try:
         j["status"] = "rendering"
         cmd = ["python3", os.path.join(HERE, "kit.py"), src_path,
                "--title", title, "--ep", str(ep), "--dur", str(dur)]
+        if prompt:
+            cmd += ["--prompt", prompt]
         if beats:
             bs = [round(float(b), 1) for b in beats if float(b) > 0.3]
             if bs:
@@ -60,14 +62,14 @@ def run_job(job_id, src_path, title, ep, dur, beats=None):
             except Exception: pass
 
 
-def download_and_run(job_id, url, title, ep, dur, beats=None):
+def download_and_run(job_id, url, title, ep, dur, beats=None, prompt=""):
     """Background: download the URL then render (so /gen returns immediately)."""
     try:
         JOBS[job_id]["status"] = "downloading"
         src = fetch_url_to_mp4(url, job_id)
     except Exception as e:
         JOBS[job_id]["status"] = "error"; JOBS[job_id]["log"] = "download: " + str(e)[:300]; return
-    run_job(job_id, src, title, ep, dur, beats=beats)
+    run_job(job_id, src, title, ep, dur, beats=beats, prompt=prompt)
 
 
 def fetch_url_to_mp4(url, job_id):
@@ -138,12 +140,12 @@ class H(BaseHTTPRequestHandler):
             return self._json({"error": "not found"}, 404)
         ctype = self.headers.get("Content-Type", "")
         jid = uuid.uuid4().hex[:10]; JOBS[jid] = {"status": "queued", "log": ""}
-        beats = None
+        beats = None; prompt = ""
         try:
             if ctype.startswith("multipart/form-data"):
                 form = cgi.FieldStorage(fp=self.rfile, headers=self.headers,
                                         environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": ctype})
-                title = form.getvalue("title", "Promo"); ep = form.getvalue("ep", "1"); dur = form.getvalue("dur", "13")
+                title = form.getvalue("title", "Promo"); ep = form.getvalue("ep", "1"); dur = form.getvalue("dur", "13"); prompt = form.getvalue("prompt", "")
                 fitem = form["file"] if "file" in form else None
                 if fitem is None or not fitem.file:
                     return self._json({"error": "no file"}, 400)
@@ -153,13 +155,13 @@ class H(BaseHTTPRequestHandler):
                 ln = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(ln) or b"{}")
                 title = body.get("title", "Promo"); ep = body.get("ep", 1); dur = body.get("dur", 13)
-                beats = body.get("beats") or None
+                beats = body.get("beats") or None; prompt = body.get("prompt", "")
                 url = body.get("video_url", "")
                 if not url: return self._json({"error": "no video_url"}, 400)
                 JOBS[jid]["status"] = "downloading"
-                threading.Thread(target=download_and_run, args=(jid, url, title, ep, int(dur)), kwargs={"beats": beats}, daemon=True).start()
+                threading.Thread(target=download_and_run, args=(jid, url, title, ep, int(dur)), kwargs={"beats": beats, "prompt": prompt}, daemon=True).start()
                 return self._json({"job_id": jid})
-            threading.Thread(target=run_job, args=(jid, src, title, ep, int(dur)), kwargs={"beats": beats}, daemon=True).start()
+            threading.Thread(target=run_job, args=(jid, src, title, ep, int(dur)), kwargs={"beats": beats, "prompt": prompt}, daemon=True).start()
             return self._json({"job_id": jid})
         except Exception as e:
             JOBS[jid] = {"status": "error", "log": str(e)}

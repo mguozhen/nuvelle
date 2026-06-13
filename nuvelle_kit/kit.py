@@ -84,7 +84,29 @@ def ai_vision(image_path, prompt, model="claude-sonnet-4-6", max_tokens=900):
     return r["choices"][0]["message"]["content"]
 
 
-def plan_with_ai(sheet, frames, meta):
+def gen_poster_art(art_prompt, out):
+    """Generate a cinematic vertical key-art poster via nano-banana (gemini-2.5-flash-image)."""
+    prompt = ((art_prompt or "cinematic vertical movie poster").strip()
+              + " Vertical 9:16 premium cinematic short-drama movie poster, photorealistic, dramatic cinematic lighting,"
+              + " rich color grade, glossy magazine quality, shallow depth of field, fully clothed, tasteful,"
+              + " NO text, no letters, no title, no watermark, no logo.")
+    body = json.dumps({"model": "gemini-2.5-flash-image",
+                       "messages": [{"role": "user", "content": prompt}]}).encode()
+    req = urllib.request.Request(FLATKEY, data=body,
+                                 headers={"Authorization": f"Bearer {K}", "Content-Type": "application/json"})
+    r = json.load(urllib.request.urlopen(req, timeout=220))
+    msg = r["choices"][0]["message"]
+    content = msg.get("content") if isinstance(msg.get("content"), str) else json.dumps(msg.get("content"))
+    m = re.search(r'base64,([A-Za-z0-9+/=]+)', content or "")
+    if not m and msg.get("images"):
+        m = re.search(r'base64,([A-Za-z0-9+/=]+)', msg["images"][0]["image_url"]["url"])
+    if not m:
+        raise RuntimeError("no image returned")
+    open(out, "wb").write(base64.b64decode(m.group(1)))
+    return out
+
+
+def plan_with_ai(sheet, frames, meta, steer=""):
     idxs = list(range(len(frames)))
     prompt = f"""You are a viral but POLICY-COMPLIANT TikTok short-drama editor for the brand "Nuvelle".
 This contact sheet shows {len(frames)} numbered frames (0-{len(frames)-1}) sampled in time order from a vertical short-drama episode titled "{meta['title']}".
@@ -98,11 +120,14 @@ Return STRICT JSON only (no markdown), with these keys:
 - "tt_safe": true only if you could pick a cover and 4 beats that are ALL non-sexual / TikTok-safe; false if this episode is so intimate that a safe selection was not possible.
 - "tt_notes": one short note if tt_safe is false (what's risky), else "".
 - "genre": 2-4 word genre (e.g. "Revenge Romance").
+- "art_prompt": ONE vivid sentence describing a CINEMATIC VERTICAL MOVIE POSTER for this drama — the key character(s), setting, wardrobe, mood, dramatic film lighting, premium glossy movie-poster look (think ReelShort/Netflix key art). Fully clothed, NON-sexual. End with: "no text, no letters, no watermark."
 - "hook": EXACTLY 3 short ALL-CAPS cover lines; punchy, emotional, 3rd line is the twist. No emojis, no sexual words.
 - "logline": one short sentence (<=8 words), Title Case, no period.
 - "caption": a TikTok caption for an account-warming post (goal = FOLLOWERS). 1-2 sentences, strong EMOTIONAL hook, 2-3 emojis, ends asking them to FOLLOW for the next part. No hashtags inside. POLICY: no sexual or suggestive enticement; never use words like spicy/steamy/hot/seductive/uncensored/18+/naughty/bed — keep it emotional and dramatic only.
 - "hashtags": array of 10-12 lowercase hashtags (#fyp #shortdrama + theme). No sexual or suggestive tags.
 Frames available: {idxs}."""
+    if steer:
+        prompt += f"\n\n🎨 REVIEWER CREATIVE DIRECTION (honor this, but NEVER break the TikTok safety rules above): {steer}"
     raw = ai_vision(sheet, prompt)
     m = re.search(r"\{.*\}", raw, re.S)
     plan = json.loads(m.group(0))
@@ -118,6 +143,7 @@ Frames available: {idxs}."""
     plan["hook"] = [tt_clean(str(x)).upper() for x in plan["hook"]][:3]
     while len(plan["hook"]) < 3: plan["hook"].append("")
     plan.setdefault("tt_safe", True); plan.setdefault("tt_notes", "")
+    plan.setdefault("art_prompt", f"Cinematic vertical movie poster for '{meta.get('title','a drama')}', dramatic film lighting, premium glossy key art")
     plan["caption"] = tt_clean(plan.get("caption", ""))
     plan["hashtags"] = [h for h in plan.get("hashtags", []) if not _BANNED.search(h)]
     plan["logline"] = tt_clean(plan.get("logline", ""))
@@ -146,7 +172,7 @@ def fallback_plan(frames, meta):
 
 
 # ---------------------------------------------------------------- COVER
-def render_cover(frame_path, plan, meta, out):
+def render_cover(frame_path, plan, meta, out, is_art=False):
     W, H = 1080, 1920
     im = Image.open(frame_path).convert("RGB")
     sc = max(W/im.width, H/im.height)
@@ -154,9 +180,10 @@ def render_cover(frame_path, plan, meta, out):
     im = im.crop(((im.width-W)//2, (im.height-H)//2, (im.width-W)//2+W, (im.height-H)//2+H))
     from PIL import ImageEnhance
     im = ImageEnhance.Contrast(im).enhance(1.05); im = ImageEnhance.Color(im).enhance(1.05)
-    # blur a band low on the body to kill any burned subtitle, then scrim
-    band = (0, 1150, W, 1470)
-    im.paste(im.crop(band).filter(ImageFilter.GaussianBlur(22)), band)
+    if not is_art:
+        # frame fallback: blur a band low on the body to kill any burned subtitle
+        band = (0, 1150, W, 1470)
+        im.paste(im.crop(band).filter(ImageFilter.GaussianBlur(22)), band)
     ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ov = Image.alpha_composite(ov, B.bottom_scrim(W, H, 1130))
     # top scrim so logo + hook stay legible over bright frames
@@ -358,6 +385,7 @@ def main():
     ap.add_argument("--plan", default=None, help="reuse a saved plan.json (skips AI)")
     ap.add_argument("--dur", type=int, default=13, help="teaser length in seconds (default 13; <=18 = fast 3-beat cut)")
     ap.add_argument("--music", default=None, help="BGM track (defaults to a rotating track in music/)")
+    ap.add_argument("--prompt", default="", help="reviewer creative direction to steer the AI (for regenerate)")
     a = ap.parse_args()
 
     meta = {"title": a.title, "ep": a.ep, "sub": a.sub, "handle": a.handle, "genre": a.genre}
@@ -377,7 +405,7 @@ def main():
         plan = fallback_plan(frames, meta); print("[plan] fallback (no AI)")
     else:
         try:
-            plan = plan_with_ai(sheet, frames, meta); print("[plan] AI ok ·", plan["hook"])
+            plan = plan_with_ai(sheet, frames, meta, steer=a.prompt); print("[plan] AI ok ·", plan["hook"])
         except Exception as e:
             print("[plan] AI failed -> fallback:", str(e)[:140]); plan = fallback_plan(frames, meta)
     if not plan.get("tt_safe", True):
@@ -394,8 +422,16 @@ def main():
 
     # render cover from a fresh full-res grab at cover_ts
     cov_src = os.path.join(work, "cover_src.jpg"); grab(a.mp4, cover_ts, cov_src, w=1080)
-    cover = render_cover(cov_src, plan, meta, os.path.join(outdir, "cover.jpg"))
-    outro = render_coming_soon(cov_src, plan, meta, os.path.join(work, "outro.jpg"))
+    # cover = AI-generated cinematic poster (sharp, has taste); fall back to the frame if gen fails
+    art_path = os.path.join(work, "art.png"); poster_ok = False
+    if not a.no_ai:
+        try:
+            gen_poster_art(plan.get("art_prompt", ""), art_path); poster_ok = True; print("[art] poster generated")
+        except Exception as e:
+            print("[art] poster gen failed -> frame:", str(e)[:120])
+    base = art_path if poster_ok else cov_src
+    cover = render_cover(base, plan, meta, os.path.join(outdir, "cover.jpg"), is_art=poster_ok)
+    outro = render_coming_soon(base, plan, meta, os.path.join(work, "outro.jpg"))
     bug = os.path.join(work, "bug.png"); B.logo_bug(430).save(bug)
     import glob as _g
     tracks = sorted(_g.glob(os.path.join(os.path.dirname(os.path.abspath(__file__)), "music", "*.mp3")))

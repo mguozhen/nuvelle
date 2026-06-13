@@ -78,6 +78,22 @@ nav button.on{color:#fff;border-bottom-color:var(--p2)}
 .genres video{width:100%;border-radius:10px;margin:10px 0;background:#000}
 .genres .grow{display:flex;gap:8px;flex-wrap:wrap}
 .dl{font-size:12px;font-weight:600;color:#fff;background:#1a1d2a;border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer}
+.playover{position:absolute;inset:0;z-index:5;display:none;align-items:center;justify-content:center;font-size:50px;color:#fff;background:#0005;cursor:pointer}
+.playover.on{display:flex}
+.regenrow{display:flex;gap:7px;margin-top:11px}
+.regenrow input{flex:1;background:#0c0f1a;border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:#fff;font-family:inherit;font-size:12px}
+.regenrow button{background:#1a1d2a;border:1px solid #a14bff55;color:#fff;border-radius:9px;padding:0 13px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.libgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:15px}
+.libc{cursor:pointer}
+.libc .libcov{position:relative;border-radius:12px;overflow:hidden;aspect-ratio:9/16;border:1px solid var(--line);background:#11141f}
+.libc .libcov img{width:100%;height:100%;object-fit:cover}
+.libc .ttbadge{position:absolute;top:8px;right:8px;font-size:14px}
+.libc .libt{font-size:13px;font-weight:600;margin-top:8px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.libc .libd{font-size:11px;color:var(--faint);margin-top:2px}
+.libmodal{position:fixed;inset:0;z-index:120;background:rgba(5,6,11,.82);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center;padding:20px}
+.libmodal.on{display:flex}
+.libsheet{position:relative;background:var(--bg2);border:1px solid var(--line);border-radius:16px;max-width:420px;width:100%;max-height:92vh;overflow:auto;padding:20px 22px}
+.libx{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;background:#0009;border:1px solid var(--line);color:#fff;cursor:pointer;font-size:15px}
 .kbd{color:var(--faint);font-size:11.5px;margin-top:13px;text-align:center}.kbd b{color:#cbd}
 .done{text-align:center;color:var(--dim);padding:50px 20px}.done b{color:#fff;font-size:18px}
 @media(max-width:820px){.swwrap{grid-template-columns:1fr}.swstage{position:static}.vidwrap{max-height:62vh}}
@@ -147,6 +163,7 @@ nav button.on{color:#fff;border-bottom-color:var(--p2)}
   <button class="on" data-v="swipe" onclick="go('swipe')">🃏 Swipe</button>
   <button data-v="pk" onclick="go('pk')">⚔️ PK</button>
   <button data-v="board" onclick="go('board')">🏆 选品看板</button>
+  <button data-v="library" onclick="go('library')">📁 Library <span id="libCount"></span></button>
 </div></nav>
 
 <div class="wrap">
@@ -170,8 +187,14 @@ nav button.on{color:#fff;border-bottom-color:var(--p2)}
     </div>
     <div class="bgrid" id="boardGrid"></div>
   </div>
+  <div class="view" id="v-library">
+    <div style="font-size:20px;font-weight:600;margin:6px 0 3px">📁 Generated material library</div>
+    <p style="color:#9aa2c0;font-size:13px;margin-bottom:16px">Every promo you've generated — cover, 13s clip, caption. Click to view, download, or regenerate.</p>
+    <div class="libgrid" id="libGrid"></div>
+  </div>
 </div>
 </div>
+<div class="libmodal" id="libModal" onclick="if(event.target===this)closeLib()"><div class="libsheet" id="libSheet"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -199,6 +222,8 @@ async function boot(){
     DATA.sort((a,b)=>((b.video_url?2:0)+(b.cover_image_url?1:0))-((a.video_url?2:0)+(a.cover_image_url?1:0)));
   }
   document.getElementById("hLib").textContent=DATA.length;
+  state.history=state.history||[];
+  const lc=document.getElementById("libCount");if(lc)lc.textContent=state.history.length?"("+state.history.length+")":"";
   refreshStats();renderSwipe();renderBoard();
 }
 function refreshStats(){
@@ -219,8 +244,9 @@ function buildSwDom(){
   document.getElementById("swArea").innerHTML=`
     <div class="swstage">
       <div class="vidwrap">
-        <video class="pv show" playsinline loop muted crossorigin="anonymous"></video>
-        <video class="pv" playsinline loop muted crossorigin="anonymous"></video>
+        <video class="pv show" playsinline loop muted crossorigin="anonymous" onclick="togglePause()"></video>
+        <video class="pv" playsinline loop muted crossorigin="anonymous" onclick="togglePause()"></video>
+        <div class="playover" id="playover" onclick="togglePause()">▶</div>
         <div class="badges" id="swBadges"></div>
         <button class="unmute" id="unmuteBtn" onclick="toggleMute()">🔇</button>
         <button class="markBtn" onclick="markHighlight()">📸 Mark highlight</button>
@@ -254,6 +280,7 @@ function showCard(initial){
   swCur=d;swTags=[];customTags=[];highlights=[];
   const va=pv(vis),vb=pv(1-vis);
   va.classList.add("show");vb.classList.remove("show");
+  const _o=document.getElementById("playover");if(_o)_o.classList.remove("on");
   va.poster=d.cover_image_url||"";
   if(d.video_url){ if(initial)loadHls(vis,d.video_url,true); else {va.currentTime=0;va.muted=muteState;va.play().catch(()=>{});} }
   else { if(hlsArr[vis]){try{hlsArr[vis].destroy()}catch(e){}hlsArr[vis]=null;} va.removeAttribute("src");va.load(); }
@@ -305,6 +332,8 @@ function markHighlight(){
 function delHl(i){highlights.splice(i,1);renderHl();}
 function toggleMute(){const v=pv(vis);if(!v)return;muteState=!muteState;v.muted=muteState;if(!muteState)v.play().catch(()=>{});
   const b=document.getElementById("unmuteBtn");if(b)b.textContent=muteState?"🔇":"🔊";}
+function togglePause(){const v=pv(vis);if(!v)return;const o=document.getElementById("playover");
+  if(v.paused){v.play().catch(()=>{});if(o)o.classList.remove("on");}else{v.pause();if(o)o.classList.add("on");}}
 function toggleTaste(t){const k=swTags.indexOf(t);if(k<0)swTags.push(t);else swTags.splice(k,1);
   document.querySelectorAll("#swPanel .tchip").forEach(c=>c.classList.toggle("on",swTags.includes(c.textContent)));}
 function addTag(){const i=document.getElementById("newTag");if(!i)return;const t=i.value.trim();if(!t)return;
@@ -320,45 +349,91 @@ document.addEventListener("keydown",e=>{
   if(!document.getElementById("v-swipe").classList.contains("on")||!swCur)return;
   if(e.target.tagName==="INPUT")return;
   if(e.key==="ArrowLeft")vote("pass");else if(e.key==="ArrowDown"){e.preventDefault();vote("ok");}
-  else if(e.key==="ArrowRight")vote("fire");else if(e.key==="h"||e.key==="H"){markHighlight();}});
+  else if(e.key==="ArrowRight")vote("fire");else if(e.key==="h"||e.key==="H"){markHighlight();}
+  else if(e.key===" "){e.preventDefault();togglePause();}});
 
 /* ---- one-click promo (calls promo_shorts backend) ---- */
-async function generatePromo(){
+function copy(t,m){navigator.clipboard?.writeText(t);toast(m||"Copied ✓");}
+function setBackend(){const u=prompt("Promo generator URL:",backend());if(u){localStorage.setItem(BACKEND_KEY,u.replace(/\/$/,''));toast("Backend set ✓");}}
+function generatePromo(promptArg){
   if(!swCur)return;
   if(!swCur.video_url)return toast("This drama has no video to generate from");
   const beats=highlights.map(h=>h.t).sort((a,b)=>a-b);
-  toast("Generating… (downloading + rendering ~1-2 min)");
+  runGen({video_url:swCur.video_url,title:swCur.title||"Promo",beats,prompt:(typeof promptArg==="string"?promptArg:"")});
+}
+async function runGen(ctx){
+  toast("Generating… ~1-2 min");
+  go("swipe");
   const panel=document.getElementById("swPanel");
-  const old=panel.innerHTML;
-  panel.insertAdjacentHTML("afterbegin",`<div class="genbox" id="genBox">⏳ Generating promo for <b>${swCur.title}</b>…<br><small>via promo_shorts · ${beats.length?beats.length+" highlights":"auto beats"}</small></div>`);
+  let box=document.getElementById("genBox");
+  if(!box){panel.insertAdjacentHTML("afterbegin",'<div class="genbox" id="genBox"></div>');box=document.getElementById("genBox");}
+  box.innerHTML=`⏳ Generating <b>${ctx.title}</b>…<br><small>${ctx.prompt?'direction: '+ctx.prompt:(ctx.beats.length?ctx.beats.length+' highlights':'auto beats')} · cloud ~1-2 min</small>`;
   try{
     const r=await fetch(backend()+"/gen",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({video_url:swCur.video_url,title:swCur.title||"Promo",ep:1,dur:13,beats})});
+      body:JSON.stringify({video_url:ctx.video_url,title:ctx.title,ep:1,dur:13,beats:ctx.beats,prompt:ctx.prompt||""})});
     const j=await r.json();if(!j.job_id)throw new Error(j.error||"failed");
-    poll(j.job_id);
+    pollGen(j.job_id,ctx);
   }catch(e){
-    document.getElementById("genBox").innerHTML=`⚠️ The generator only runs locally (it needs ffmpeg + AI).<br><small>Open this dashboard at <a href="http://localhost:8799" style="color:#ff8fd0">http://localhost:8799</a> (run <code>python3 promo_server.py</code> in nuvelle_kit) and generate there — not on the public site.</small> <button onclick="setBackend()">or set a backend URL</button>`;
+    box.innerHTML=`⚠️ Can't reach the cloud generator. <button onclick="setBackend()">set backend URL</button>`;
   }
 }
-async function poll(id){
-  for(let i=0;i<120;i++){
+async function pollGen(id,ctx){
+  for(let i=0;i<140;i++){
     await new Promise(r=>setTimeout(r,3000));
     let j;try{j=await(await fetch(backend()+"/job?id="+id)).json();}catch(e){continue;}
     const box=document.getElementById("genBox");if(!box)return;
     if(j.status==="done"){
-      const warn=(j.tt_safe===false)?`<div class="ttwarn">⚠️ TikTok risk: this episode is intimate — <b>review every frame before posting</b>. ${j.tt_notes||''}</div>`:`<div class="ttok">✅ Built with TikTok-safe frames (no intimate/suggestive content)</div>`;
-      box.innerHTML=`<div class="genres"><b>✅ Promo ready</b>${warn}
-        <video src="${backend()+j.files.teaser}" controls autoplay muted loop></video>
-        <div class="grow"><a class="dl" href="${backend()+j.files.teaser}" download>⬇ 13s video</a>
-          <a class="dl" href="${backend()+j.files.cover}" download>⬇ cover</a>
-          <button class="dl" onclick="copyCap(\`${(j.caption||'').replace(/[\\\`]/g,'')}\`)">📋 caption + tags</button></div></div>`;
+      const teaser=backend()+j.files.teaser,cover=backend()+j.files.cover;
+      const warn=(j.tt_safe===false)?`<div class="ttwarn">⚠️ TikTok risk — review before posting. ${j.tt_notes||''}</div>`:`<div class="ttok">✅ TikTok-safe (AI poster + safe beats + BGM, no watermark)</div>`;
+      box.innerHTML=`<div class="genres"><b>✅ Promo ready · saved to Library</b>${warn}
+        <video src="${teaser}" controls autoplay muted loop></video>
+        <div class="grow"><a class="dl" href="${teaser}" download>⬇ 13s</a><a class="dl" href="${cover}" download>⬇ cover</a>
+          <button class="dl" onclick="copy(\`${(j.caption||'').replace(/[\\\`]/g,'')}\`,'Caption copied ✓')">📋 caption</button></div>
+        <div class="regenrow"><input id="regenPrompt" placeholder="Regenerate with a direction… e.g. angrier hook"><button onclick="generatePromo((document.getElementById('regenPrompt')||{}).value||'')">🔄 Regenerate</button></div></div>`;
+      saveToHistory({title:ctx.title,video_url:ctx.video_url,beats:ctx.beats,teaserUrl:teaser,coverUrl:cover,caption:j.caption||"",tt_safe:j.tt_safe,tt_notes:j.tt_notes||"",ts:Date.now(),prompt:ctx.prompt||""},cover);
       return;
-    } else if(j.status==="error"){box.innerHTML="⚠️ Generation failed. "+(j.log||"").slice(-160);return;}
+    } else if(j.status==="error"){box.innerHTML="⚠️ Failed. "+(j.log||"").slice(-180);return;}
     else box.innerHTML=`⏳ ${j.status}…`;
   }
+  const box=document.getElementById("genBox");if(box)box.innerHTML="⚠️ Timed out — try again.";
 }
-function copyCap(t){navigator.clipboard?.writeText(t);toast("Caption copied ✓");}
-function setBackend(){const u=prompt("Promo generator URL:",backend());if(u){localStorage.setItem(BACKEND_KEY,u.replace(/\/$/,''));toast("Backend set ✓");}}
+async function saveToHistory(item,coverUrl){
+  try{
+    const img=new Image();img.crossOrigin="anonymous";
+    await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=coverUrl;});
+    const cv=document.createElement("canvas");cv.width=180;cv.height=320;
+    cv.getContext("2d").drawImage(img,0,0,180,320);item.thumb=cv.toDataURL("image/jpeg",0.6);
+  }catch(e){item.thumb=coverUrl;}
+  state.history=state.history||[];state.history.unshift(item);state.history=state.history.slice(0,40);persist();
+  const lc=document.getElementById("libCount");if(lc)lc.textContent="("+state.history.length+")";
+}
+function renderLibrary(){
+  const g=document.getElementById("libGrid"),h=state.history||[];
+  const lc=document.getElementById("libCount");if(lc)lc.textContent=h.length?"("+h.length+")":"";
+  g.innerHTML=h.length?h.map((it,i)=>`<div class="libc" onclick="openLib(${i})">
+    <div class="libcov"><img src="${it.thumb||it.coverUrl}" loading="lazy">${it.tt_safe===false?'<span class="ttbadge">⚠️</span>':''}</div>
+    <div class="libt">${it.title}</div><div class="libd">${new Date(it.ts).toLocaleDateString()}${it.prompt?' · ↻':''}</div></div>`).join("")
+    :'<div class="empty">No generated material yet — generate a promo in Swipe.</div>';
+}
+function openLib(i){
+  const it=(state.history||[])[i];if(!it)return;
+  document.getElementById("libSheet").innerHTML=`<button class="libx" onclick="closeLib()">✕</button>
+    <h3 style="font-size:19px;font-weight:600;padding-right:34px">${it.title}</h3>
+    ${it.tt_safe===false?'<div class="ttwarn" style="margin:8px 0">⚠️ TikTok risk — review before posting. '+(it.tt_notes||'')+'</div>':'<div class="ttok" style="margin:8px 0">✅ TikTok-safe</div>'}
+    <video src="${it.teaserUrl}" controls loop poster="${it.thumb||it.coverUrl}" style="width:100%;border-radius:10px;margin:6px 0;background:#000;max-height:46vh"></video>
+    <textarea readonly style="width:100%;height:74px;background:#0c0f1a;border:1px solid var(--line);border-radius:9px;color:#cbd;font-size:12px;padding:9px;resize:none">${(it.caption||'').replace(/</g,'&lt;')}</textarea>
+    <div class="grow" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px">
+      <a class="dl" href="${it.teaserUrl}" download>⬇ 13s</a><a class="dl" href="${it.coverUrl}" download>⬇ cover</a>
+      <button class="dl" onclick="copy(\`${(it.caption||'').replace(/[\\\`]/g,'')}\`,'Caption copied ✓')">📋 caption</button></div>
+    <div class="regenrow"><input id="libRegenPrompt" placeholder="Regenerate with a direction…"><button onclick="regenFromLib(${i})">🔄 Regenerate</button></div>`;
+  document.getElementById("libModal").classList.add("on");
+}
+function closeLib(){document.getElementById("libModal").classList.remove("on");}
+function regenFromLib(i){
+  const it=(state.history||[])[i];if(!it||!it.video_url)return toast("Missing source video");
+  const p=((document.getElementById("libRegenPrompt")||{}).value||"").trim();
+  closeLib();runGen({video_url:it.video_url,title:it.title,beats:it.beats||[],prompt:p});
+}
 
 /* ---- PK (mode B) ---- */
 let pkPair=null;
@@ -415,7 +490,7 @@ function queuePack(t){toast("Queued for nuvelle_kit → 13s pack");}
 function go(v){document.querySelectorAll(".view").forEach(e=>e.classList.remove("on"));
   document.getElementById("v-"+v).classList.add("on");
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
-  if(v==="pk")renderPK();if(v==="board")renderBoard();scrollTo(0,0);}
+  if(v==="pk")renderPK();if(v==="board")renderBoard();if(v==="library")renderLibrary();scrollTo(0,0);}
 
 /* auto-resume if already signed in */
 state=load();if(state&&state.auth)boot();
