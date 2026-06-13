@@ -4,3 +4,5 @@ _uploads/
 __pycache__/
 *.filter.txt
 *.log
+_vidcache/
+votes.json

@@ -367,7 +367,7 @@ function generatePromo(promptArg){
   if(!swCur)return;
   if(!swCur.video_url)return toast("This drama has no video to generate from");
   const beats=highlights.map(h=>h.t).sort((a,b)=>a-b);
-  runGen({video_url:swCur.video_url,title:swCur.title||"Promo",beats,prompt:(typeof promptArg==="string"?promptArg:"")});
+  runGen({video_url:swCur.video_url,title:swCur.title||"Promo",beats,prompt:(typeof promptArg==="string"?promptArg:""),cover_url:swCur.cover_image_url||""});
 }
 async function runGen(ctx){
   toast("Generating… ~1-2 min");
@@ -378,7 +378,7 @@ async function runGen(ctx){
   box.innerHTML=`⏳ Generating <b>${ctx.title}</b>…<br><small>${ctx.prompt?'direction: '+ctx.prompt:(ctx.beats.length?ctx.beats.length+' highlights':'auto beats')} · cloud ~1-2 min</small>`;
   try{
     const r=await fetch(backend()+"/gen",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({video_url:ctx.video_url,title:ctx.title,ep:1,dur:13,beats:ctx.beats,prompt:ctx.prompt||""})});
+      body:JSON.stringify({video_url:ctx.video_url,title:ctx.title,ep:1,dur:13,beats:ctx.beats,prompt:ctx.prompt||"",cover_url:ctx.cover_url||""})});
     const j=await r.json();if(!j.job_id)throw new Error(j.error||"failed");
     pollGen(j.job_id,ctx);
   }catch(e){
@@ -399,7 +399,7 @@ async function pollGen(id,ctx){
         <div class="grow"><a class="dl" href="${teaser}" download>⬇ 13s</a><a class="dl" href="${cover}" download>⬇ cover</a>
           <button class="dl" onclick="copy(\`${(j.caption||'').replace(/[\\\`]/g,'')}\`,'Caption copied ✓')">📋 caption</button></div>
         <div class="regenrow"><input id="regenPrompt" placeholder="Regenerate with a direction… e.g. angrier hook"><button onclick="generatePromo((document.getElementById('regenPrompt')||{}).value||'')">🔄 Regenerate</button></div></div>`;
-      saveToHistory({title:ctx.title,video_url:ctx.video_url,beats:ctx.beats,teaserUrl:teaser,coverUrl:cover,caption:j.caption||"",tt_safe:j.tt_safe,tt_notes:j.tt_notes||"",ts:Date.now(),prompt:ctx.prompt||""},cover);
+      saveToHistory({title:ctx.title,video_url:ctx.video_url,cover_url:ctx.cover_url||"",beats:ctx.beats,teaserUrl:teaser,coverUrl:cover,caption:j.caption||"",tt_safe:j.tt_safe,tt_notes:j.tt_notes||"",ts:Date.now(),prompt:ctx.prompt||""},cover);
       return;
     } else if(j.status==="error"){box.innerHTML="⚠️ Failed. "+(j.log||"").slice(-180);return;}
     else box.innerHTML=`⏳ ${j.status}…`;
@@ -441,7 +441,7 @@ function closeLib(){document.getElementById("libModal").classList.remove("on");}
 function regenFromLib(i){
   const it=(state.history||[])[i];if(!it||!it.video_url)return toast("Missing source video");
   const p=((document.getElementById("libRegenPrompt")||{}).value||"").trim();
-  closeLib();runGen({video_url:it.video_url,title:it.title,beats:it.beats||[],prompt:p});
+  closeLib();runGen({video_url:it.video_url,title:it.title,beats:it.beats||[],prompt:p,cover_url:it.cover_url||""});
 }
 
 /* ---- PK (mode B) ---- */

@@ -190,15 +190,19 @@ def fallback_plan(frames, meta):
 
 
 # ---------------------------------------------------------------- COVER
-def render_cover(frame_path, plan, meta, out, is_art=False):
+def render_cover(frame_path, plan, meta, out, is_art=False, official=False):
     W, H = 1080, 1920
     im = Image.open(frame_path).convert("RGB")
+    if official:
+        # official covers bake their own title + "ReelShort Original" mark into the BOTTOM band.
+        # Crop that band off (keep the character art); we re-brand with our own title/CTA below.
+        im = im.crop((0, 0, im.width, int(im.height*0.66)))
     sc = max(W/im.width, H/im.height)
     im = im.resize((int(im.width*sc), int(im.height*sc)), Image.LANCZOS)
-    im = im.crop(((im.width-W)//2, (im.height-H)//2, (im.width-W)//2+W, (im.height-H)//2+H))
+    im = im.crop(((im.width-W)//2, 0, (im.width-W)//2+W, H))
     from PIL import ImageEnhance
     im = ImageEnhance.Contrast(im).enhance(1.05); im = ImageEnhance.Color(im).enhance(1.05)
-    if not is_art:
+    if not is_art and not official:
         # frame fallback: blur a band low on the body to kill any burned subtitle
         band = (0, 1150, W, 1470)
         im.paste(im.crop(band).filter(ImageFilter.GaussianBlur(22)), band)
@@ -219,12 +223,12 @@ def render_cover(frame_path, plan, meta, out, is_art=False):
     kx = (W-kw)//2
     d.rounded_rectangle([kx-22, 232, kx+kw+22, 286], radius=27, fill=(178,92,255,235))
     d.text((kx, 244), kick, font=kf, fill=(255,255,255,255))
-    # hook lines — auto-fit width
-    lines = [l for l in plan["hook"] if l]
+    # hook lines — auto-fit width. SKIP on official covers (characters fill the frame → hook would cover faces)
+    lines = [] if official else [l for l in plan["hook"] if l]
     MARGIN = 56; max_w = W - 2*MARGIN
     def line_w(txt, f): bb = d.textbbox((0,0), txt, font=f); return bb[2]-bb[0]
     size = 96
-    while size > 40:
+    while lines and size > 40:
         f = B.font(B.F_BLACK, size)
         if all(line_w(l, f) <= max_w for l in lines): break
         size -= 2
@@ -360,8 +364,9 @@ def build_teaser(mp4, beats_ts, src_dur, outro_jpg, bug_png, out, target=30, mus
     blen = round(drama/len(chosen), 2)
     segs = [(round(max(0, min(t, src_dur-blen-0.2)), 2), blen) for t in chosen]
     total = round(sum(ln for _, ln in segs) + outro, 2)
-    # strip source watermark (ReelShort 'R' sits top-right or bottom-right depending on the show)
-    DL = "delogo=x=864:y=26:w=156:h=150,delogo=x=864:y=1638:w=156:h=150"
+    # strip source watermark (ReelShort 'R' moves between corners) — delogo all four
+    DL = ("delogo=x=40:y=92:w=164:h=150,delogo=x=876:y=26:w=160:h=150,"
+          "delogo=x=40:y=1648:w=164:h=150,delogo=x=876:y=1644:w=160:h=150")
     # KEEP ORIGINAL AUDIO of the (safe) beats — dialogue + conflict are the hook that drives clicks.
     fc, labels = [], []
     for i, (s, ln) in enumerate(segs):
@@ -404,6 +409,7 @@ def main():
     ap.add_argument("--dur", type=int, default=13, help="teaser length in seconds (default 13; <=18 = fast 3-beat cut)")
     ap.add_argument("--music", default=None, help="BGM track (defaults to a rotating track in music/)")
     ap.add_argument("--prompt", default="", help="reviewer creative direction to steer the AI (for regenerate)")
+    ap.add_argument("--cover-image", default="", help="use this existing cover image URL instead of generating one")
     a = ap.parse_args()
 
     meta = {"title": a.title, "ep": a.ep, "sub": a.sub, "handle": a.handle, "genre": a.genre}
@@ -442,20 +448,29 @@ def main():
     cov_src = os.path.join(work, "cover_src.jpg"); grab(a.mp4, cover_ts, cov_src, w=1080)
     # cover = AI-generated cinematic poster (sharp, has taste); fall back to the frame if gen fails
     art_path = os.path.join(work, "art.png"); poster_ok = False
-    if not a.no_ai:
+    if a.cover_image:
+        # an official cover exists — use it directly (no need to generate)
+        try:
+            req = urllib.request.Request(a.cover_image, headers={"User-Agent": "Mozilla/5.0"})
+            open(art_path, "wb").write(urllib.request.urlopen(req, timeout=40).read())
+            poster_ok = True; print("[art] using provided official cover")
+        except Exception as e:
+            print("[art] official cover dl failed:", str(e)[:100])
+    if not poster_ok and not a.no_ai:
         try:
             gen_poster_art(plan.get("art_prompt", ""), art_path); poster_ok = True; print("[art] poster generated")
         except Exception as e:
             print("[art] poster gen failed -> frame:", str(e)[:120])
     base = art_path if poster_ok else cov_src
-    cover = render_cover(base, plan, meta, os.path.join(outdir, "cover.jpg"), is_art=poster_ok)
+    used_official = bool(a.cover_image) and poster_ok
+    cover = render_cover(base, plan, meta, os.path.join(outdir, "cover.jpg"), is_art=poster_ok, official=used_official)
     # 图文完整性 QA: flag if the headline covers a face or the layout isn't clean
     plan["cover_warn"] = ""
     if not a.no_ai:
         fcov, friendly, note = check_cover(cover)
-        if fcov or not friendly:
-            plan["cover_warn"] = note or ("text covers the subject's face" if fcov else "layout not clean")
-            print("⚠️ [cover-qa]", plan["cover_warn"])
+        if fcov:
+            plan["cover_warn"] = "Headline may cover the subject's face — regenerate for a cleaner layout"
+            print("⚠️ [cover-qa] face covered")
     outro = render_coming_soon(base, plan, meta, os.path.join(work, "outro.jpg"))
     bug = os.path.join(work, "bug.png"); B.logo_bug(430).save(bug)
     teaser = build_teaser(a.mp4, beats_ts, info["dur"], outro, bug, os.path.join(outdir, "teaser.mp4"), target=a.dur, music=a.music)

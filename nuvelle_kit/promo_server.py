@@ -31,7 +31,7 @@ def slugify(t):
     return re.sub(r"[^a-z0-9]+", "_", (t or "promo").lower()).strip("_") or "promo"
 
 
-def run_job(job_id, src_path, title, ep, dur, beats=None, prompt=""):
+def run_job(job_id, src_path, title, ep, dur, beats=None, prompt="", cover_image=""):
     j = JOBS[job_id]
     try:
         j["status"] = "rendering"
@@ -39,6 +39,8 @@ def run_job(job_id, src_path, title, ep, dur, beats=None, prompt=""):
                "--title", title, "--ep", str(ep), "--dur", str(dur)]
         if prompt:
             cmd += ["--prompt", prompt]
+        if cover_image:
+            cmd += ["--cover-image", cover_image]
         if beats:
             bs = [round(float(b), 1) for b in beats if float(b) > 0.3]
             if bs:
@@ -72,19 +74,26 @@ def run_job(job_id, src_path, title, ep, dur, beats=None, prompt=""):
             except Exception: pass
 
 
-def download_and_run(job_id, url, title, ep, dur, beats=None, prompt=""):
+def download_and_run(job_id, url, title, ep, dur, beats=None, prompt="", cover_image=""):
     """Background: download the URL then render (so /gen returns immediately)."""
     try:
         JOBS[job_id]["status"] = "downloading"
         src = fetch_url_to_mp4(url, job_id)
     except Exception as e:
         JOBS[job_id]["status"] = "error"; JOBS[job_id]["log"] = "download: " + str(e)[:300]; return
-    run_job(job_id, src, title, ep, dur, beats=beats, prompt=prompt)
+    run_job(job_id, src, title, ep, dur, beats=beats, prompt=prompt, cover_image=cover_image)
 
+
+import hashlib
+CACHE = os.path.join(HERE, "_vidcache"); os.makedirs(CACHE, exist_ok=True)
 
 def fetch_url_to_mp4(url, job_id):
-    """Download an m3u8/mp4 URL to a local mp4 for the pipeline."""
-    dst = os.path.join(TMP, f"{job_id}.mp4")
+    """Download an m3u8/mp4 URL to a local mp4 — cached by URL so we never re-download the same video."""
+    key = hashlib.md5(url.encode()).hexdigest()[:16]
+    cached = os.path.join(CACHE, key + ".mp4")
+    if os.path.exists(cached) and os.path.getsize(cached) > 100000:
+        return cached
+    dst = cached
     # -c copy works for HLS->mp4; re-mux audio for aac-in-ts
     r = subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y",
                         "-i", url, "-c", "copy", "-bsf:a", "aac_adtstoasc", dst],
@@ -179,11 +188,11 @@ class H(BaseHTTPRequestHandler):
                 ln = int(self.headers.get("Content-Length", 0))
                 body = json.loads(self.rfile.read(ln) or b"{}")
                 title = body.get("title", "Promo"); ep = body.get("ep", 1); dur = body.get("dur", 13)
-                beats = body.get("beats") or None; prompt = body.get("prompt", "")
+                beats = body.get("beats") or None; prompt = body.get("prompt", ""); cover_image = body.get("cover_url", "")
                 url = body.get("video_url", "")
                 if not url: return self._json({"error": "no video_url"}, 400)
                 JOBS[jid]["status"] = "downloading"
-                threading.Thread(target=download_and_run, args=(jid, url, title, ep, int(dur)), kwargs={"beats": beats, "prompt": prompt}, daemon=True).start()
+                threading.Thread(target=download_and_run, args=(jid, url, title, ep, int(dur)), kwargs={"beats": beats, "prompt": prompt, "cover_image": cover_image}, daemon=True).start()
                 return self._json({"job_id": jid})
             threading.Thread(target=run_job, args=(jid, src, title, ep, int(dur)), kwargs={"beats": beats, "prompt": prompt}, daemon=True).start()
             return self._json({"job_id": jid})
