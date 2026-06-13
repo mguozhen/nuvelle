@@ -7,3 +7,6 @@ node_modules/
 .env
 .DS_Store
 __pycache__/
+
+# licensed macOS fonts — bundled only into the private Railway deploy
+nuvelle_kit/fonts/

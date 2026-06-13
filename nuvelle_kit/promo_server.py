@@ -167,7 +167,7 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PROMO_PORT", "8799"))
-    print(f"Nuvelle promo-shorts service on http://127.0.0.1:{port}")
-    print("Expose:  cloudflared tunnel --url http://localhost:%d" % port)
-    ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+    port = int(os.environ.get("PORT") or os.environ.get("PROMO_PORT", "8799"))
+    host = os.environ.get("HOST", "0.0.0.0")
+    print(f"Nuvelle promo-shorts service on http://{host}:{port}")
+    ThreadingHTTPServer((host, port), H).serve_forever()

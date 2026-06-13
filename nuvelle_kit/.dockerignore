@@ -1,0 +1,6 @@
+out/
+_work/
+_uploads/
+__pycache__/
+*.filter.txt
+*.log

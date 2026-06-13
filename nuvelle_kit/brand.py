@@ -14,11 +14,15 @@ DIM   = (154, 162, 192)
 import os
 SUP = "/System/Library/Fonts/Supplemental/"
 CORE = "/System/Library/Fonts/"
-F_BLACK = SUP + "Arial Black.ttf"
-F_BOLD  = SUP + "Arial Bold.ttf"
-F_REG   = SUP + "Arial.ttf"
-F_DIDOT = SUP + "Didot.ttc"        # drama-title serif
-F_GROTESK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "SpaceGrotesk.ttf")  # brand wordmark (locked: 方案2)
+_FD = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts")  # bundled fonts (travel with cloud deploy)
+def _f(name, fallback):
+    p = os.path.join(_FD, name)
+    return p if os.path.exists(p) else fallback
+F_BLACK = _f("Arial Black.ttf", SUP + "Arial Black.ttf")
+F_BOLD  = _f("Arial Bold.ttf",  SUP + "Arial Bold.ttf")
+F_REG   = _f("Arial.ttf",       SUP + "Arial.ttf")
+F_DIDOT = _f("Didot.ttc",       SUP + "Didot.ttc")        # drama-title serif
+F_GROTESK = _f("SpaceGrotesk.ttf", os.path.join(os.path.dirname(os.path.abspath(__file__)), "SpaceGrotesk.ttf"))  # brand wordmark (locked: 方案2)
 
 
 def font(path, size):

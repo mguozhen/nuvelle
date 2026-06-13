@@ -211,7 +211,7 @@ function cover(d){return d.cover_image_url?`<img src="${d.cover_image_url}" refe
 /* ---- SWIPE (mode A) ---- */
 /* ===== SWIPE: double-buffered fast-switch + two-column + tags + highlights + generate ===== */
 const BACKEND_KEY="nuvelle_promo_backend";
-function backend(){return localStorage.getItem(BACKEND_KEY)||"";}  /* "" = same-origin (works when served by promo_server on localhost:8799) */
+function backend(){return localStorage.getItem(BACKEND_KEY)||"https://nuvelle-generator-production.up.railway.app";}  /* cloud generator (Railway); override via setBackend() */
 let queue=[],qPtr=0,vis=0,hlsArr=[null,null],muteState=true,built=false;
 let swCur=null,swTags=[],customTags=[],highlights=[];
 
