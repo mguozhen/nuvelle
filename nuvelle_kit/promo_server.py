@@ -40,10 +40,16 @@ def run_job(job_id, src_path, title, ep, dur, beats=None):
             cp = os.path.join(d, "caption.txt")
             if os.path.exists(cp):
                 cap = open(cp).read()
+            tt_safe, tt_notes = True, ""
+            pj = os.path.join(d, "plan.json")
+            if os.path.exists(pj):
+                try:
+                    pl = json.load(open(pj)); tt_safe = pl.get("tt_safe", True); tt_notes = pl.get("tt_notes", "")
+                except Exception: pass
             j.update(status="done", slug=slug,
                      files={"teaser": f"/file?slug={slug}&n=teaser.mp4",
                             "cover": f"/file?slug={slug}&n=cover.jpg"},
-                     caption=cap, title=title)
+                     caption=cap, title=title, tt_safe=tt_safe, tt_notes=tt_notes)
         else:
             j["status"] = "error"
     except Exception as e:

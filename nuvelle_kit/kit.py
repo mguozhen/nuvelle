@@ -86,17 +86,22 @@ def ai_vision(image_path, prompt, model="claude-sonnet-4-6", max_tokens=900):
 
 def plan_with_ai(sheet, frames, meta):
     idxs = list(range(len(frames)))
-    prompt = f"""You are a viral TikTok short-drama editor for the brand "Nuvelle".
+    prompt = f"""You are a viral but POLICY-COMPLIANT TikTok short-drama editor for the brand "Nuvelle".
 This contact sheet shows {len(frames)} numbered frames (0-{len(frames)-1}) sampled in time order from a vertical short-drama episode titled "{meta['title']}".
 
+⚠️ CRITICAL — TIKTOK SAFETY (overrides everything; one flagged clip = the account is banned):
+Pick frames and write copy that PASS TikTok moderation. For BOTH cover_idx and beat_idxs you MUST choose only NON-SEXUAL, non-suggestive moments. STRICTLY AVOID any frame showing: kissing or making out, two people intimate in/on a bed, undressing / lingerie / towel / shirtless-intimate, nudity or partial nudity, cleavage- or body-focused framing, straddling / lying-together / sexually suggestive poses or camera angles. Instead PREFER emotional & conflict moments — crying, shock, fear, anger, a slap, a confrontation, tears, a shocking reveal (a document / phone / photo), someone storming off, a wounded face. These are both policy-safe AND more clickable.
+
 Return STRICT JSON only (no markdown), with these keys:
-- "cover_idx": the frame number that makes the BEST cover — a clear emotional face roughly in the MIDDLE of the frame (empty space above the head and below), dramatic, minimal burned-in subtitle. Prefer a wounded/crying/shocked close-ish shot.
-- "beat_idxs": array of EXACTLY 4 frame numbers in increasing time order that form an escalating teaser (setup -> tension -> betrayal/shock -> climax). Pick the most dramatic, varied moments.
+- "cover_idx": best cover frame — a clear EMOTIONAL face (crying / shocked / wounded / angry) roughly centered, dramatic, minimal burned-in subtitle, and FULLY non-sexual.
+- "beat_idxs": EXACTLY 4 frame numbers in increasing time order forming an escalating, NON-SEXUAL teaser (setup -> tension -> shock -> climax). Skip any suggestive frame even if it looks dramatic.
+- "tt_safe": true only if you could pick a cover and 4 beats that are ALL non-sexual / TikTok-safe; false if this episode is so intimate that a safe selection was not possible.
+- "tt_notes": one short note if tt_safe is false (what's risky), else "".
 - "genre": 2-4 word genre (e.g. "Revenge Romance").
-- "hook": array of EXACTLY 3 short ALL-CAPS lines for the cover headline; punchy, emotional, the 3rd line is the twist. No emojis.
+- "hook": EXACTLY 3 short ALL-CAPS cover lines; punchy, emotional, 3rd line is the twist. No emojis, no sexual words.
 - "logline": one short sentence (<=8 words), Title Case, no period.
-- "caption": a TikTok caption for an account-warming post (goal = FOLLOWERS). 1-2 sentences, strong hook, 2-3 emojis, ends asking them to FOLLOW for the next part. No hashtags inside.
-- "hashtags": array of 10-12 lowercase hashtags (strings starting with #), mixing broad (#fyp #shortdrama) and niche (theme-specific).
+- "caption": a TikTok caption for an account-warming post (goal = FOLLOWERS). 1-2 sentences, strong EMOTIONAL hook, 2-3 emojis, ends asking them to FOLLOW for the next part. No hashtags inside. POLICY: no sexual or suggestive enticement; never use words like spicy/steamy/hot/seductive/uncensored/18+/naughty/bed — keep it emotional and dramatic only.
+- "hashtags": array of 10-12 lowercase hashtags (#fyp #shortdrama + theme). No sexual or suggestive tags.
 Frames available: {idxs}."""
     raw = ai_vision(sheet, prompt)
     m = re.search(r"\{.*\}", raw, re.S)
@@ -110,9 +115,20 @@ Frames available: {idxs}."""
         if cand not in bi: bi.append(cand)
         else: bi.append((bi[-1]+1) % len(frames))
     plan["beat_idxs"] = sorted(bi)[:4]
-    plan["hook"] = [str(x).upper() for x in plan["hook"]][:3]
+    plan["hook"] = [tt_clean(str(x)).upper() for x in plan["hook"]][:3]
     while len(plan["hook"]) < 3: plan["hook"].append("")
+    plan.setdefault("tt_safe", True); plan.setdefault("tt_notes", "")
+    plan["caption"] = tt_clean(plan.get("caption", ""))
+    plan["hashtags"] = [h for h in plan.get("hashtags", []) if not _BANNED.search(h)]
+    plan["logline"] = tt_clean(plan.get("logline", ""))
     return plan
+
+
+# TikTok content-policy guard: scrub sexual/suggestive words from any generated copy
+_BANNED = re.compile(r"\b(spicy|steamy|seductive|seduce|uncensored|18\+?|nsfw|sexy|naughty|strip|lingerie|in bed|bedroom|undress|nude|nudity|sensual|thirst|horny|kinky)\b", re.I)
+def tt_clean(s):
+    s = _BANNED.sub("", s or "")
+    return re.sub(r"\s{2,}", " ", s).strip(" ,.-")
 
 
 def fallback_plan(frames, meta):
@@ -359,6 +375,8 @@ def main():
             plan = plan_with_ai(sheet, frames, meta); print("[plan] AI ok ·", plan["hook"])
         except Exception as e:
             print("[plan] AI failed -> fallback:", str(e)[:140]); plan = fallback_plan(frames, meta)
+    if not plan.get("tt_safe", True):
+        print("⚠️ [tt-safety] intimate episode — REVIEW before posting:", plan.get("tt_notes", ""))
 
     # resolve timestamps (CLI overrides win)
     cover_ts = a.cover_ts if a.cover_ts is not None else frames[plan["cover_idx"]][0]

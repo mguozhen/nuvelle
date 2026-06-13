@@ -73,6 +73,8 @@ nav button.on{color:#fff;border-bottom-color:var(--p2)}
 .genbtn{width:100%;margin-top:11px;background:var(--grad);color:#fff;border:none;border-radius:13px;padding:14px;font-size:14.5px;font-weight:700;cursor:pointer}
 .genbox{background:#0c0f1a;border:1px solid #a14bff44;border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:13.5px;color:#dfe3ee}
 .genbox small{color:var(--dim)}.genbox code{background:#11141f;border-radius:5px;padding:1px 6px;font-size:11.5px;color:#ff8fd0}
+.ttwarn{background:#3a1414;border:1px solid #ff7a7a55;color:#ffd6d6;font-size:12px;border-radius:9px;padding:9px 11px;margin:9px 0;line-height:1.45}
+.ttok{background:#11261b;border:1px solid #5fd39a44;color:#bdf0d6;font-size:11.5px;border-radius:9px;padding:7px 11px;margin:9px 0}
 .genres video{width:100%;border-radius:10px;margin:10px 0;background:#000}
 .genres .grow{display:flex;gap:8px;flex-wrap:wrap}
 .dl{font-size:12px;font-weight:600;color:#fff;background:#1a1d2a;border:1px solid var(--line);border-radius:9px;padding:8px 12px;cursor:pointer}
@@ -277,7 +279,7 @@ function renderPanel(d){
     <div class="plabel">Taste tags</div>
     <div class="tastes" id="tasteWrap">${TASTE.map(tagBtn).join("")}${customTags.map(tagBtn).join("")}</div>
     <div class="addtag"><input id="newTag" placeholder="+ add your own tag" onkeydown="if(event.key==='Enter')addTag()"><button onclick="addTag()">Add</button></div>
-    <div class="plabel">🎬 Highlights for promo <span id="hlInfo">${highlights.length?highlights.length+" marked":"watch & mark hot moments"}</span></div>
+    <div class="plabel">🎬 Highlights for promo <span id="hlInfo">${highlights.length?highlights.length+" marked":"mark dramatic, TikTok-safe moments (no intimate frames)"}</span></div>
     <div class="hlchips" id="hlChips"></div>
     <div class="verdicts">
       <div class="vb pass" onclick="vote('pass')">👎 Pass</div>
@@ -335,7 +337,7 @@ async function generatePromo(){
     const j=await r.json();if(!j.job_id)throw new Error(j.error||"failed");
     poll(j.job_id);
   }catch(e){
-    document.getElementById("genBox").innerHTML=`⚠️ Can't reach the generator.<br><small>Run <code>python3 promo_server.py</code> locally and open this dashboard at <b>${backend()}</b>, or set the backend URL.</small> <button onclick="setBackend()">Set backend</button>`;
+    document.getElementById("genBox").innerHTML=`⚠️ The generator only runs locally (it needs ffmpeg + AI).<br><small>Open this dashboard at <a href="http://localhost:8799" style="color:#ff8fd0">http://localhost:8799</a> (run <code>python3 promo_server.py</code> in nuvelle_kit) and generate there — not on the public site.</small> <button onclick="setBackend()">or set a backend URL</button>`;
   }
 }
 async function poll(id){
@@ -344,7 +346,8 @@ async function poll(id){
     let j;try{j=await(await fetch(backend()+"/job?id="+id)).json();}catch(e){continue;}
     const box=document.getElementById("genBox");if(!box)return;
     if(j.status==="done"){
-      box.innerHTML=`<div class="genres"><b>✅ Promo ready</b>
+      const warn=(j.tt_safe===false)?`<div class="ttwarn">⚠️ TikTok risk: this episode is intimate — <b>review every frame before posting</b>. ${j.tt_notes||''}</div>`:`<div class="ttok">✅ Built with TikTok-safe frames (no intimate/suggestive content)</div>`;
+      box.innerHTML=`<div class="genres"><b>✅ Promo ready</b>${warn}
         <video src="${backend()+j.files.teaser}" controls autoplay muted loop></video>
         <div class="grow"><a class="dl" href="${backend()+j.files.teaser}" download>⬇ 13s video</a>
           <a class="dl" href="${backend()+j.files.cover}" download>⬇ cover</a>
