@@ -1,0 +1,22 @@
+# The API image only needs the FastAPI app and the promo Python package.
+# Keep the root build context small even when frontend/node artifacts exist.
+*
+
+!nuvelle_api/
+!nuvelle_api/**
+!nuvelle_kit/
+!nuvelle_kit/**
+
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.venv/
+**/venv/
+
+nuvelle_kit/out/
+nuvelle_kit/_work/
+nuvelle_kit/_uploads/
+nuvelle_kit/_vidcache/
+nuvelle_kit/fonts/
