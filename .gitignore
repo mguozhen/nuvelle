@@ -1,10 +1,15 @@
+.superpowers/
 .vercel/
+.next/
 out/
+dist/
+coverage/
 _work/
 _uploads/
 _vidcache/
 votes.json
 node_modules/
+*.tsbuildinfo
 *.log
 .env
 .DS_Store
