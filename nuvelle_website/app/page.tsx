@@ -10,7 +10,6 @@ import { HeroCarousel } from "@/components/hero-carousel";
 import { Button } from "@/components/ui/button";
 import {
   bannerItems,
-  displayAliasForDrama,
   getDramaBySlug,
   rows,
   searchDramas,
@@ -22,6 +21,10 @@ const footerLinks = {
   Explore: ["New Releases", "Categories", "Trending", "For Creators"],
   Company: ["About Nuvelle", "Careers", "Press", "Contact"],
   Legal: ["Terms of Service", "Privacy Policy", "Content Policy", "Support"]
+};
+
+const searchDisplayAliases: Record<string, string> = {
+  mafia_wife: "Mafia Wife"
 };
 
 function scrollToApp() {
@@ -103,7 +106,7 @@ export default function WebsiteHome() {
                       key={drama.slug}
                       drama={drama}
                       onOpen={openDrama}
-                      searchAlias={displayAliasForDrama(drama.slug)}
+                      searchAlias={searchDisplayAliases[drama.slug]}
                     />
                   ))}
                 </div>

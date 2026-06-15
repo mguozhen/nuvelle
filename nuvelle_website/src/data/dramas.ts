@@ -266,7 +266,3 @@ export function statForDrama(slug: string): { views: string; rating: string } {
     rating: (4.5 + (hash % 5) / 10).toFixed(1)
   };
 }
-
-export function displayAliasForDrama(slug: string): string | undefined {
-  return searchAliases[slug]?.[0];
-}
