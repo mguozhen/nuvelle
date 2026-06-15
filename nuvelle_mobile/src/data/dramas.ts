@@ -132,7 +132,7 @@ const catalog: Drama[] = [
     title: "He Forgot He Loved Me",
     genre: "Tear-jerkers",
     episodes: "EP 1-9",
-    synopsis: "He lost every memory but one feeling he couldn't name - her."
+    synopsis: "He lost every memory but one feeling he couldn't name — her."
   },
   {
     slug: "mafia_wife",
