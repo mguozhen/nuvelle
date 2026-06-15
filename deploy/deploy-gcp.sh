@@ -79,16 +79,26 @@ build_frontend() {
 
   echo "Building frontend package $package" >&2
   if [[ "$package" == "nuvelle_admin" && -n "$backend_url" ]]; then
-    VITE_NUVELLE_BACKEND_URL="$backend_url" pnpm --filter "$package" build
+    VITE_NUVELLE_API_URL="$backend_url/api/v1" pnpm --filter "$package" build
   else
     pnpm --filter "$package" build
   fi
 }
 
 deploy_backend() {
-  local service="nuvelle-kit"
+  local service="nuvelle-api"
   local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service:$TAG"
   local secret_args=()
+
+  if [[ -z "${DATABASE_URL:-}" ]]; then
+    cat >&2 <<EOF
+DATABASE_URL is required to deploy nuvelle-api.
+
+Point it at your managed PostgreSQL database, then rerun:
+  DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DB PROJECT_ID=$PROJECT_ID REGION=$REGION bash deploy/deploy-gcp.sh
+EOF
+    exit 2
+  fi
 
   if gcloud secrets describe FLATKEY_API_KEY --project="$PROJECT_ID" >/dev/null 2>&1; then
     secret_args+=(--set-secrets=FLATKEY_API_KEY=FLATKEY_API_KEY:latest)
@@ -99,13 +109,14 @@ deploy_backend() {
       --data-file=-
     secret_args+=(--set-secrets=FLATKEY_API_KEY=FLATKEY_API_KEY:latest)
   else
-    echo "Warning: FLATKEY_API_KEY is not set; nuvelle-kit will deploy, but AI promo generation will fall back or fail." >&2
+    echo "Warning: FLATKEY_API_KEY is not set; promo generation will fall back or fail." >&2
   fi
 
   echo "Building $service -> $image" >&2
-  gcloud builds submit nuvelle_kit \
+  gcloud builds submit . \
     --project="$PROJECT_ID" \
-    --tag="$image" >&2
+    --config=deploy/cloudbuild-api.yaml \
+    --substitutions="_IMAGE=$image" >&2
 
   echo "Deploying Cloud Run service $service" >&2
   gcloud run deploy "$service" \
@@ -118,6 +129,7 @@ deploy_backend() {
     --timeout=900 \
     --min-instances=0 \
     --max-instances=2 \
+    --set-env-vars="DATABASE_URL=$DATABASE_URL,ENVIRONMENT=production,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out" \
     "${secret_args[@]}" >&2
 
   gcloud run services describe "$service" \

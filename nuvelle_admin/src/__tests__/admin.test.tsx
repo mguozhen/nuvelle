@@ -46,6 +46,6 @@ describe("admin app", () => {
     localStorage.setItem("nuvelle_admin_state", JSON.stringify({ loggedIn: true, votes: {}, generated: [] }));
     render(<App />);
     await user.click(screen.getByRole("button", { name: /backend/i }));
-    expect(screen.getByDisplayValue("http://localhost:8799")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("http://localhost:8000/api/v1")).toBeInTheDocument();
   });
 });

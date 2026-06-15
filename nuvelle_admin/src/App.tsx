@@ -138,7 +138,8 @@ export default function App() {
 
       persistState(next);
       setRemoteRated((current) => new Set(current).add(String(drama.id)));
-      void client.postVote({ dramaId: drama.id, verdict, score: nuvelleScore(drama) }).catch(() => {
+      void client.postVote({ dramaId: drama.id, verdict, score: nuvelleScore(drama) }).catch((error: unknown) => {
+        console.error("Remote vote sync failed", error);
         showStatus("Remote vote sync failed");
       });
     },
@@ -202,12 +203,12 @@ export default function App() {
           dur: duration,
           beats: [],
           prompt,
-          cover_image: drama.cover_image_url
+          cover_image: drama.cover_image_url || undefined
         },
         {
           title: `${drama.title || "Promo"} EP${episode}`,
           sourceUrl: videoUrl,
-          coverUrl: drama.cover_image_url,
+          coverUrl: drama.cover_image_url || undefined,
           episode,
           duration,
           prompt
@@ -225,7 +226,7 @@ export default function App() {
         title: drama.title || "Promo",
         ep: Number(episode),
         dur: duration,
-        cover_image: drama.cover_image_url
+        cover_image: drama.cover_image_url || undefined
       }));
 
       if (!items.length) {

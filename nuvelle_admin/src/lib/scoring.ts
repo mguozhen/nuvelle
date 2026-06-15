@@ -14,6 +14,10 @@ function textFor(drama: DramaRecord): string {
   return [drama.title, drama.platform, drama.genre, drama.signal, drama.synopsis_or_hook].filter(Boolean).join(" ");
 }
 
+function textValue(value: string | null | undefined): string {
+  return typeof value === "string" ? value : "";
+}
+
 function parseMagnitude(rawValue: string, suffix?: string): number {
   const value = Number(rawValue.replace(/,/g, ""));
   const normalizedSuffix = suffix?.toLowerCase();
@@ -33,13 +37,13 @@ function parseMagnitude(rawValue: string, suffix?: string): number {
   return value;
 }
 
-function revenueFrom(signal = ""): number {
-  const match = signal.match(/(?:revenue\s*)?\$\s*([\d,.]+)\s*([kmb])?/i);
+function revenueFrom(signal: string | null | undefined): number {
+  const match = textValue(signal).match(/(?:revenue\s*)?\$\s*([\d,.]+)\s*([kmb])?/i);
   return match ? parseMagnitude(match[1], match[2]) : 0;
 }
 
-function promotersFrom(signal = ""): number {
-  const match = signal.match(/([\d,.]+)\s*([kmb])?\s*promoters/i);
+function promotersFrom(signal: string | null | undefined): number {
+  const match = textValue(signal).match(/([\d,.]+)\s*([kmb])?\s*promoters/i);
   return match ? parseMagnitude(match[1], match[2]) : 0;
 }
 

@@ -8,12 +8,12 @@ This deploys Nuvelle to Cloud Run in the `nuvelle` GCP project.
 - `nuvelle-mobile` serves `nuvelle_mobile/dist`
 - `nuvelle-web` serves `nuvelle_web/dist`
 - `nuvelle-admin` serves `nuvelle_admin/dist`
-- `nuvelle-kit` serves `python3 -m nuvelle_kit.promo_server`
+- `nuvelle-api` serves FastAPI and imports `nuvelle_kit` for promo generation
 
-The deploy script deploys `nuvelle-kit` first, reads its Cloud Run URL, then builds `nuvelle_admin` with:
+The deploy script deploys `nuvelle-api` first, reads its Cloud Run URL, then builds `nuvelle_admin` with:
 
 ```bash
-VITE_NUVELLE_BACKEND_URL=<nuvelle-kit Cloud Run URL>
+VITE_NUVELLE_API_URL=<nuvelle-api Cloud Run URL>/api/v1
 ```
 
 That makes Admin use the deployed backend by default while still allowing local override through the `nuvelle_promo_backend` localStorage setting.
@@ -36,6 +36,12 @@ export FLATKEY_API_KEY=sk-...
 
 The deploy script stores it in Secret Manager as `FLATKEY_API_KEY`.
 
+The API also requires a managed PostgreSQL connection string:
+
+```bash
+export DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DB
+```
+
 ## Deploy
 
 ```bash
@@ -48,7 +54,7 @@ The script builds:
 pnpm --filter nuvelle_website build
 pnpm --filter nuvelle_mobile build
 pnpm --filter nuvelle_web build
-VITE_NUVELLE_BACKEND_URL=<backend-url> pnpm --filter nuvelle_admin build
+VITE_NUVELLE_API_URL=<api-url>/api/v1 pnpm --filter nuvelle_admin build
 ```
 
-Then it packages the generated static output directories into shared Nginx containers. The Python promo backend uses `nuvelle_kit/Dockerfile`.
+Then it packages the generated static output directories into shared Nginx containers. The FastAPI image is built with `nuvelle_api/Dockerfile`.

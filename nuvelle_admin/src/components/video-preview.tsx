@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import Hls from "hls.js";
 
 type VideoPreviewProps = {
-  poster?: string;
+  poster?: string | null;
   title?: string;
-  url?: string;
+  url?: string | null;
 };
 
 export function VideoPreview({ poster, title, url }: VideoPreviewProps) {
@@ -48,7 +48,7 @@ export function VideoPreview({ poster, title, url }: VideoPreviewProps) {
           loop
           muted
           playsInline
-          poster={poster}
+          poster={poster || undefined}
         />
       ) : poster ? (
         <img alt={title || "Drama cover"} className="h-full w-full object-cover" referrerPolicy="no-referrer" src={poster} />

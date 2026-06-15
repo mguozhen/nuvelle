@@ -1,4 +1,4 @@
-import { DEFAULT_BACKEND_URL, normalizeBackendUrl } from "@/lib/backend";
+import { DEFAULT_BACKEND_URL, LEGACY_PROMO_BACKEND_URL, normalizeBackendUrl } from "@/lib/backend";
 import type { VoteVerdict } from "@/types/drama";
 
 const ADMIN_STATE_KEY = "nuvelle_admin_state";
@@ -75,7 +75,13 @@ export function clearAdminState(): void {
 }
 
 export function loadBackendUrl(): string {
-  return normalizeBackendUrl(getLocalStorage()?.getItem(BACKEND_URL_KEY) || DEFAULT_BACKEND_URL);
+  const stored = normalizeBackendUrl(getLocalStorage()?.getItem(BACKEND_URL_KEY) || DEFAULT_BACKEND_URL);
+
+  if (stored === LEGACY_PROMO_BACKEND_URL) {
+    return DEFAULT_BACKEND_URL;
+  }
+
+  return stored;
 }
 
 export function saveBackendUrl(url: string): void {

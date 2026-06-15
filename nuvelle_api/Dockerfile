@@ -2,14 +2,19 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/workspace
 
 WORKDIR /app
 
-COPY requirements.txt .
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY nuvelle_api/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY nuvelle_api/ /app/
+COPY nuvelle_kit/ /workspace/nuvelle_kit/
 
 EXPOSE 8000
 

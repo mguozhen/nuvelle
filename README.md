@@ -8,8 +8,8 @@ Nuvelle is an AI short-drama distribution platform. The repo now uses a pnpm wor
 | Mobile PWA | `nuvelle_mobile/` | Vite React + Tailwind + shadcn-style UI | Installable consumer app, bottom tabs, My List |
 | CPS portal | `nuvelle_web/` | Vite React + Tailwind + shadcn-style UI | Nuvelle Boost distributor links and material packs |
 | Admin | `nuvelle_admin/` | Vite React + Tailwind + shadcn-style UI | Scout dashboard, scoring, promo generation workflows |
-| Business API | `nuvelle_api/` | FastAPI + PostgreSQL + SQLAlchemy | Versioned backend API, health checks, domain models, migrations |
-| Promo backend | `nuvelle_kit/` | Python package | `nuvelle_kit` package and `promo_server.py` for teaser/cover/caption generation |
+| Business API | `nuvelle_api/` | FastAPI + PostgreSQL + SQLAlchemy | Versioned backend API, health checks, votes, promo generation workflows |
+| Promo kit | `nuvelle_kit/` | Python package | Importable teaser/cover/caption generation package used by FastAPI and CLI |
 
 Brand: Ribbon-N mark, white Nuvelle wordmark, aurora gradient `#b25cff -> #ff5fbf`.
 
@@ -48,26 +48,21 @@ pnpm --filter nuvelle_web build       # outputs nuvelle_web/dist
 pnpm --filter nuvelle_admin build     # outputs nuvelle_admin/dist
 ```
 
-Admin defaults to `http://localhost:8799` for the promo backend. Override at build time with:
+Admin defaults to `http://localhost:8000/api/v1` for the FastAPI backend. Override at build time with:
 
 ```bash
-VITE_NUVELLE_BACKEND_URL=https://your-nuvelle-kit-url pnpm --filter nuvelle_admin build
+VITE_NUVELLE_API_URL=https://your-api-url/api/v1 pnpm --filter nuvelle_admin build
 ```
 
-## Promo Backend
+## Promo Generation CLI
 
 ```bash
-pip install pillow
-FLATKEY_API_KEY=sk-... python3 -m nuvelle_kit.promo_server
+pip install -r nuvelle_api/requirements-dev.txt
+FLATKEY_API_KEY=sk-... python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1
 ```
 
-The backend listens on `http://localhost:8799` and serves the built Admin app from `nuvelle_admin/dist` when that directory exists.
+FastAPI calls the same `nuvelle_kit` package behind `/api/v1/promo/jobs` and `/api/v1/promo/batches`.
 
-For local CLI generation, prefer:
-
-```bash
-python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1
-```
 
 ## FastAPI Backend Dev Environment
 

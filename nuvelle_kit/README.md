@@ -34,7 +34,8 @@ result = generate_promo(
 print(result.teaser_path)
 ```
 
-New code should import the package or call `python3 -m nuvelle_kit.cli`.
+FastAPI imports this package directly for backend promo generation. New command-line usage should call
+`python3 -m nuvelle_kit.cli`.
 
 ## Flags
 - `--handle @nuvelle`     account handle on the end card
@@ -55,11 +56,3 @@ Account-warming mode: teaser CTA = FOLLOW (grow to the Series threshold first).
 - ffmpeg here has no libass; all text is PIL-rendered overlays.
 - Cover text auto-fits the frame width; bottom band is blurred+scrimmed to
   hide any burned-in subtitle. brand.py holds the palette/mark/fonts.
-
-## Local HTTP Service
-
-Run from the repo root:
-
-```bash
-FLATKEY_API_KEY=sk-... python3 -m nuvelle_kit.promo_server
-```

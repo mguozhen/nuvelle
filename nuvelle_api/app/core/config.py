@@ -1,7 +1,21 @@
 from functools import lru_cache
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def default_cors_origins() -> list[str]:
+    return [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:61400",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:5175",
+        "http://127.0.0.1:61400",
+    ]
 
 
 class Settings(BaseSettings):
@@ -11,7 +25,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_v1_prefix: str = "/api/v1"
     database_url: str = "postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle"
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: list[str] = default_cors_origins()
+    promo_storage_dir: str = "../nuvelle_kit/out"
+    promo_upload_dir: str = "../nuvelle_kit/_uploads"
+    promo_cache_dir: str = "../nuvelle_kit/_vidcache"
 
     model_config = SettingsConfigDict(env_file=(".env", "../.env"), env_nested_delimiter="__", extra="ignore")
 
