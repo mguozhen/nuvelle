@@ -9,7 +9,7 @@ Nuvelle is an AI short-drama distribution platform. The repo now uses a pnpm wor
 | CPS portal | `nuvelle_web/` | Vite React + Tailwind + shadcn-style UI | Nuvelle Boost distributor links and material packs |
 | Admin | `nuvelle_admin/` | Vite React + Tailwind + shadcn-style UI | Scout dashboard, scoring, promo generation workflows |
 | Business API | `nuvelle_api/` | FastAPI + PostgreSQL + SQLAlchemy | Versioned backend API, health checks, domain models, migrations |
-| Promo backend | `nuvelle_kit/` | Python | `kit.py` and `promo_server.py` for teaser/cover/caption generation |
+| Promo backend | `nuvelle_kit/` | Python package | `nuvelle_kit` package, compatibility `kit.py`, and `promo_server.py` for teaser/cover/caption generation |
 
 Brand: Ribbon-N mark, white Nuvelle wordmark, aurora gradient `#b25cff -> #ff5fbf`.
 
@@ -63,6 +63,12 @@ FLATKEY_API_KEY=sk-... python3 promo_server.py
 ```
 
 The backend listens on `http://localhost:8799` and serves the built Admin app from `nuvelle_admin/dist` when that directory exists.
+
+For local CLI generation, prefer:
+
+```bash
+python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1
+```
 
 ## FastAPI Backend Dev Environment
 

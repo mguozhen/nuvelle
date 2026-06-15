@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Nuvelle brand kit — shared palette, Ribbon-N mark, Didot wordmark, text helpers.
 Used by the cover / teaser / asset renderers in the publishing pipeline."""
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 # ---- feminine bright Aurora palette ----
 P_TOP = (178, 92, 255)    # violet  #b25cff

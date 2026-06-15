@@ -168,7 +168,7 @@ class H(BaseHTTPRequestHandler):
                         if os.path.exists(fp):
                             zf.write(fp, dst_fn)
                     # Build summary
-                    cap = ""; hook = []; tags = []; logline = ""; tt_safe = True; tt_notes = ""
+                    cap = ""; hook = []; logline = ""; tt_safe = True; tt_notes = ""
                     cp = os.path.join(d, "caption.txt")
                     if os.path.exists(cp): cap = open(cp).read().strip()
                     pj = os.path.join(d, "plan.json")
@@ -176,7 +176,6 @@ class H(BaseHTTPRequestHandler):
                         try:
                             pl = json.load(open(pj))
                             hook = pl.get("hook", [])
-                            tags = pl.get("hashtags", [])
                             logline = pl.get("logline", "")
                             tt_safe = pl.get("tt_safe", True)
                             tt_notes = pl.get("tt_notes", "")

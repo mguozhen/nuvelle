@@ -3,14 +3,44 @@
 Drop one episode mp4 → get a TikTok cover + ~30s teaser + caption/hashtags.
 
 ## Use
+
+Recommended module entry from the repo root:
+
+```bash
+python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
+```
+
+Backward-compatible script entry from this directory:
+
 ```bash
 python3 kit.py EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
 ```
+
 A vision model (claude-sonnet via flatkey) samples 12 frames and auto-picks:
 the cover frame, 4 escalating teaser beats, the cover hook (3 lines),
 a logline, a FOLLOW-driven caption, and 10-12 hashtags.
 
 Outputs land in `out/<slug>/`: `cover.jpg`, `teaser.mp4`, `caption.txt`, `plan.json`.
+
+## Python API
+
+```python
+from pathlib import Path
+
+from nuvelle_kit import PromoGenerationRequest, generate_promo
+
+result = generate_promo(
+    PromoGenerationRequest(
+        mp4=Path("EPISODE.mp4"),
+        title="MY WIFE",
+        episode="1",
+        subtitle="The 1 AM Tragedy",
+    )
+)
+print(result.teaser_path)
+```
+
+`kit.py` is now only a compatibility wrapper. New code should import the package or call `python3 -m nuvelle_kit.cli`.
 
 ## Flags
 - `--handle @nuvelle`     account handle on the end card
@@ -19,6 +49,9 @@ Outputs land in `out/<slug>/`: `cover.jpg`, `teaser.mp4`, `caption.txt`, `plan.j
 - `--plan out/x/plan.json` re-render from a saved plan (skips the AI call)
 - `--no-ai`               skip AI entirely, use evenly-spaced defaults
 - `--out DIR`             custom output dir
+- `--dur 13`              teaser duration in seconds
+- `--prompt "..."`        reviewer creative direction for regeneration
+- `--cover-image URL`     use an existing cover image URL
 
 ## Branding
 Ribbon-N mark + white "Nuvelle" (Didot) wordmark; drama title in pink.
