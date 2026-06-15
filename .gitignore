@@ -8,6 +8,7 @@ node_modules/
 *.log
 .env
 .DS_Store
+.idea/
 __pycache__/
 
 # licensed macOS fonts — bundled only into the private Railway deploy
