@@ -10,6 +10,10 @@ This deploys all Nuvelle surfaces to Cloud Run in the `nuvelle` GCP project.
 - `nuvelle-dash` serves `nuvelle_dash/`
 - `nuvelle-kit` serves `nuvelle_kit/promo_server.py`
 
+The deploy script deploys `nuvelle-kit` first, reads its Cloud Run URL, and builds
+`nuvelle-dash` with that URL as the default promo backend instead of
+`http://localhost:8799`.
+
 ## Prerequisites
 
 The project must have billing enabled before APIs can be enabled:
