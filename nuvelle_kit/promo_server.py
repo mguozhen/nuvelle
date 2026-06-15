@@ -7,7 +7,7 @@ The admin dashboard (admin.nuvelle.ai) calls this to generate a promo pack
 Run:  python3 promo_server.py            # listens on 127.0.0.1:8799
 Expose: cloudflared tunnel --url http://localhost:8799   -> https URL for the dashboard
 """
-import json, os, re, subprocess, threading, time, uuid, cgi, urllib.parse
+import json, os, re, subprocess, threading, time, uuid, cgi, urllib.parse, zipfile, io
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -15,6 +15,7 @@ DASH = os.path.join(os.path.dirname(HERE), "nuvelle_dash")  # serve the Scout da
 OUT = os.path.join(HERE, "out")
 TMP = os.path.join(HERE, "_uploads"); os.makedirs(TMP, exist_ok=True)
 JOBS = {}  # id -> {status, log, slug, files}
+BATCHES = {}  # batch_id -> {title, jobs: [{ep, job_id}], ts}
 VOTES_FILE = os.path.join(HERE, "votes.json")
 try:
     VOTES = json.load(open(VOTES_FILE))   # {drama_id(str): [{taster, verdict, tags, ts}]}
@@ -135,6 +136,64 @@ class H(BaseHTTPRequestHandler):
         if u.path == "/job":
             jid = q.get("id", [""])[0]
             return self._json(JOBS.get(jid, {"status": "unknown"}))
+        if u.path == "/batch":
+            bid = q.get("id", [""])[0]
+            batch = BATCHES.get(bid)
+            if not batch: return self._json({"error": "not found"}, 404)
+            jobs_status = []
+            for item in batch["jobs"]:
+                j = JOBS.get(item["job_id"], {"status": "unknown"})
+                jobs_status.append({"ep": item["ep"], "job_id": item["job_id"], "status": j.get("status"),
+                                    "files": j.get("files"), "caption": j.get("caption",""), "tt_safe": j.get("tt_safe",True), "tt_notes": j.get("tt_notes","")})
+            done = sum(1 for js in jobs_status if js["status"] == "done")
+            error = sum(1 for js in jobs_status if js["status"] == "error")
+            return self._json({"batch_id": bid, "title": batch["title"], "total": len(jobs_status),
+                               "done": done, "error": error, "jobs": jobs_status})
+        if u.path == "/batch-download":
+            bid = q.get("id", [""])[0]
+            batch = BATCHES.get(bid)
+            if not batch: return self._json({"error": "not found"}, 404)
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                summary_lines = [f"{batch['title']} — TikTok 宣传片素材包\n{'='*50}\n\n"]
+                for item in sorted(batch["jobs"], key=lambda x: x["ep"]):
+                    j = JOBS.get(item["job_id"], {})
+                    if j.get("status") != "done" or not j.get("slug"): continue
+                    slug = j["slug"]; ep = item["ep"]
+                    d = os.path.join(OUT, slug)
+                    prefix = slugify(batch["title"])
+                    # Videos with ep number in filename
+                    for src_fn, dst_fn in [("teaser.mp4", f"{prefix}_EP{ep}.mp4")]:
+                        fp = os.path.join(d, src_fn)
+                        if os.path.exists(fp):
+                            zf.write(fp, dst_fn)
+                    # Build summary
+                    cap = ""; hook = []; tags = []; logline = ""; tt_safe = True; tt_notes = ""
+                    cp = os.path.join(d, "caption.txt")
+                    if os.path.exists(cp): cap = open(cp).read().strip()
+                    pj = os.path.join(d, "plan.json")
+                    if os.path.exists(pj):
+                        try:
+                            pl = json.load(open(pj))
+                            hook = pl.get("hook", [])
+                            tags = pl.get("hashtags", [])
+                            logline = pl.get("logline", "")
+                            tt_safe = pl.get("tt_safe", True)
+                            tt_notes = pl.get("tt_notes", "")
+                        except: pass
+                    summary_lines.append(f"EP{ep}\n{'-'*30}\n")
+                    summary_lines.append(f"标题: {' / '.join(hook)}\n")
+                    summary_lines.append(f"Logline: {logline}\n")
+                    summary_lines.append(f"TikTok安全: {'安全' if tt_safe else '需审核 - '+tt_notes}\n")
+                    summary_lines.append(f"文案:\n{cap}\n\n")
+                zf.writestr(f"{prefix}_素材汇总.txt", "\n".join(summary_lines))
+            data = buf.getvalue()
+            fname = slugify(batch["title"]) + "_promo_pack.zip"
+            self.send_response(200); self._cors()
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{fname}"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers(); self.wfile.write(data); return
         if u.path == "/file":
             slug = q.get("slug", [""])[0]; n = q.get("n", [""])[0]
             fp = os.path.join(OUT, os.path.basename(slug), os.path.basename(n))
@@ -169,6 +228,26 @@ class H(BaseHTTPRequestHandler):
                                                   "tags": b.get("tags", []), "ts": b.get("ts")})
                 save_votes()
             return self._json({"ok": True, "rated": len(VOTES)})
+        if path == "/gen-batch":
+            ln = int(self.headers.get("Content-Length", 0))
+            try: body = json.loads(self.rfile.read(ln) or b"{}")
+            except Exception: return self._json({"error": "bad json"}, 400)
+            title = body.get("title", "Promo")
+            dur = int(body.get("dur", 13))
+            cover_url = body.get("cover_url", "")
+            episodes = body.get("episodes", {})  # {ep_num: video_url}
+            if not episodes: return self._json({"error": "no episodes"}, 400)
+            batch_id = uuid.uuid4().hex[:12]
+            batch_jobs = []
+            for ep_str, vid_url in episodes.items():
+                ep = int(ep_str)
+                jid = uuid.uuid4().hex[:10]
+                JOBS[jid] = {"status": "queued", "log": ""}
+                threading.Thread(target=download_and_run, args=(jid, vid_url, title, ep, dur),
+                                 kwargs={"prompt": "", "cover_image": cover_url}, daemon=True).start()
+                batch_jobs.append({"ep": ep, "job_id": jid})
+            BATCHES[batch_id] = {"title": title, "jobs": batch_jobs, "ts": time.time()}
+            return self._json({"batch_id": batch_id, "jobs": batch_jobs})
         if path != "/gen":
             return self._json({"error": "not found"}, 404)
         ctype = self.headers.get("Content-Type", "")

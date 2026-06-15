@@ -2,6 +2,8 @@
 out/
 _work/
 _uploads/
+_vidcache/
+votes.json
 node_modules/
 *.log
 .env
