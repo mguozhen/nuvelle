@@ -10,12 +10,6 @@ Recommended module entry from the repo root:
 python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
 ```
 
-Backward-compatible script entry from this directory:
-
-```bash
-python3 kit.py EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
-```
-
 A vision model (claude-sonnet via flatkey) samples 12 frames and auto-picks:
 the cover frame, 4 escalating teaser beats, the cover hook (3 lines),
 a logline, a FOLLOW-driven caption, and 10-12 hashtags.
@@ -40,7 +34,7 @@ result = generate_promo(
 print(result.teaser_path)
 ```
 
-`kit.py` is now only a compatibility wrapper. New code should import the package or call `python3 -m nuvelle_kit.cli`.
+New code should import the package or call `python3 -m nuvelle_kit.cli`.
 
 ## Flags
 - `--handle @nuvelle`     account handle on the end card
@@ -61,3 +55,11 @@ Account-warming mode: teaser CTA = FOLLOW (grow to the Series threshold first).
 - ffmpeg here has no libass; all text is PIL-rendered overlays.
 - Cover text auto-fits the frame width; bottom band is blurred+scrimmed to
   hide any burned-in subtitle. brand.py holds the palette/mark/fonts.
+
+## Local HTTP Service
+
+Run from the repo root:
+
+```bash
+FLATKEY_API_KEY=sk-... python3 -m nuvelle_kit.promo_server
+```

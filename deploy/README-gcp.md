@@ -8,7 +8,7 @@ This deploys Nuvelle to Cloud Run in the `nuvelle` GCP project.
 - `nuvelle-mobile` serves `nuvelle_mobile/dist`
 - `nuvelle-web` serves `nuvelle_web/dist`
 - `nuvelle-admin` serves `nuvelle_admin/dist`
-- `nuvelle-kit` serves `nuvelle_kit/promo_server.py`
+- `nuvelle-kit` serves `python3 -m nuvelle_kit.promo_server`
 
 The deploy script deploys `nuvelle-kit` first, reads its Cloud Run URL, then builds `nuvelle_admin` with:
 

@@ -2,7 +2,7 @@
 """
 Nuvelle publishing kit — drop an episode mp4, get cover + teaser + caption.
 
-  python3 kit.py EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
+  python3 -m nuvelle_kit.cli EPISODE.mp4 --title "MY WIFE" --ep 1 --sub "The 1 AM Tragedy"
       [--handle @nuvelle] [--out DIR] [--cover-ts 27] [--beats 24,83,95,107]
       [--no-ai]   # skip the vision model, use evenly-spaced defaults
 
