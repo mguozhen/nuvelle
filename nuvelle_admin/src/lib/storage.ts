@@ -7,8 +7,15 @@ const BACKEND_URL_KEY = "nuvelle_promo_backend";
 export type GeneratedPromo = {
   id?: string;
   title?: string;
-  url?: string;
+  sourceUrl?: string;
+  teaserUrl?: string;
+  coverUrl?: string;
+  caption?: string;
+  episode?: number;
+  duration?: number;
+  prompt?: string;
   status?: string;
+  createdAt?: number;
 };
 
 export type AdminState = {

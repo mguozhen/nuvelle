@@ -48,7 +48,11 @@ export class PromoBackendClient {
     return this.request<T>("/gen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request)
+      body: JSON.stringify({
+        ...request,
+        video_url: request.url,
+        cover_url: request.cover_image
+      })
     });
   }
 
@@ -57,10 +61,19 @@ export class PromoBackendClient {
   }
 
   generateBatch<T = unknown>(payload: { items: PromoRequest[]; prompt?: string }): Promise<T> {
+    const firstItem = payload.items[0];
+    const episodes = Object.fromEntries(payload.items.map((item) => [String(item.ep), item.url]));
+
     return this.request<T>("/gen-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        ...payload,
+        title: firstItem?.title || "Promo",
+        dur: firstItem?.dur || 30,
+        cover_url: firstItem?.cover_image || "",
+        episodes
+      })
     });
   }
 
