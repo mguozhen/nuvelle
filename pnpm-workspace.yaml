@@ -1,0 +1,5 @@
+packages:
+  - "nuvelle_website"
+  - "nuvelle_mobile"
+  - "nuvelle_web"
+  - "nuvelle_admin"

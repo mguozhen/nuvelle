@@ -1,0 +1,14 @@
+{
+  "name": "nuvelle",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "dev:website": "pnpm --filter nuvelle_website dev",
+    "dev:mobile": "pnpm --filter nuvelle_mobile dev",
+    "dev:web": "pnpm --filter nuvelle_web dev",
+    "dev:admin": "pnpm --filter nuvelle_admin dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test -- --run"
+  }
+}
