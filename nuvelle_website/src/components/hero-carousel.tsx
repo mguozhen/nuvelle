@@ -69,6 +69,7 @@ export function HeroCarousel({ items, onOpen }: HeroCarouselProps) {
 
             <button
               type="button"
+              tabIndex={active ? 0 : -1}
               className="absolute right-[7%] top-1/2 hidden w-56 -translate-y-1/2 overflow-hidden rounded-lg border border-white/15 shadow-2xl shadow-black/50 outline-none transition-transform duration-300 hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-white/70 lg:block"
               onClick={() => onOpen(drama)}
             >
@@ -82,6 +83,7 @@ export function HeroCarousel({ items, onOpen }: HeroCarouselProps) {
                 </Badge>
                 <button
                   type="button"
+                  tabIndex={active ? 0 : -1}
                   className="block text-left text-4xl font-bold leading-[1.04] tracking-normal text-white outline-none drop-shadow-2xl focus-visible:ring-2 focus-visible:ring-white/70 sm:text-6xl"
                   onClick={() => onOpen(drama)}
                 >
@@ -97,11 +99,23 @@ export function HeroCarousel({ items, onOpen }: HeroCarouselProps) {
                   </span>
                 </div>
                 <div className="mt-7 flex flex-wrap gap-3">
-                  <Button type="button" size="lg" variant="gradient" onClick={() => onOpen(drama)}>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="gradient"
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => onOpen(drama)}
+                  >
                     <Play className="h-4 w-4 fill-current" />
                     Watch Now
                   </Button>
-                  <Button type="button" size="lg" variant="ghost" onClick={() => onOpen(drama)}>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="ghost"
+                    tabIndex={active ? 0 : -1}
+                    onClick={() => onOpen(drama)}
+                  >
                     <ListPlus className="h-4 w-4" />
                     My List
                   </Button>

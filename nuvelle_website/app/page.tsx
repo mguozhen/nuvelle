@@ -70,6 +70,7 @@ export default function WebsiteHome() {
           <label className="order-last flex w-full items-center gap-2 rounded-full border border-white/10 bg-[#0c0f1a] px-4 py-2 text-[#8f98b6] sm:order-none sm:min-w-[13rem] sm:max-w-xs">
             <Search className="h-4 w-4" />
             <input
+              aria-label="Search dramas"
               className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#6b7290]"
               placeholder="Search dramas"
               value={query}
