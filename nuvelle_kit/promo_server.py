@@ -11,7 +11,7 @@ import json, os, re, subprocess, threading, time, uuid, cgi, urllib.parse, zipfi
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DASH = os.path.join(os.path.dirname(HERE), "nuvelle_dash")  # serve the Scout dashboard locally
+DASH = os.path.join(os.path.dirname(HERE), "nuvelle_admin", "dist")  # serve the built Scout dashboard locally
 OUT = os.path.join(HERE, "out")
 TMP = os.path.join(HERE, "_uploads"); os.makedirs(TMP, exist_ok=True)
 JOBS = {}  # id -> {status, log, slug, files}
@@ -203,7 +203,9 @@ class H(BaseHTTPRequestHandler):
             self.send_response(200); self._cors()
             self.send_header("Content-Type", ct); self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data); return
-        # serve the Scout dashboard locally (same-origin → generate works with no tunnel)
+        # serve the built Scout dashboard locally (same-origin -> generate works with no tunnel)
+        if not os.path.isdir(DASH):
+            return self._json({"error": "admin build not found", "path": DASH}, 404)
         relp = (u.path.lstrip("/") or "index.html")
         fp = os.path.normpath(os.path.join(DASH, relp))
         if fp.startswith(DASH) and os.path.isfile(fp):

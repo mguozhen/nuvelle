@@ -1,6 +1,6 @@
 import type { PromoRequest, VoteRecord } from "@/types/drama";
 
-export const DEFAULT_BACKEND_URL = "http://localhost:8799";
+export const DEFAULT_BACKEND_URL = import.meta.env.VITE_NUVELLE_BACKEND_URL || "http://localhost:8799";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 

@@ -12,5 +12,5 @@ steps:
 images:
   - ${_IMAGE}
 substitutions:
-  _SITE_DIR: site
+  _SITE_DIR: nuvelle_website/out
   _IMAGE: us-west1-docker.pkg.dev/nuvelle/nuvelle/nuvelle-site:manual

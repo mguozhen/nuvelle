@@ -16,6 +16,7 @@ require_cmd() {
 
 require_cmd gcloud
 require_cmd python3
+require_cmd pnpm
 
 rm -rf "$BUILD_DIR"
 trap 'rm -rf "$BUILD_DIR"' EXIT
@@ -72,6 +73,18 @@ deploy_static() {
     --max-instances=4
 }
 
+build_frontend() {
+  local package="$1"
+  local backend_url="${2:-}"
+
+  echo "Building frontend package $package" >&2
+  if [[ "$package" == "nuvelle_admin" && -n "$backend_url" ]]; then
+    VITE_NUVELLE_BACKEND_URL="$backend_url" pnpm --filter "$package" build
+  else
+    pnpm --filter "$package" build
+  fi
+}
+
 deploy_backend() {
   local service="nuvelle-kit"
   local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service:$TAG"
@@ -113,36 +126,17 @@ deploy_backend() {
     --format='value(status.url)'
 }
 
-prepare_dashboard() {
-  local backend_url="$1"
-  local out_dir="$BUILD_DIR/nuvelle_dash"
-
-  mkdir -p "$BUILD_DIR"
-  cp -R nuvelle_dash "$out_dir"
-
-  python3 - "$out_dir/index.html" "$backend_url" <<'PY'
-import pathlib
-import sys
-
-path = pathlib.Path(sys.argv[1])
-backend_url = sys.argv[2].rstrip("/")
-text = path.read_text()
-old = 'localStorage.getItem(BACKEND_KEY)||"http://localhost:8799"'
-new = f'localStorage.getItem(BACKEND_KEY)||"{backend_url}"'
-if old not in text:
-    raise SystemExit(f"backend default marker not found in {path}")
-path.write_text(text.replace(old, new))
-PY
-
-  printf '%s\n' "$out_dir"
-}
-
 backend_url="$(deploy_backend)"
 
-deploy_static nuvelle-site site
-deploy_static nuvelle-app nuvelle_app
-deploy_static nuvelle-cps nuvelle_cps
-deploy_static nuvelle-dash "$(prepare_dashboard "$backend_url")"
+build_frontend nuvelle_website
+build_frontend nuvelle_mobile
+build_frontend nuvelle_web
+build_frontend nuvelle_admin "$backend_url"
+
+deploy_static nuvelle-website nuvelle_website/out
+deploy_static nuvelle-mobile nuvelle_mobile/dist
+deploy_static nuvelle-web nuvelle_web/dist
+deploy_static nuvelle-admin nuvelle_admin/dist
 
 cat <<EOF
 
