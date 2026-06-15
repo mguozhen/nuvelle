@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Nuvelle Website",
-  description: "Nuvelle website shell"
+  title: "Nuvelle — The Home of AI Shorts",
+  description:
+    "Nuvelle is the home of premium AI-crafted vertical dramas. Billionaires, werewolves, second chances and sweet revenge."
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
