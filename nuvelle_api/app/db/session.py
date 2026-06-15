@@ -1,14 +1,9 @@
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
-from app.config import get_settings
-
-
-class Base(DeclarativeBase):
-    pass
-
+from app.core.config import get_settings
 
 settings = get_settings()
 

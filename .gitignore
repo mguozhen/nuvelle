@@ -16,6 +16,11 @@ node_modules/
 .idea/
 .gcloud-build/
 __pycache__/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
 
 # licensed macOS fonts — bundled only into the private Railway deploy
 nuvelle_kit/fonts/

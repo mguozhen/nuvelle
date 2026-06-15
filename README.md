@@ -1,6 +1,6 @@
 # Nuvelle - The Home of AI Shorts
 
-Nuvelle is an AI short-drama distribution platform. The repo now uses a pnpm workspace with a Next.js website, three Vite React apps, and the existing Python promo-generation backend.
+Nuvelle is an AI short-drama distribution platform. The repo now uses a pnpm workspace with a Next.js website, three Vite React apps, a FastAPI business API, and the existing Python promo-generation backend.
 
 | Surface | Directory | Stack | Purpose |
 |---|---|---|---|
@@ -8,6 +8,7 @@ Nuvelle is an AI short-drama distribution platform. The repo now uses a pnpm wor
 | Mobile PWA | `nuvelle_mobile/` | Vite React + Tailwind + shadcn-style UI | Installable consumer app, bottom tabs, My List |
 | CPS portal | `nuvelle_web/` | Vite React + Tailwind + shadcn-style UI | Nuvelle Boost distributor links and material packs |
 | Admin | `nuvelle_admin/` | Vite React + Tailwind + shadcn-style UI | Scout dashboard, scoring, promo generation workflows |
+| Business API | `nuvelle_api/` | FastAPI + PostgreSQL + SQLAlchemy | Versioned backend API, health checks, domain models, migrations |
 | Promo backend | `nuvelle_kit/` | Python | `kit.py` and `promo_server.py` for teaser/cover/caption generation |
 
 Brand: Ribbon-N mark, white Nuvelle wordmark, aurora gradient `#b25cff -> #ff5fbf`.
@@ -75,7 +76,8 @@ docker compose up --build api postgres
 API health check:
 
 ```bash
-curl http://localhost:8000/health
+curl http://localhost:8000/api/v1/health/live
+curl http://localhost:8000/api/v1/health/ready
 ```
 
 Local database connection for GUI tools:

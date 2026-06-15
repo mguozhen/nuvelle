@@ -2,13 +2,13 @@ services:
   api:
     build:
       context: ./nuvelle_api
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nuvelle}:${POSTGRES_PASSWORD:-nuvelle_dev_password}@postgres:5432/${POSTGRES_DB:-nuvelle}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./nuvelle_api/app:/app/app
+      - ./nuvelle_api:/app
     depends_on:
       postgres:
         condition: service_healthy
