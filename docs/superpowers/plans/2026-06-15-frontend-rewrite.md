@@ -255,7 +255,7 @@ Use this exact content:
     "dev:admin": "pnpm --filter nuvelle_admin dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test -- --run"
+    "test": "pnpm -r test --run"
   }
 }
 ```
@@ -594,7 +594,7 @@ describe("website drama data", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_website test -- --run src/__tests__/data.test.ts
+pnpm --filter nuvelle_website test --run src/__tests__/data.test.ts
 ```
 
 Expected: FAIL because `src/data/dramas.ts` does not exist.
@@ -652,7 +652,7 @@ Replace the empty arrays and objects with the migrated data before running tests
 Run:
 
 ```bash
-pnpm --filter nuvelle_website test -- --run src/__tests__/data.test.ts
+pnpm --filter nuvelle_website test --run src/__tests__/data.test.ts
 ```
 
 Expected: PASS.
@@ -693,7 +693,7 @@ describe("website home page", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_website test -- --run src/__tests__/page.test.tsx
+pnpm --filter nuvelle_website test --run src/__tests__/page.test.tsx
 ```
 
 Expected: FAIL until `app/page.tsx` and components render the required UI.
@@ -715,7 +715,7 @@ Implement these components using the existing website layout, assets, and text:
 Run:
 
 ```bash
-pnpm --filter nuvelle_website test -- --run
+pnpm --filter nuvelle_website test --run
 pnpm --filter nuvelle_website typecheck
 pnpm --filter nuvelle_website build
 ```
@@ -776,7 +776,7 @@ describe("mobile My List storage", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_mobile test -- --run src/__tests__/my-list.test.ts
+pnpm --filter nuvelle_mobile test --run src/__tests__/my-list.test.ts
 ```
 
 Expected: FAIL because `src/lib/my-list.ts` does not exist.
@@ -818,7 +818,7 @@ export function toggleSavedDrama(slug: string) {
 Run:
 
 ```bash
-pnpm --filter nuvelle_mobile test -- --run src/__tests__/my-list.test.ts
+pnpm --filter nuvelle_mobile test --run src/__tests__/my-list.test.ts
 ```
 
 Expected: PASS.
@@ -874,7 +874,7 @@ Implement:
 Run:
 
 ```bash
-pnpm --filter nuvelle_mobile test -- --run
+pnpm --filter nuvelle_mobile test --run
 pnpm --filter nuvelle_mobile typecheck
 pnpm --filter nuvelle_mobile build
 ```
@@ -927,7 +927,7 @@ describe("distributor helpers", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_web test -- --run src/__tests__/distributor.test.ts
+pnpm --filter nuvelle_web test --run src/__tests__/distributor.test.ts
 ```
 
 Expected: FAIL because `src/lib/distributor.ts` does not exist.
@@ -955,7 +955,7 @@ export function promoLink(slug: string, code: string) {
 Run:
 
 ```bash
-pnpm --filter nuvelle_web test -- --run src/__tests__/distributor.test.ts
+pnpm --filter nuvelle_web test --run src/__tests__/distributor.test.ts
 ```
 
 Expected: PASS.
@@ -1017,7 +1017,7 @@ Implement:
 Run:
 
 ```bash
-pnpm --filter nuvelle_web test -- --run
+pnpm --filter nuvelle_web test --run
 pnpm --filter nuvelle_web typecheck
 pnpm --filter nuvelle_web build
 ```
@@ -1131,7 +1131,7 @@ describe("admin scoring", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_admin test -- --run src/__tests__/backend.test.ts src/__tests__/scoring.test.ts
+pnpm --filter nuvelle_admin test --run src/__tests__/backend.test.ts src/__tests__/scoring.test.ts
 ```
 
 Expected: FAIL because the core modules do not exist.
@@ -1188,7 +1188,7 @@ Create `lib/storage.ts` with `loadAdminState()`, `saveAdminState()`, `clearAdmin
 Run:
 
 ```bash
-pnpm --filter nuvelle_admin test -- --run src/__tests__/backend.test.ts src/__tests__/scoring.test.ts
+pnpm --filter nuvelle_admin test --run src/__tests__/backend.test.ts src/__tests__/scoring.test.ts
 ```
 
 Expected: PASS.
@@ -1275,7 +1275,7 @@ describe("admin app", () => {
 Run:
 
 ```bash
-pnpm --filter nuvelle_admin test -- --run src/__tests__/admin.test.tsx
+pnpm --filter nuvelle_admin test --run src/__tests__/admin.test.tsx
 ```
 
 Expected: FAIL until the Admin UI is implemented.
@@ -1314,7 +1314,7 @@ Implement `GeneratedLibrary` with generated cards, teaser and cover download lin
 Run:
 
 ```bash
-pnpm --filter nuvelle_admin test -- --run
+pnpm --filter nuvelle_admin test --run
 pnpm --filter nuvelle_admin typecheck
 pnpm --filter nuvelle_admin build
 ```
