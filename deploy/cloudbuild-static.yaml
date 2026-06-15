@@ -1,0 +1,16 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/Dockerfile.static
+      - --build-arg
+      - SITE_DIR=${_SITE_DIR}
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _SITE_DIR: site
+  _IMAGE: us-west1-docker.pkg.dev/nuvelle/nuvelle/nuvelle-site:manual
