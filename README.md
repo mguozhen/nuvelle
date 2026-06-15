@@ -63,6 +63,27 @@ FLATKEY_API_KEY=sk-... python3 promo_server.py
 
 The backend listens on `http://localhost:8799` and serves the built Admin app from `nuvelle_admin/dist` when that directory exists.
 
+## FastAPI Backend Dev Environment
+
+The new business API scaffold lives in `nuvelle_api/` and runs with PostgreSQL through Docker Compose:
+
+```bash
+cp .env.example .env
+docker compose up --build api postgres
+```
+
+API health check:
+
+```bash
+curl http://localhost:8000/health
+```
+
+Local database connection for GUI tools:
+
+```text
+postgresql://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle
+```
+
 ## Data
 
 `nuvelle_admin/public/seed_dramas.json` contains the competitor drama metadata used by the Admin dashboard. It includes metadata, covers, ReelShort preview URLs, and episode URL maps where available.
