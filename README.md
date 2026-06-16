@@ -92,4 +92,118 @@ postgresql://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle
 
 ## Deployment
 
-Google Cloud deployment lives in `deploy/`. Billing must be enabled on the target GCP project before the deploy script can enable APIs or deploy services.
+Google Cloud deployment lives in `deploy/`. Production currently runs in the
+`vocai-gemini-prod` project, region `us-west1`.
+
+Cloud Run services:
+
+| Service | Purpose |
+|---|---|
+| `nuvelle-website` | Public website from `nuvelle_website/out` |
+| `nuvelle-mobile` | Mobile PWA from `nuvelle_mobile/dist` |
+| `nuvelle-web` | CPS portal from `nuvelle_web/dist` |
+| `nuvelle-admin` | Admin dashboard from `nuvelle_admin/dist` |
+| `nuvelle-api` | FastAPI backend on port `8000` |
+
+Managed resources:
+
+- Artifact Registry repository: `us-west1/nuvelle`
+- Cloud SQL instance: `nuvelle-postgres`
+- PostgreSQL database/user: `nuvelle`
+- Secret Manager:
+  - `nuvelle-database-url`
+  - `nuvelle-db-password`
+  - `nuvelle-flatkey-api-key`
+
+### One-Time Setup
+
+Authenticate with Google Cloud and select the production project:
+
+```bash
+gcloud auth login
+gcloud auth application-default login
+gcloud config set project vocai-gemini-prod
+```
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+If the Flatkey key changes, rotate the Secret Manager value without writing it
+to the repo:
+
+```bash
+printf '%s' "$FLATKEY_API_KEY" | gcloud secrets versions add nuvelle-flatkey-api-key \
+  --project=vocai-gemini-prod \
+  --data-file=-
+```
+
+### Normal Deploy
+
+Use the one-entrypoint Google Cloud script:
+
+```bash
+bash deploy/google-cloud.sh
+```
+
+The script:
+
+1. Enables required Google Cloud APIs.
+2. Creates or reuses Artifact Registry and Cloud SQL resources.
+3. Builds and deploys `nuvelle-api`.
+4. Builds all frontend apps.
+5. Builds static Nginx images for the four frontend surfaces.
+6. Deploys all five Cloud Run services.
+7. Verifies the API and static services.
+
+Scoped runs:
+
+```bash
+ONLY=api bash deploy/google-cloud.sh
+ONLY=frontend bash deploy/google-cloud.sh
+ONLY=static bash deploy/google-cloud.sh
+ONLY=verify bash deploy/google-cloud.sh
+ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
+SKIP_BACKEND_BUILD=true bash deploy/google-cloud.sh
+```
+
+See `deploy/README-google-cloud.md` for the detailed deployment flow.
+
+### Verify Deploy
+
+```bash
+ONLY=verify bash deploy/google-cloud.sh
+```
+
+Expected responses include:
+
+```json
+{"status":"ok","database":"ok"}
+{"rated":[],"votes":{},"count":0}
+```
+
+### Custom Domain
+
+The target domain is `nuvelle.ai`, managed in Cloudflare. Domain setup is also
+handled by the deployment entrypoint:
+
+```bash
+ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
+```
+
+The Cloudflare token needs zone read and DNS edit permissions for `nuvelle.ai`.
+The script verifies Google ownership, creates Cloud Run domain mappings, and
+syncs DNS-only Cloudflare records.
+
+Mapping:
+
+| Domain | Cloud Run service |
+|---|---|
+| `nuvelle.ai` | `nuvelle-website` |
+| `www.nuvelle.ai` | `nuvelle-website` |
+| `app.nuvelle.ai` | `nuvelle-mobile` |
+| `cps.nuvelle.ai` | `nuvelle-web` |
+| `admin.nuvelle.ai` | `nuvelle-admin` |
+| `api.nuvelle.ai` | `nuvelle-api` |

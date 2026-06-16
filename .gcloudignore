@@ -1,13 +1,13 @@
-# The API image only needs the FastAPI app and the promo Python package.
-# Keep the root build context small even when frontend/node artifacts exist.
+# Keep Cloud Build uploads aligned with the Docker build contexts.
 *
 
+!.dockerignore
+!deploy/
+!deploy/**
 !nuvelle_api/
 !nuvelle_api/**
 !nuvelle_kit/
 !nuvelle_kit/**
-!deploy/
-!deploy/**
 !nuvelle_website/
 !nuvelle_website/out/
 !nuvelle_website/out/**
