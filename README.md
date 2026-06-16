@@ -142,13 +142,13 @@ printf '%s' "$FLATKEY_API_KEY" | gcloud secrets versions add nuvelle-flatkey-api
 
 ### Normal Deploy
 
-Use the one-entrypoint Google Cloud script:
+Use the pnpm deployment entrypoint:
 
 ```bash
-bash deploy/google-cloud.sh
+pnpm deploy
 ```
 
-The script:
+The pnpm command delegates to `deploy/google-cloud.sh`. The script:
 
 1. Enables required Google Cloud APIs.
 2. Creates or reuses Artifact Registry and Cloud SQL resources.
@@ -161,12 +161,12 @@ The script:
 Scoped runs:
 
 ```bash
-ONLY=api bash deploy/google-cloud.sh
-ONLY=frontend bash deploy/google-cloud.sh
-ONLY=static bash deploy/google-cloud.sh
-ONLY=verify bash deploy/google-cloud.sh
-ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
-SKIP_BACKEND_BUILD=true bash deploy/google-cloud.sh
+pnpm deploy:api
+pnpm deploy:frontend
+pnpm deploy:static
+pnpm deploy:verify
+CF_API_TOKEN=... pnpm deploy:domain
+SKIP_BACKEND_BUILD=true pnpm deploy
 ```
 
 See `deploy/README-google-cloud.md` for the detailed deployment flow.
@@ -174,7 +174,7 @@ See `deploy/README-google-cloud.md` for the detailed deployment flow.
 ### Verify Deploy
 
 ```bash
-ONLY=verify bash deploy/google-cloud.sh
+pnpm deploy:verify
 ```
 
 Expected responses include:
@@ -190,7 +190,7 @@ The target domain is `nuvelle.ai`, managed in Cloudflare. Domain setup is also
 handled by the deployment entrypoint:
 
 ```bash
-ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
+CF_API_TOKEN=... pnpm deploy:domain
 ```
 
 The Cloudflare token needs zone read and DNS edit permissions for `nuvelle.ai`.

@@ -2,22 +2,21 @@
 set -Eeuo pipefail
 shopt -s inherit_errexit 2>/dev/null || true
 
-# Nuvelle Google Cloud deployment entrypoint.
+# Nuvelle 的 Google Cloud 部署总入口。
 #
-# Daily use:
-#   bash deploy/google-cloud.sh
+# 日常使用：
+#   pnpm deploy
 #
-# Useful scoped runs:
-#   ONLY=api bash deploy/google-cloud.sh
-#   ONLY=frontend bash deploy/google-cloud.sh
-#   ONLY=verify bash deploy/google-cloud.sh
-#   ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
-#   SKIP_BACKEND_BUILD=true bash deploy/google-cloud.sh
+# 常用分段执行：
+#   pnpm deploy:api
+#   pnpm deploy:frontend
+#   pnpm deploy:verify
+#   CF_API_TOKEN=... pnpm deploy:domain
+#   SKIP_BACKEND_BUILD=true pnpm deploy
 #
-# This script intentionally stays close to official Google Cloud primitives:
-# gcloud, Cloud Build, Cloud Run, Cloud SQL, Artifact Registry, and Secret
-# Manager. It avoids a Terraform state dependency until the deployment shape is
-# stable enough to justify infrastructure-as-code.
+# 这里刻意只封装 Google Cloud 官方能力：gcloud、Cloud Build、Cloud Run、
+# Cloud SQL、Artifact Registry 和 Secret Manager。等部署形态稳定后，再考虑
+# 是否引入 Terraform/OpenTofu 这类基础设施即代码工具。
 
 PROJECT_ID="${PROJECT_ID:-vocai-gemini-prod}"
 REGION="${REGION:-us-west1}"
@@ -91,7 +90,7 @@ die() {
 usage() {
   cat <<EOF
 Usage:
-  bash deploy/google-cloud.sh
+  pnpm deploy
 
 Environment:
   ONLY=all|api|frontend|static|verify|domain
@@ -104,11 +103,11 @@ Environment:
   USE_CUSTOM_API_DOMAIN=true|false
 
 Examples:
-  bash deploy/google-cloud.sh
-  ONLY=api bash deploy/google-cloud.sh
-  ONLY=frontend SKIP_BACKEND_BUILD=true bash deploy/google-cloud.sh
-  ONLY=verify bash deploy/google-cloud.sh
-  ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
+  pnpm deploy
+  pnpm deploy:api
+  SKIP_BACKEND_BUILD=true pnpm deploy:frontend
+  pnpm deploy:verify
+  CF_API_TOKEN=... pnpm deploy:domain
 EOF
 }
 
@@ -252,8 +251,7 @@ ensure_database() {
   fi
 
   if ! gcloud sql instances describe "$SQL_INSTANCE" --project="$PROJECT_ID" >/dev/null 2>&1; then
-    # Cloud SQL creation is the slowest first-time operation. Subsequent runs
-    # reuse the instance and finish much faster.
+    # 首次创建 Cloud SQL 最慢；后续执行会复用已有实例，速度会快很多。
     gcloud sql instances create "$SQL_INSTANCE" \
       --project="$PROJECT_ID" \
       --database-version=POSTGRES_16 \
@@ -288,12 +286,12 @@ ensure_database() {
     gcloud sql users create "$SQL_USER" \
       --project="$PROJECT_ID" \
       --instance="$SQL_INSTANCE" \
-      --password="$db_password"
+    --password="$db_password"
   fi
 
-  # Cloud Run uses the default compute service account unless
-  # RUNTIME_SERVICE_ACCOUNT is set. It needs Cloud SQL Client to use the
-  # Cloud SQL Unix socket mounted by --add-cloudsql-instances.
+  # Cloud Run 默认使用 Compute Engine 默认服务账号，除非显式设置
+  # RUNTIME_SERVICE_ACCOUNT。该服务账号需要 Cloud SQL Client 权限，才能使用
+  # --add-cloudsql-instances 挂载出来的 Cloud SQL Unix socket。
   gcloud projects add-iam-policy-binding "$PROJECT_ID" \
     --member="serviceAccount:$runtime_sa" \
     --role="roles/cloudsql.client" \
@@ -316,8 +314,8 @@ prepare_api_context() {
   rm -rf "$context"
   mkdir -p "$context"
 
-  # Send Cloud Build only the API and nuvelle_kit package. Uploading the whole
-  # monorepo is slow and can accidentally include local caches or node_modules.
+  # 只把 API 和 nuvelle_kit 发给 Cloud Build。上传整个 monorepo 会更慢，也容易
+  # 误带本地缓存或 node_modules。
   rsync -a "${rsync_common_excludes[@]}" nuvelle_api "$context/"
   rsync -a "${rsync_common_excludes[@]}" \
     --exclude=out/ \
@@ -336,8 +334,8 @@ prepare_static_context() {
   rm -rf "$context"
   mkdir -p "$context/deploy" "$context/$site_dir"
 
-  # Static services all share the same tiny Nginx image. The frontend build
-  # output is copied in as /usr/share/nginx/html.
+  # 四个前端静态服务共用同一个轻量 Nginx 镜像，构建产物最终会放到
+  # Nginx 的 /usr/share/nginx/html 目录。
   cp deploy/Dockerfile.static "$context/deploy/Dockerfile.static"
   cp deploy/nginx-static.conf "$context/deploy/nginx-static.conf"
   cp deploy/cloudbuild-static.yaml "$context/cloudbuild-static.yaml"
@@ -359,8 +357,8 @@ submit_cloud_build() {
     --format='value(id)')"
   echo "Cloud Build submitted: $build_id" >&2
 
-  # Poll with builds describe instead of streaming logs. Some accounts can start
-  # builds but cannot stream the default Cloud Build log bucket.
+  # 用 builds describe 轮询状态，而不直接流式读取日志。部分账号可以启动构建，
+  # 但没有默认 Cloud Build 日志桶的读取权限。
   while true; do
     build_status="$(gcloud builds describe "$build_id" \
       --project="$PROJECT_ID" \
@@ -683,8 +681,8 @@ setup_domain() {
   zone_id="$(cloudflare_zone_id)"
   [[ -n "$zone_id" ]] || die "Cloudflare zone not found: $DOMAIN_ROOT"
 
-  # Google Search Console/Cloud Run requires ownership verification before
-  # domain mappings can be created. TXT records must remain DNS-only.
+  # Cloud Run 创建域名映射前，需要先完成 Google 站点所有权验证。
+  # 验证 TXT 记录必须保持 DNS only，不能开启 Cloudflare 代理。
   cloudflare_upsert_dns "$zone_id" TXT "$DOMAIN_ROOT" "$GOOGLE_SITE_VERIFICATION_TXT" 1 false
   verify_google_domain
 

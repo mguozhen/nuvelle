@@ -1,3 +1,6 @@
+# Cloud Build 配置：构建 FastAPI 后端镜像。
+# deploy/google-cloud.sh 会把 API 和 nuvelle_kit 单独打包到临时目录，
+# 然后用这个配置执行 docker build，并把镜像推到 Artifact Registry。
 steps:
   - name: gcr.io/cloud-builders/docker
     args:

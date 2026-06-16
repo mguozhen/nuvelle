@@ -1,3 +1,6 @@
+# Cloud Build 配置：构建前端静态站点镜像。
+# _SITE_DIR 指向已经构建好的前端产物目录，例如 nuvelle_website/out。
+# _IMAGE 是最终推送到 Artifact Registry 的镜像地址。
 steps:
   - name: gcr.io/cloud-builders/docker
     args:
@@ -12,5 +15,6 @@ steps:
 images:
   - ${_IMAGE}
 substitutions:
+  # 本地手动执行 Cloud Build 时的默认值；部署脚本会按服务覆盖它们。
   _SITE_DIR: nuvelle_website/out
   _IMAGE: us-west1-docker.pkg.dev/nuvelle/nuvelle/nuvelle-site:manual

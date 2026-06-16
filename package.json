@@ -9,7 +9,14 @@
     "dev:admin": "pnpm --filter nuvelle_admin dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test --run"
+    "test": "pnpm -r test --run",
+    "deploy": "bash deploy/google-cloud.sh",
+    "deploy:api": "ONLY=api bash deploy/google-cloud.sh",
+    "deploy:frontend": "ONLY=frontend bash deploy/google-cloud.sh",
+    "deploy:static": "ONLY=static bash deploy/google-cloud.sh",
+    "deploy:verify": "ONLY=verify bash deploy/google-cloud.sh",
+    "deploy:domain": "ONLY=domain bash deploy/google-cloud.sh",
+    "deploy:help": "ONLY=help bash deploy/google-cloud.sh"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",

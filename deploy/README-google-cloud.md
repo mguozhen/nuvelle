@@ -1,10 +1,13 @@
 # Nuvelle Google Cloud Deployment
 
-This project deploys to Google Cloud with one local entrypoint:
+This project deploys to Google Cloud through pnpm scripts:
 
 ```bash
-bash deploy/google-cloud.sh
+pnpm deploy
 ```
+
+The pnpm scripts delegate to `deploy/google-cloud.sh`, which remains the
+single implementation point for Google Cloud operations.
 
 The script uses official Google Cloud primitives rather than a third-party
 deployment framework:
@@ -20,12 +23,13 @@ deployment framework:
 
 | Command | Purpose |
 |---|---|
-| `bash deploy/google-cloud.sh` | Full deploy: infra, API, frontends, static services, verify |
-| `ONLY=api bash deploy/google-cloud.sh` | Rebuild and deploy only FastAPI |
-| `ONLY=frontend bash deploy/google-cloud.sh` | Build all frontends and deploy static services |
-| `ONLY=static bash deploy/google-cloud.sh` | Deploy existing `out/dist` folders without rebuilding frontends |
-| `ONLY=verify bash deploy/google-cloud.sh` | Verify Cloud Run URLs and API health |
-| `ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh` | Sync Cloudflare DNS and Cloud Run domain mappings |
+| `pnpm deploy` | Full deploy: infra, API, frontends, static services, verify |
+| `pnpm deploy:api` | Rebuild and deploy only FastAPI |
+| `pnpm deploy:frontend` | Build all frontends and deploy static services |
+| `pnpm deploy:static` | Deploy existing `out/dist` folders without rebuilding frontends |
+| `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
+| `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS and Cloud Run domain mappings |
+| `pnpm deploy:help` | Show all supported script options |
 
 ## Configuration
 
@@ -91,7 +95,7 @@ The optional domain mode targets `nuvelle.ai`:
 Run:
 
 ```bash
-ONLY=domain CF_API_TOKEN=... bash deploy/google-cloud.sh
+CF_API_TOKEN=... pnpm deploy:domain
 ```
 
 The Cloudflare token must be scoped to the `nuvelle.ai` zone with:
