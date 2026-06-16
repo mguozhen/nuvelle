@@ -36,6 +36,29 @@ describe("blog sanitizer", () => {
     expect(sanitized.toLowerCase()).not.toContain("data:text/html");
   });
 
+  it("decodes html character references before checking unsafe url schemes", () => {
+    const html = [
+      '<a href="jav&#x61;script:alert(1)">Hex</a>',
+      '<a href="jav&#97;script:alert(2)">Decimal</a>',
+      '<a href="javascript&#58;alert(3)">Numeric colon</a>',
+      '<a href="javascript&colon;alert(4)">Named colon</a>',
+      '<img src="d&#97;ta:text/html,evil" alt="bad">',
+      '<a href="https://nuvelle.ai?x=1&amp;y=2">Safe link</a>',
+      '<img src="data:image/webp;base64,AAAA" alt="safe">'
+    ].join("");
+    const sanitized = sanitizeArticleHtml(html);
+
+    expect(sanitized).toContain("<a>Hex</a>");
+    expect(sanitized).toContain("<a>Decimal</a>");
+    expect(sanitized).toContain("<a>Numeric colon</a>");
+    expect(sanitized).toContain("<a>Named colon</a>");
+    expect(sanitized).toContain('<img alt="bad">');
+    expect(sanitized).toContain('<a href="https://nuvelle.ai?x=1&amp;y=2">Safe link</a>');
+    expect(sanitized).toContain('<img src="data:image/webp;base64,AAAA" alt="safe">');
+    expect(sanitized.toLowerCase()).not.toContain("javascript");
+    expect(sanitized.toLowerCase()).not.toContain("data:text/html");
+  });
+
   it("strips html for descriptions", () => {
     expect(stripHtml("<p>Hello <strong>Nuvelle</strong></p>").trim()).toBe("Hello Nuvelle");
   });
