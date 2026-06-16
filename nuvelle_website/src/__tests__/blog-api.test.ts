@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { fetchBlogDetail, fetchBlogList, mapBlogDetail, mapBlogListItem } from "../lib/blog/api";
 import type { BlogConfig } from "../lib/blog/config";
+import { blogPostingJsonLd, metadataForBlogDetail } from "../lib/blog/seo";
+import type { BlogArticleDetail } from "../lib/blog/types";
 
 const config: BlogConfig = {
   slxHost: "https://apps.voc.ai",
@@ -16,6 +18,16 @@ const config: BlogConfig = {
     es: [],
     pt: []
   }
+};
+
+const articleDetail: BlogArticleDetail = {
+  id: 10,
+  slug: "clean-seo",
+  title: "Plain title",
+  excerpt: "Plain excerpt",
+  date: "2026-06-16T00:00:00.000Z",
+  contentHtml: "<p>Plain content</p>",
+  meta: {}
 };
 
 describe("blog api adapter", () => {
@@ -136,5 +148,61 @@ describe("blog api adapter", () => {
         fetcher: fetchMock as unknown as typeof fetch
       })
     ).resolves.toBeNull();
+  });
+
+  it("strips HTML and encoded markup from detail metadata title and description", () => {
+    const metadata = metadataForBlogDetail(
+      "en",
+      {
+        ...articleDetail,
+        title: "<b>Fallback title</b>",
+        meta: {
+          title: "&lt;strong&gt;Meta &amp;amp; title&lt;/strong&gt;",
+          desc: "<p>Meta <em>description</em> &amp; details</p>"
+        }
+      },
+      "clean-seo"
+    );
+
+    expect(metadata.title).toBe("Meta & title");
+    expect(metadata.description).toBe("Meta description & details");
+    expect(metadata.openGraph?.title).toBe("Meta & title");
+    expect(metadata.openGraph?.description).toBe("Meta description & details");
+    expect(metadata.twitter?.title).toBe("Meta & title");
+    expect(metadata.twitter?.description).toBe("Meta description & details");
+  });
+
+  it("strips HTML from JSON-LD headline and meta description", () => {
+    expect(
+      blogPostingJsonLd(
+        {
+          ...articleDetail,
+          title: "<h1>Headline &amp; news</h1>",
+          meta: {
+            desc: "<p>Structured <strong>description</strong> &amp; summary</p>"
+          }
+        },
+        "https://nuvelle.ai/blog/clean-seo"
+      )
+    ).toMatchObject({
+      headline: "Headline & news",
+      description: "Structured description & summary"
+    });
+  });
+
+  it("slices detail metadata descriptions after stripping HTML", () => {
+    const visibleDescription = `${"a".repeat(159)}b`;
+    const metadata = metadataForBlogDetail(
+      "en",
+      {
+        ...articleDetail,
+        meta: {
+          desc: `<span>${visibleDescription}</span><strong>hidden</strong>`
+        }
+      },
+      "clean-seo"
+    );
+
+    expect(metadata.description).toBe(visibleDescription);
   });
 });

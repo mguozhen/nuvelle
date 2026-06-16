@@ -27,13 +27,53 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[]) {
   };
 }
 
+const htmlEntityMap: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  nbsp: " ",
+  quot: "\""
+};
+
+function decodeHtmlEntities(value: string) {
+  const fromCodePoint = (parsed: number) =>
+    Number.isFinite(parsed) && parsed >= 0 && parsed <= 0x10ffff ? String.fromCodePoint(parsed) : undefined;
+
+  return value.replace(/&(#\d+|#x[\da-f]+|[a-z][\w]+);/gi, (entity, code: string) => {
+    if (code.startsWith("#x")) {
+      const parsed = Number.parseInt(code.slice(2), 16);
+      return fromCodePoint(parsed) ?? entity;
+    }
+
+    if (code.startsWith("#")) {
+      const parsed = Number.parseInt(code.slice(1), 10);
+      return fromCodePoint(parsed) ?? entity;
+    }
+
+    return htmlEntityMap[code.toLowerCase()] ?? entity;
+  });
+}
+
+function normalizeSeoText(value: string | null | undefined) {
+  return decodeHtmlEntities(stripHtml(decodeHtmlEntities(value || ""))).trim();
+}
+
+function normalizeSeoDescription(value: string | null | undefined) {
+  return normalizeSeoText(value).slice(0, 160);
+}
+
+function excerptDescription(article: BlogArticleDetail) {
+  return normalizeSeoDescription(article.excerpt || article.contentHtml);
+}
+
 export function blogPostingJsonLd(article: BlogArticleDetail, canonical: string) {
-  const description = article.meta.desc || stripHtml(article.excerpt || article.contentHtml).trim().slice(0, 160);
+  const description = article.meta.desc ? normalizeSeoDescription(article.meta.desc) : excerptDescription(article);
 
   return {
     "@context": "https://schema.org",
     "@type": "BlogPosting",
-    headline: stripHtml(article.title).trim(),
+    headline: normalizeSeoText(article.title),
     description,
     image: article.image ? [article.image] : undefined,
     datePublished: article.date,
@@ -72,8 +112,8 @@ export function metadataForBlogList(
 export function metadataForBlogDetail(locale: LocaleKey, article: BlogArticleDetail, slug: string): Metadata {
   const canonical = article.canonicalUrl || canonicalUrl(blogConfig.siteOrigin, locale, { kind: "detail", slug });
   const alternates = buildDetailAlternateLinks(blogConfig.siteOrigin, locale, slug);
-  const title = article.meta.title || article.title;
-  const description = article.meta.desc || stripHtml(article.excerpt || article.contentHtml).trim().slice(0, 160);
+  const title = normalizeSeoText(article.meta.title || article.title);
+  const description = article.meta.desc ? normalizeSeoDescription(article.meta.desc) : excerptDescription(article);
 
   return {
     title,
