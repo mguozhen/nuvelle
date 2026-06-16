@@ -359,6 +359,8 @@ prepare_static_context() {
 prepare_website_context() {
   local context="$1"
 
+  [[ -f nuvelle_website/.next/BUILD_ID ]] || die "Run pnpm --filter nuvelle_website build first"
+
   rm -rf "$context"
   mkdir -p "$context/deploy" "$context/nuvelle_website"
 
