@@ -1,11 +1,14 @@
 import type { BlogArticleListItem } from "@/lib/blog/types";
+import { formatBlogDate } from "@/lib/blog/date";
+import type { LocaleKey } from "@/lib/i18n";
 
 type BlogArticleCardProps = {
   article: BlogArticleListItem;
   href: string;
+  locale: LocaleKey;
 };
 
-export function BlogArticleCard({ article, href }: BlogArticleCardProps) {
+export function BlogArticleCard({ article, href, locale }: BlogArticleCardProps) {
   return (
     <article className="h-full">
       <a
@@ -26,9 +29,7 @@ export function BlogArticleCard({ article, href }: BlogArticleCardProps) {
         )}
         <div className="flex flex-1 flex-col p-5">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#8f98b6]">
-            {article.category ? <span className="text-[#ff96d0]">{article.category.name}</span> : null}
-            {article.category ? <span className="text-[#4e5674]">/</span> : null}
-            <time dateTime={article.date}>{article.date}</time>
+            <time dateTime={article.date}>{formatBlogDate(article.date, locale)}</time>
           </div>
           <h2 className="mt-3 text-xl font-semibold leading-snug tracking-normal text-white transition-colors group-hover:text-[#ffd0e8]">
             {article.title}

@@ -1,5 +1,6 @@
 import { BlogBreadcrumbs } from "@/components/blog/blog-breadcrumbs";
 import { blogConfig } from "@/lib/blog/config";
+import { formatBlogDate } from "@/lib/blog/date";
 import { breadcrumbJsonLd, blogPostingJsonLd, serializeJsonLd, type BreadcrumbItem } from "@/lib/blog/seo";
 import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
 import type { BlogArticleDetail } from "@/lib/blog/types";
@@ -44,7 +45,7 @@ export function BlogArticlePage({ locale, article }: BlogArticlePageProps) {
       <header className="mt-8">
         <h1 className="text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl">{article.title}</h1>
         <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[#8f98b6]">
-          <time dateTime={article.date}>{article.date}</time>
+          <time dateTime={article.date}>{formatBlogDate(article.date, locale)}</time>
         </div>
       </header>
 

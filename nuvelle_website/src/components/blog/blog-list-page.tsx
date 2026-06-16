@@ -35,6 +35,7 @@ export function BlogListPage({ locale, result, emptyTitle, emptyBody }: BlogList
           <BlogArticleCard
             key={article.slug || article.id}
             article={article}
+            locale={locale}
             href={blogPath(locale, { kind: "detail", slug: article.slug })}
           />
         ))}
