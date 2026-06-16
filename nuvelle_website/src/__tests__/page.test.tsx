@@ -9,6 +9,8 @@ describe("website home page", () => {
     const user = userEvent.setup();
     render(<WebsiteHome locale="en" />);
     expect(screen.getByText("Nuvelle")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Nuvelle home" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "Blog" })).toHaveAttribute("href", "/blog");
     expect(screen.getByRole("heading", { name: "New Releases" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Top 10 This Week" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Hidden Identity" })).toBeInTheDocument();
@@ -45,6 +47,7 @@ describe("website home page", () => {
 
   it("renders localized navigation and app copy", () => {
     render(<WebsiteHome locale="cn" />);
+    expect(screen.getByRole("link", { name: "Nuvelle 首页" })).toHaveAttribute("href", "/cn");
     expect(screen.getByRole("link", { name: "博客" })).toHaveAttribute("href", "/cn/blog");
     expect(screen.getByPlaceholderText("搜索短剧")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "最新上线" })).toBeInTheDocument();
