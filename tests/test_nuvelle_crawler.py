@@ -4,11 +4,14 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from nuvelle_crawler.db.models import Base, ThirdPartyDramaResource
+from nuvelle_crawler.db.models import Base, ThirdPartyCrawlLog, ThirdPartyDramaResource
 from nuvelle_crawler.db.repositories import ThirdPartyDramaRepository
-from nuvelle_crawler.services.backfill import LocalDramaBackfillService
+from nuvelle_crawler.config import Settings
+from nuvelle_crawler.services.backfill import LocalDramaBackfillService, SourceProtectionDetectedError
 from nuvelle_crawler.services.planner import CrawlerPlanner
 from nuvelle_crawler.sources.config import get_source_config
+from nuvelle_crawler.sources.dramacps_materials.client import DramaCpsMaterialsClient
+from nuvelle_crawler.sources.dramacps_materials.mapper import DramaCpsMaterialsMapper
 from nuvelle_crawler.sources.reelshort_cps.client import ReelShortCpsClient
 from nuvelle_crawler.sources.reelshort_cps.mapper import ReelShortCpsMapper
 from nuvelle_crawler.tasks.enqueuer import InMemoryTaskEnqueuer
@@ -22,6 +25,14 @@ def make_session():
     )
     Base.metadata.create_all(bind=engine)
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)()
+
+
+def test_crawler_default_database_url_matches_api_postgres(monkeypatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_url == "postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle"
 
 
 class FakeDramaAdapter:
@@ -64,6 +75,17 @@ class FakeHttpResponse:
         return self.data
 
 
+class FakeProtectedResponse:
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+
+
+class FakeHttpStatusError(Exception):
+    def __init__(self, status_code: int):
+        super().__init__(f"{status_code} response")
+        self.response = FakeProtectedResponse(status_code)
+
+
 class FakeHttpClient:
     def __init__(self):
         self.calls: list[tuple[str, dict, dict | None]] = []
@@ -71,6 +93,37 @@ class FakeHttpClient:
     def post(self, path: str, *, json: dict, headers: dict | None = None) -> FakeHttpResponse:
         self.calls.append((path, json, headers))
         return FakeHttpResponse({"code": 0, "data": {"id": json["book_id"]}})
+
+
+class FakeGetHttpClient:
+    def __init__(self):
+        self.calls: list[tuple[str, dict]] = []
+
+    def get(self, path: str, *, params: dict | None = None) -> FakeHttpResponse:
+        self.calls.append((path, params or {}))
+        if params and "base_id" in params:
+            return FakeHttpResponse(
+                {
+                    "base_id": params["base_id"],
+                    "name": "Drama Detail",
+                    "source": "stardusttv",
+                    "lang": "tc",
+                    "section": [{"series_no": 1, "origin_video": "https://example.com/1.m3u8"}],
+                }
+            )
+        return FakeHttpResponse(
+            {
+                "items": [
+                    {
+                        "base_id": "166653",
+                        "name": "Drama List",
+                        "source": "stardusttv",
+                        "lang": "tc",
+                    }
+                ],
+                "next_page": True,
+            }
+        )
 
 
 def test_reelshort_mapper_extracts_minimal_resource_fields() -> None:
@@ -96,6 +149,48 @@ def test_reelshort_mapper_extracts_minimal_resource_fields() -> None:
     assert payload.cover_url == "https://example.com/cover.jpg"
     assert payload.episode_count == 63
     assert payload.free_episode_count == 4
+    assert payload.raw_data == raw
+    assert len(payload.raw_hash) == 64
+
+
+def test_dramacps_mapper_extracts_material_fields_and_video_sections() -> None:
+    raw = {
+        "base_id": "166653",
+        "name": "重生歸來尋女友：萬米高空的陰謀",
+        "name_cn": "重生后，我回到女朋友在航班上消失当天_TW",
+        "source": "stardusttv",
+        "lang": "tc",
+        "lang_other": "zh_TW",
+        "cover_url": "https://example.com/cover.jpg",
+        "description": "素材简介",
+        "section": [
+            {
+                "section_id": 1,
+                "series_no": 1,
+                "section_title": "EP 1",
+                "origin_video": "https://example.com/1.m3u8",
+            },
+            {
+                "section_id": 2,
+                "series_no": 2,
+                "section_title": "EP 2",
+                "origin_video": "https://example.com/2.m3u8",
+            },
+        ],
+    }
+
+    payload = DramaCpsMaterialsMapper().to_resource_payload(raw)
+
+    assert payload.source == "dramacps_materials"
+    assert payload.external_id == "166653"
+    assert payload.source_app == "stardusttv"
+    assert payload.book_type == "material"
+    assert payload.language == "zh_TW"
+    assert payload.title == "重生后，我回到女朋友在航班上消失当天_TW"
+    assert payload.cover_url == "https://example.com/cover.jpg"
+    assert payload.synopsis == "素材简介"
+    assert payload.episode_count == 2
+    assert payload.free_episode_count == 2
     assert payload.raw_data == raw
     assert len(payload.raw_hash) == 64
 
@@ -193,6 +288,30 @@ def test_reelshort_source_config_uses_frontend_language_codes() -> None:
     assert {"ar", "zh-TW", "it", "ro"}.issubset(languages)
 
 
+def test_dramacps_client_uses_open_material_api() -> None:
+    fake_http = FakeGetHttpClient()
+    client = DramaCpsMaterialsClient(base_url="https://files.example.com")
+    client.client = fake_http
+
+    rows = client.list_materials(page=2, language="tc", limit=12)
+    detail = client.material_detail(base_id="166653")
+
+    assert rows["items"][0]["base_id"] == "166653"
+    assert detail["section"][0]["origin_video"] == "https://example.com/1.m3u8"
+    assert fake_http.calls == [
+        ("/api/open/dramas", {"page": 2, "limit": 12, "lang": "tc"}),
+        ("/api/open/dramas", {"base_id": "166653"}),
+    ]
+
+
+def test_dramacps_source_config_defaults_to_all_languages_once() -> None:
+    config = get_source_config("dramacps_materials")
+
+    assert config["adapter"] == "dramacps_materials"
+    assert config["default_languages"] == [None]
+    assert {"en", "tc", "id", "pl"}.issubset(config["languages"])
+
+
 def test_local_backfill_stops_at_empty_page_and_upserts_rows() -> None:
     db = make_session()
     adapter = FakeDramaAdapter(
@@ -251,6 +370,31 @@ def test_local_backfill_respects_max_pages() -> None:
     rows = list(db.scalars(select(ThirdPartyDramaResource)).all())
     assert adapter.list_calls == [("en", "time", 1)]
     assert summary.list_pages_scanned == 1
+    assert summary.resources_scanned == 1
+    assert len(rows) == 1
+
+
+def test_local_backfill_can_start_from_later_page() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 3): [{"id": "book-3", "title": "Third", "lang": "English", "book_type": 1}],
+            ("en", "time", 4): [],
+        }
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        start_page=3,
+        max_pages=10,
+        delay_seconds=0,
+    )
+
+    rows = list(db.scalars(select(ThirdPartyDramaResource)).all())
+    assert adapter.list_calls == [("en", "time", 3), ("en", "time", 4)]
+    assert summary.list_pages_scanned == 2
     assert summary.resources_scanned == 1
     assert len(rows) == 1
 
@@ -322,3 +466,74 @@ def test_local_backfill_reports_progress_and_continues_detail_errors() -> None:
     assert any("list start source=reelshort_cps language=en sort=time page=1" in message for message in messages)
     assert any("detail error external_id=book-1 book_type=1 error=detail unavailable" in message for message in messages)
     assert any("done resources_scanned=2 details_scanned=1 detail_errors=1" in message for message in messages)
+
+
+def test_local_backfill_retries_detail_errors_and_records_failed_details() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "First", "lang": "English", "book_type": 1}],
+            ("en", "time", 2): [],
+        },
+        detail_errors={"book-1": RuntimeError("temporary detail failure")},
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+        with_details=True,
+        detail_retry_attempts=1,
+    )
+
+    log = db.scalar(select(ThirdPartyCrawlLog).order_by(ThirdPartyCrawlLog.id.desc()))
+    assert adapter.detail_calls == [("book-1", "1"), ("book-1", "1")]
+    assert summary.detail_errors == 1
+    assert summary.failed_details == [
+        {
+            "external_id": "book-1",
+            "book_type": "1",
+            "error": "temporary detail failure",
+            "language": "English",
+            "source_app": "reelshort",
+            "title": "First",
+        }
+    ]
+    assert log is not None
+    assert log.log_metadata["failed_details"] == summary.failed_details
+
+
+def test_local_backfill_stops_on_source_protection_and_records_failed_detail() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "First", "lang": "English", "book_type": 1}],
+        },
+        detail_errors={"book-1": FakeHttpStatusError(429)},
+    )
+
+    try:
+        LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+            source="reelshort_cps",
+            languages=["en"],
+            sorts=["time"],
+            max_pages=1,
+            delay_seconds=0,
+            with_details=True,
+            detail_retry_attempts=3,
+        )
+    except SourceProtectionDetectedError:
+        pass
+    else:
+        raise AssertionError("expected source protection error")
+
+    log = db.scalar(select(ThirdPartyCrawlLog).order_by(ThirdPartyCrawlLog.id.desc()))
+    assert adapter.detail_calls == [("book-1", "1")]
+    assert log is not None
+    assert log.status == "error"
+    assert log.error_count == 1
+    assert log.log_metadata["source_protection_detected"] is True
+    assert log.log_metadata["failed_details"][0]["external_id"] == "book-1"
+    assert log.log_metadata["failed_details"][0]["status_code"] == 429

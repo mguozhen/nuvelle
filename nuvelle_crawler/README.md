@@ -16,12 +16,15 @@ PYTHONPATH=nuvelle_crawler nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli p
 
 The CLI command only plans local in-memory tasks. It does not call ReelShort CPS.
 
+By default, the crawler uses the same local Postgres database as `nuvelle_api`:
+`postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle`.
+Override `DATABASE_URL` only when you intentionally want a different database.
+
 ## Manual ReelShort Backfill
 
 Run a one-page smoke crawl before any broader run:
 
 ```bash
-DATABASE_URL=sqlite+pysqlite:///./nuvelle_crawler.db \
 PYTHONPATH=nuvelle_crawler \
 REELSHORT_CPS_TOKEN="$REELSHORT_CPS_TOKEN" \
 nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
@@ -37,7 +40,6 @@ nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
 Full source-cache backfill, after the smoke run is clean:
 
 ```bash
-DATABASE_URL=sqlite+pysqlite:///./nuvelle_crawler.db \
 PYTHONPATH=nuvelle_crawler \
 REELSHORT_CPS_TOKEN="$REELSHORT_CPS_TOKEN" \
 nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
@@ -54,6 +56,51 @@ nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
 `backfill` sends live source requests only when `--confirm-live` is present.
 `--with-details` roughly doubles the request volume, so keep the delay conservative.
 Progress logs are printed while the command runs. Detail request failures are
-counted and skipped by default so one bad content item does not stop the whole
-backfill. Add `--fail-fast-detail-errors` when you want the command to stop on
-the first detail failure.
+retried twice by default, then counted and written to
+`third_party_crawl_logs.metadata.failed_details` so they can be compensated by a
+later rerun. Add `--detail-retries N` to tune retry count. Add
+`--fail-fast-detail-errors` when you want the command to stop on the first detail
+failure. Source protection signals such as HTTP 401, 403, 429, and 503 stop the
+run immediately and are recorded in the crawl log.
+
+## Manual DramaCPS Materials Backfill
+
+DramaCPS materials come from the dashboard Material Library. The crawler stores
+each drama/material row and saves free episode video URLs under `raw_data.section`.
+
+Smoke crawl:
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
+  --source dramacps_materials \
+  --max-pages 1 \
+  --delay-seconds 1 \
+  --with-details \
+  --confirm-live
+```
+
+Full materials crawl:
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
+  --source dramacps_materials \
+  --no-page-limit \
+  --delay-seconds 1 \
+  --with-details \
+  --confirm-live
+```
+
+Resume from a later page after an interrupted run:
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
+  --source dramacps_materials \
+  --start-page 139 \
+  --no-page-limit \
+  --delay-seconds 1 \
+  --with-details \
+  --confirm-live
+```

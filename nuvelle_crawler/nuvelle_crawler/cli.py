@@ -27,10 +27,12 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument("--language", action="append")
     backfill.add_argument("--all-languages", action="store_true")
     backfill.add_argument("--sort", action="append")
+    backfill.add_argument("--start-page", type=int, default=1)
     backfill.add_argument("--max-pages", type=int, default=1)
     backfill.add_argument("--no-page-limit", action="store_true")
     backfill.add_argument("--delay-seconds", type=float, default=3.0)
     backfill.add_argument("--with-details", action="store_true")
+    backfill.add_argument("--detail-retries", type=int, default=2)
     backfill.add_argument("--fail-fast-detail-errors", action="store_true")
     backfill.add_argument("--create-tables", action="store_true")
     backfill.add_argument("--confirm-live", action="store_true")
@@ -55,8 +57,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.no_page_limit and args.max_pages != 1:
             parser.error("--max-pages cannot be combined with --no-page-limit")
         config = get_source_config(args.source)
-        languages = list(config["languages"]) if args.all_languages else args.language or ["en"]
-        sorts = args.sort or ["time"]
+        languages = list(config["languages"]) if args.all_languages else args.language or list(
+            config.get("default_languages", ["en"])
+        )
+        sorts = args.sort or list(config.get("default_sorts", ["time"]))
         max_pages = None if args.no_page_limit else args.max_pages
         if args.create_tables:
             Base.metadata.create_all(bind=engine)
@@ -72,9 +76,11 @@ def main(argv: list[str] | None = None) -> int:
                 source=args.source,
                 languages=languages,
                 sorts=sorts,
+                start_page=args.start_page,
                 max_pages=max_pages,
                 delay_seconds=args.delay_seconds,
                 with_details=args.with_details,
+                detail_retry_attempts=args.detail_retries,
                 continue_on_detail_error=not args.fail_fast_detail_errors,
             )
             print(json.dumps(summary.__dict__, ensure_ascii=False, sort_keys=True))
