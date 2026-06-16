@@ -1,5 +1,7 @@
 import { blogCategoryMetadata, renderBlogCategory } from "@/lib/blog/page-data";
 
+export const dynamic = "force-dynamic";
+
 type EnglishBlogCategoryPageProps = {
   params: Promise<{ slug: string }>;
 };

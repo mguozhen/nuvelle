@@ -1,5 +1,7 @@
 import { blogDetailMetadata, renderBlogDetail, resolveLocaleParam } from "@/lib/blog/page-data";
 
+export const dynamic = "force-dynamic";
+
 type LocalizedBlogDetailPageProps = {
   params: Promise<{ locale: string; slug: string }>;
 };

@@ -1,5 +1,7 @@
 import { blogCategoryMetadata, renderBlogCategory, resolveLocaleParam } from "@/lib/blog/page-data";
 
+export const dynamic = "force-dynamic";
+
 type LocalizedBlogCategoryPageProps = {
   params: Promise<{ locale: string; slug: string }>;
 };

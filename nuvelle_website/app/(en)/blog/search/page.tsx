@@ -1,5 +1,7 @@
 import { blogSearchMetadata, renderBlogSearch, type SearchParamValue } from "@/lib/blog/page-data";
 
+export const dynamic = "force-dynamic";
+
 type EnglishBlogSearchPageProps = {
   searchParams: Promise<{ value?: SearchParamValue }>;
 };

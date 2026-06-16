@@ -1,14 +1,11 @@
 import { blogSearchMetadata, renderBlogSearch, resolveLocaleParam, type SearchParamValue } from "@/lib/blog/page-data";
-import { localeOptions } from "@/lib/i18n";
+
+export const dynamic = "force-dynamic";
 
 type LocalizedBlogSearchPageProps = {
   params: Promise<{ locale: string }>;
   searchParams: Promise<{ value?: SearchParamValue }>;
 };
-
-export function generateStaticParams() {
-  return localeOptions.filter((locale) => locale.prefix).map((locale) => ({ locale: locale.key }));
-}
 
 export async function generateMetadata({ params, searchParams }: LocalizedBlogSearchPageProps) {
   const { locale } = await params;

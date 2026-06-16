@@ -1,5 +1,7 @@
 import { blogDetailMetadata, renderBlogDetail } from "@/lib/blog/page-data";
 
+export const dynamic = "force-dynamic";
+
 type EnglishBlogDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
