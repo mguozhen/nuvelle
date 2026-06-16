@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Search, Smartphone } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
+import { BlogBreadcrumbs } from "@/components/blog/blog-breadcrumbs";
 import { Button } from "@/components/ui/button";
+import { breadcrumbJsonLd, serializeJsonLd, type BreadcrumbItem } from "@/lib/blog/seo";
 import { blogPath } from "@/lib/blog/urls";
 import { getLocale, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
@@ -10,10 +12,11 @@ type BlogShellProps = {
   title: string;
   description: string;
   searchValue?: string;
+  breadcrumbs?: BreadcrumbItem[];
   children: ReactNode;
 };
 
-export function BlogShell({ locale, title, description, searchValue, children }: BlogShellProps) {
+export function BlogShell({ locale, title, description, searchValue, breadcrumbs, children }: BlogShellProps) {
   const copy = websiteCopy[locale];
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
@@ -72,8 +75,23 @@ export function BlogShell({ locale, title, description, searchValue, children }:
             <p className="mt-4 max-w-3xl text-base leading-relaxed text-[#a8b0cc] sm:text-lg">{description}</p>
           </div>
         </section>
-        <section className="mx-auto max-w-[1320px] px-5 py-10 sm:px-7 sm:py-12">{children}</section>
+        <section className="mx-auto max-w-[1320px] px-5 py-10 sm:px-7 sm:py-12">
+          {breadcrumbs?.length ? (
+            <div className="mb-6">
+              <BlogBreadcrumbs items={breadcrumbs} />
+            </div>
+          ) : null}
+          {children}
+        </section>
       </main>
+      {breadcrumbs?.length ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd(breadcrumbJsonLd(breadcrumbs))
+          }}
+        />
+      ) : null}
     </>
   );
 }

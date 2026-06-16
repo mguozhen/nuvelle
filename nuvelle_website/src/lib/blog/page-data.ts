@@ -5,9 +5,11 @@ import { BlogListPage } from "@/components/blog/blog-list-page";
 import { BlogShell } from "@/components/blog/blog-shell";
 import { fetchBlogDetail, fetchBlogList } from "@/lib/blog/api";
 import { blogConfig } from "@/lib/blog/config";
+import type { BreadcrumbItem } from "@/lib/blog/seo";
 import { metadataForBlogDetail, metadataForBlogList } from "@/lib/blog/seo";
 import type { BlogListResult } from "@/lib/blog/types";
-import { getLocaleByRouteParam, type LocaleKey, websiteCopy } from "@/lib/i18n";
+import { canonicalUrl, type BlogRoute } from "@/lib/blog/urls";
+import { getLocaleByRouteParam, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
 type SafeListFetchOptions = {
   locale: LocaleKey;
@@ -86,6 +88,29 @@ function searchText(locale: LocaleKey, query: string) {
   };
 }
 
+function homeUrl(locale: LocaleKey) {
+  return new URL(homePathForLocale(locale), blogConfig.siteOrigin).toString();
+}
+
+function blogBreadcrumbs(locale: LocaleKey, currentName: string, route: Exclude<BlogRoute, { kind: "detail" }>): BreadcrumbItem[] {
+  const copy = websiteCopy[locale];
+  const listUrl = canonicalUrl(blogConfig.siteOrigin, locale, { kind: "list" });
+  const routeUrl = canonicalUrl(blogConfig.siteOrigin, locale, route);
+
+  if (route.kind === "list") {
+    return [
+      { name: copy.nav.home, url: homeUrl(locale) },
+      { name: copy.nav.blog }
+    ];
+  }
+
+  return [
+    { name: copy.nav.home, url: homeUrl(locale) },
+    { name: copy.nav.blog, url: listUrl },
+    { name: currentName, url: routeUrl }
+  ];
+}
+
 export async function resolveLocaleParam(locale: string | undefined): Promise<LocaleKey> {
   const localeInfo = getLocaleByRouteParam(locale);
 
@@ -104,6 +129,7 @@ export async function renderBlogList(locale: LocaleKey) {
     locale,
     title: text.title,
     description: text.description,
+    breadcrumbs: blogBreadcrumbs(locale, text.title, { kind: "list" }),
     children: createElement(BlogListPage, {
       locale,
       result,
@@ -121,6 +147,7 @@ export async function renderBlogCategory(locale: LocaleKey, slug: string) {
     locale,
     title: text.title,
     description: text.description,
+    breadcrumbs: blogBreadcrumbs(locale, text.title, { kind: "category", slug }),
     children: createElement(BlogListPage, {
       locale,
       result,
@@ -140,6 +167,7 @@ export async function renderBlogSearch(locale: LocaleKey, query: SearchParamValu
     title: text.title,
     description: text.description,
     searchValue: value,
+    breadcrumbs: blogBreadcrumbs(locale, text.title, { kind: "search", query: value }),
     children: createElement(BlogListPage, {
       locale,
       result,
