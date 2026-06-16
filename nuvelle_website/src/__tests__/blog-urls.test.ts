@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { blogPath, buildAlternateLinks, canonicalUrl, normalizeSiteOrigin } from "../lib/blog/urls";
+import {
+  blogPath,
+  buildAlternateLinks,
+  buildDetailAlternateLinks,
+  canonicalUrl,
+  normalizeSiteOrigin
+} from "../lib/blog/urls";
 
 describe("blog urls", () => {
   it("normalizes origins and builds locale-aware relative paths", () => {
@@ -25,6 +31,13 @@ describe("blog urls", () => {
       { hrefLang: "es-ES", href: "https://nuvelle.ai/es/blog/category/news" },
       { hrefLang: "pt-PT", href: "https://nuvelle.ai/pt/blog/category/news" },
       { hrefLang: "x-default", href: "https://nuvelle.ai/blog/category/news" }
+    ]);
+  });
+
+  it("builds detail alternates only for the current locale when translated slugs are unknown", () => {
+    expect(buildDetailAlternateLinks("https://nuvelle.ai", "jp", "konnichiwa")).toEqual([
+      { hrefLang: "ja-JP", href: "https://nuvelle.ai/jp/blog/konnichiwa" },
+      { hrefLang: "x-default", href: "https://nuvelle.ai/jp/blog/konnichiwa" }
     ]);
   });
 });

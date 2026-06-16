@@ -60,15 +60,16 @@ export function buildAlternateLinks(origin: string, route: Exclude<BlogRoute, { 
 
 export function buildDetailAlternateLinks(origin: string, locale: LocaleKey, slug: string): AlternateLink[] {
   const normalizedOrigin = normalizeSiteOrigin(origin);
+  const href = `${normalizedOrigin}${blogPath(locale, { kind: "detail", slug })}`;
 
   return [
     {
       hrefLang: getLocale(locale).hrefLang,
-      href: `${normalizedOrigin}${blogPath(locale, { kind: "detail", slug })}`
+      href
     },
     {
       hrefLang: "x-default",
-      href: `${normalizedOrigin}${blogPath("en", { kind: "detail", slug })}`
+      href
     }
   ];
 }

@@ -17,6 +17,25 @@ describe("blog sanitizer", () => {
     expect(sanitized).toContain('src="x.jpg"');
   });
 
+  it("removes unsafe href and src schemes across unquoted, mixed-case, and obfuscated values", () => {
+    const html = [
+      '<a href=javascript:alert(1)>Unquoted</a>',
+      '<a href=JaVaScRiPt:alert(2)>Mixed</a>',
+      '<a href="java\nscript:alert(3)">Obfuscated</a>',
+      '<img src=data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg== alt="bad">',
+      '<img src="data:image/png;base64,AAAA" alt="safe">'
+    ].join("");
+    const sanitized = sanitizeArticleHtml(html);
+
+    expect(sanitized).toContain("<a>Unquoted</a>");
+    expect(sanitized).toContain("<a>Mixed</a>");
+    expect(sanitized).toContain("<a>Obfuscated</a>");
+    expect(sanitized).toContain('<img alt="bad">');
+    expect(sanitized).toContain('<img src="data:image/png;base64,AAAA" alt="safe">');
+    expect(sanitized.toLowerCase()).not.toContain("javascript:");
+    expect(sanitized.toLowerCase()).not.toContain("data:text/html");
+  });
+
   it("strips html for descriptions", () => {
     expect(stripHtml("<p>Hello <strong>Nuvelle</strong></p>").trim()).toBe("Hello Nuvelle");
   });
