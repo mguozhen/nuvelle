@@ -1,6 +1,7 @@
 .superpowers/
 .worktrees/
 .vercel/
+.vite/
 .next/
 out/
 dist/

@@ -6,7 +6,10 @@ from sqlalchemy.pool import StaticPool
 
 from nuvelle_crawler.db.models import Base, ThirdPartyDramaResource
 from nuvelle_crawler.db.repositories import ThirdPartyDramaRepository
+from nuvelle_crawler.services.backfill import LocalDramaBackfillService
 from nuvelle_crawler.services.planner import CrawlerPlanner
+from nuvelle_crawler.sources.config import get_source_config
+from nuvelle_crawler.sources.reelshort_cps.client import ReelShortCpsClient
 from nuvelle_crawler.sources.reelshort_cps.mapper import ReelShortCpsMapper
 from nuvelle_crawler.tasks.enqueuer import InMemoryTaskEnqueuer
 
@@ -19,6 +22,55 @@ def make_session():
     )
     Base.metadata.create_all(bind=engine)
     return sessionmaker(bind=engine, autoflush=False, autocommit=False)()
+
+
+class FakeDramaAdapter:
+    def __init__(
+        self,
+        *,
+        pages: dict[tuple[str | None, str, int], list[dict]],
+        details: dict[str, dict] | None = None,
+        detail_errors: dict[str, Exception] | None = None,
+    ):
+        self.pages = pages
+        self.details = details or {}
+        self.detail_errors = detail_errors or {}
+        self.mapper = ReelShortCpsMapper()
+        self.list_calls: list[tuple[str | None, str, int]] = []
+        self.detail_calls: list[tuple[str, str]] = []
+
+    def list_page(self, *, page: int, language: str | None, sort: str) -> list[dict]:
+        self.list_calls.append((language, sort, page))
+        return self.pages.get((language, sort, page), [])
+
+    def get_detail(self, *, external_id: str, book_type: str) -> dict:
+        self.detail_calls.append((external_id, book_type))
+        if external_id in self.detail_errors:
+            raise self.detail_errors[external_id]
+        return self.details[external_id]
+
+    def to_resource_payload(self, raw: dict):
+        return self.mapper.to_resource_payload(raw)
+
+
+class FakeHttpResponse:
+    def __init__(self, data: dict):
+        self.data = data
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self) -> dict:
+        return self.data
+
+
+class FakeHttpClient:
+    def __init__(self):
+        self.calls: list[tuple[str, dict, dict | None]] = []
+
+    def post(self, path: str, *, json: dict, headers: dict | None = None) -> FakeHttpResponse:
+        self.calls.append((path, json, headers))
+        return FakeHttpResponse({"code": 0, "data": {"id": json["book_id"]}})
 
 
 def test_reelshort_mapper_extracts_minimal_resource_fields() -> None:
@@ -115,3 +167,158 @@ def test_planner_enqueues_list_page_tasks_without_calling_source() -> None:
         "sort": "money",
         "page": 2,
     }
+
+
+def test_reelshort_client_uses_frontend_detail_payload_shape() -> None:
+    fake_http = FakeHttpClient()
+    client = ReelShortCpsClient(token="token")
+    client.client = fake_http
+
+    client.book_detail(external_id="book-1", book_type="0")
+
+    assert fake_http.calls == [
+        (
+            "/api/v1/book/book-detail",
+            {"app": "reelshort", "book_id": "book-1", "book_type": 0},
+            {"Authorization": "Bearer token"},
+        )
+    ]
+
+
+def test_reelshort_source_config_uses_frontend_language_codes() -> None:
+    languages = get_source_config("reelshort_cps")["languages"]
+
+    assert "in" in languages
+    assert "id" not in languages
+    assert {"ar", "zh-TW", "it", "ro"}.issubset(languages)
+
+
+def test_local_backfill_stops_at_empty_page_and_upserts_rows() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [
+                {
+                    "id": "book-1",
+                    "title": "First",
+                    "lang": "English",
+                    "book_type": 1,
+                },
+                {
+                    "id": "book-2",
+                    "title": "Second",
+                    "lang": "English",
+                    "book_type": 1,
+                },
+            ],
+            ("en", "time", 2): [],
+        }
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+    )
+
+    rows = list(db.scalars(select(ThirdPartyDramaResource)).all())
+    assert adapter.list_calls == [("en", "time", 1), ("en", "time", 2)]
+    assert summary.list_pages_scanned == 2
+    assert summary.resources_scanned == 2
+    assert summary.resources_changed == 2
+    assert len(rows) == 2
+
+
+def test_local_backfill_respects_max_pages() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "First", "lang": "English", "book_type": 1}],
+            ("en", "time", 2): [{"id": "book-2", "title": "Second", "lang": "English", "book_type": 1}],
+        }
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=1,
+        delay_seconds=0,
+    )
+
+    rows = list(db.scalars(select(ThirdPartyDramaResource)).all())
+    assert adapter.list_calls == [("en", "time", 1)]
+    assert summary.list_pages_scanned == 1
+    assert summary.resources_scanned == 1
+    assert len(rows) == 1
+
+
+def test_local_backfill_can_fetch_details_for_each_row() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "List Title", "lang": "English", "book_type": 1}],
+            ("en", "time", 2): [],
+        },
+        details={
+            "book-1": {
+                "id": "book-1",
+                "title": "Detail Title",
+                "introduction": "Detail synopsis",
+                "book_type": 1,
+            }
+        },
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+        with_details=True,
+    )
+
+    row = db.scalar(select(ThirdPartyDramaResource))
+    assert adapter.detail_calls == [("book-1", "1")]
+    assert summary.details_scanned == 1
+    assert row is not None
+    assert row.title == "Detail Title"
+    assert row.synopsis == "Detail synopsis"
+    assert row.language == "English"
+
+
+def test_local_backfill_reports_progress_and_continues_detail_errors() -> None:
+    db = make_session()
+    messages: list[str] = []
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [
+                {"id": "book-1", "title": "First", "lang": "English", "book_type": 1},
+                {"id": "book-2", "title": "Second", "lang": "English", "book_type": 1},
+            ],
+            ("en", "time", 2): [],
+        },
+        details={"book-2": {"id": "book-2", "title": "Second Detail", "lang": "English", "book_type": 1}},
+        detail_errors={"book-1": RuntimeError("detail unavailable")},
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None, reporter=messages.append).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+        with_details=True,
+    )
+
+    rows = list(db.scalars(select(ThirdPartyDramaResource).order_by(ThirdPartyDramaResource.external_id)).all())
+    assert summary.resources_scanned == 2
+    assert summary.details_scanned == 1
+    assert summary.detail_errors == 1
+    assert [row.external_id for row in rows] == ["book-1", "book-2"]
+    assert any("list start source=reelshort_cps language=en sort=time page=1" in message for message in messages)
+    assert any("detail error external_id=book-1 book_type=1 error=detail unavailable" in message for message in messages)
+    assert any("done resources_scanned=2 details_scanned=1 detail_errors=1" in message for message in messages)

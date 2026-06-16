@@ -34,8 +34,8 @@ class ReelShortCpsClient:
         return self.post("/api/v1/book/all-book", payload)
 
     def book_detail(self, *, external_id: str, book_type: str) -> dict:
+        book_type_value = int(book_type) if str(book_type).isdigit() else book_type
         return self.post(
             "/api/v1/book/book-detail",
-            {"id": external_id, "app": "reelshort", "book_type": book_type},
+            {"app": "reelshort", "book_id": external_id, "book_type": book_type_value},
         )
-
