@@ -13,11 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import type { Drama } from "@/data/dramas";
 import { statForDrama } from "@/data/dramas";
+import type { WebsiteCopy } from "@/lib/i18n";
 
 type DramaModalProps = {
   drama: Drama | null;
   onClose: () => void;
   onGetApp: () => void;
+  copy: WebsiteCopy["modal"];
 };
 
 function episodeCount(episodes: string) {
@@ -25,7 +27,7 @@ function episodeCount(episodes: string) {
   return match ? Number(match[0]) : 8;
 }
 
-export function DramaModal({ drama, onClose, onGetApp }: DramaModalProps) {
+export function DramaModal({ drama, onClose, onGetApp, copy }: DramaModalProps) {
   const stats = drama ? statForDrama(drama.slug) : null;
   const episodes = drama ? Array.from({ length: episodeCount(drama.episodes) }, (_, index) => index + 1) : [];
 
@@ -79,7 +81,7 @@ export function DramaModal({ drama, onClose, onGetApp }: DramaModalProps) {
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/7 px-3 py-1.5">
                   <Eye className="h-4 w-4 text-[#b25cff]" />
-                  <b className="text-white">{stats.views}</b> views
+                  <b className="text-white">{stats.views}</b> {copy.views}
                 </span>
               </div>
 
@@ -90,7 +92,7 @@ export function DramaModal({ drama, onClose, onGetApp }: DramaModalProps) {
                     className="rounded-md border border-white/12 bg-[#0b0d16] px-3 py-2 text-xs font-semibold text-[#a8b0cc]"
                   >
                     EP {episode}
-                    {episode <= 2 ? <span className="text-white"> · Free</span> : null}
+                    {episode <= 2 ? <span className="text-white"> · {copy.free}</span> : null}
                   </span>
                 ))}
               </div>
@@ -98,11 +100,11 @@ export function DramaModal({ drama, onClose, onGetApp }: DramaModalProps) {
               <DialogFooter className="mt-7 justify-start sm:justify-start">
                 <Button type="button" size="lg" variant="gradient" onClick={handleWatch}>
                   <Play className="h-4 w-4 fill-current" />
-                  Watch Episode 1
+                  {copy.watchEpisode}
                 </Button>
                 <Button type="button" size="lg" variant="outline" onClick={onGetApp}>
                   <Download className="h-4 w-4" />
-                  Get the App
+                  {copy.getApp}
                 </Button>
               </DialogFooter>
             </div>

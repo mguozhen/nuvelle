@@ -1,7 +1,12 @@
 import { Apple, Play, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { WebsiteCopy } from "@/lib/i18n";
 
-export function AppBand() {
+type AppBandProps = {
+  copy: WebsiteCopy["appBand"];
+};
+
+export function AppBand({ copy }: AppBandProps) {
   return (
     <section
       id="app"
@@ -10,28 +15,25 @@ export function AppBand() {
       <div className="mx-auto flex max-w-[1320px] flex-col gap-7 px-5 py-10 sm:px-10 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="max-w-lg text-3xl font-bold leading-tight tracking-normal text-white sm:text-4xl">
-            Unlock every episode
+            {copy.title}
             <span className="block bg-[linear-gradient(135deg,#b25cff,#ff5fbf)] bg-clip-text text-transparent">
-              free in the app.
+              {copy.accent}
             </span>
           </h2>
-          <p className="mt-3 max-w-xl text-sm leading-relaxed text-[#a8b0cc] sm:text-base">
-            Binge thousands of premium AI-crafted vertical dramas. New drops daily. Watch offline, get early access,
-            and follow your favorite story worlds.
-          </p>
+          <p className="mt-3 max-w-xl text-sm leading-relaxed text-[#a8b0cc] sm:text-base">{copy.body}</p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <Button type="button" size="lg" variant="outline" className="justify-start bg-[#0c0e18]">
             <Apple className="h-5 w-5" />
-            App Store
+            {copy.appStore}
           </Button>
           <Button type="button" size="lg" variant="outline" className="justify-start bg-[#0c0e18]">
             <Play className="h-5 w-5 fill-current" />
-            Google Play
+            {copy.googlePlay}
           </Button>
           <Button type="button" size="lg" variant="gradient" className="justify-start">
             <Smartphone className="h-5 w-5" />
-            Get the App
+            {copy.getApp}
           </Button>
         </div>
       </div>

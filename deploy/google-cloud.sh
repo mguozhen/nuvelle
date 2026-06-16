@@ -51,9 +51,9 @@ ADMIN_SERVICE="nuvelle-admin"
 
 API_URL=""
 
-# 前端应用映射格式：部署模式:Cloud Run 服务名:pnpm 包名:构建产物目录。
+# 前端应用映射格式：部署模式:Cloud Run 服务名:pnpm 包名:部署产物目录或类型。
 FRONTEND_APPS=(
-  "website:$WEBSITE_SERVICE:nuvelle_website:nuvelle_website/out"
+  "website:$WEBSITE_SERVICE:nuvelle_website:ssr"
   "mobile:$MOBILE_SERVICE:nuvelle_mobile:nuvelle_mobile/dist"
   "web:$WEB_SERVICE:nuvelle_web:nuvelle_web/dist"
   "admin:$ADMIN_SERVICE:nuvelle_admin:nuvelle_admin/dist"
@@ -348,12 +348,29 @@ prepare_static_context() {
   rm -rf "$context"
   mkdir -p "$context/deploy" "$context/$site_dir"
 
-  # 四个前端静态服务共用同一个轻量 Nginx 镜像，构建产物最终会放到
+  # 静态前端服务共用同一个轻量 Nginx 镜像，构建产物最终会放到
   # Nginx 的 /usr/share/nginx/html 目录。
   cp deploy/Dockerfile.static "$context/deploy/Dockerfile.static"
   cp deploy/nginx-static.conf "$context/deploy/nginx-static.conf"
   cp deploy/cloudbuild-static.yaml "$context/cloudbuild-static.yaml"
   rsync -a --delete "$site_dir/" "$context/$site_dir/"
+}
+
+prepare_website_context() {
+  local context="$1"
+
+  [[ -f nuvelle_website/.next/BUILD_ID ]] || die "Run pnpm --filter nuvelle_website build first"
+
+  rm -rf "$context"
+  mkdir -p "$context/deploy" "$context/nuvelle_website"
+
+  cp package.json pnpm-lock.yaml pnpm-workspace.yaml "$context/"
+  cp deploy/Dockerfile.website "$context/deploy/Dockerfile.website"
+  cp deploy/cloudbuild-website.yaml "$context/cloudbuild-website.yaml"
+  cp nuvelle_website/package.json "$context/nuvelle_website/package.json"
+  cp nuvelle_website/next.config.mjs "$context/nuvelle_website/next.config.mjs"
+  rsync -a --delete nuvelle_website/.next "$context/nuvelle_website/"
+  rsync -a --delete nuvelle_website/public "$context/nuvelle_website/"
 }
 
 submit_cloud_build() {
@@ -524,8 +541,58 @@ deploy_static_service() {
     --max-instances=4
 }
 
+join_by() {
+  local IFS="$1"
+  shift
+  printf '%s' "$*"
+}
+
+deploy_website_service() {
+  local service="$1"
+  local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service:$TAG"
+  local context="$BUILD_DIR/website-$service"
+  local env_vars=(
+    "BLOG_SITE_KEY=${BLOG_SITE_KEY:-nuvelle.ai}"
+    "NEXT_PUBLIC_SITE_ORIGIN=https://$DOMAIN_ROOT"
+    "BLOG_SLX_HOST=${BLOG_SLX_HOST:-https://apps.voc.ai}"
+    "BLOG_PAGE_SIZE=${BLOG_PAGE_SIZE:-12}"
+  )
+  local category_env
+  local env_arg
+
+  for category_env in \
+    BLOG_CATEGORY_IDS_EN \
+    BLOG_CATEGORY_IDS_CN \
+    BLOG_CATEGORY_IDS_JP \
+    BLOG_CATEGORY_IDS_DE \
+    BLOG_CATEGORY_IDS_FR \
+    BLOG_CATEGORY_IDS_ES \
+    BLOG_CATEGORY_IDS_PT; do
+    if [[ -n "${!category_env:-}" ]]; then
+      env_vars+=("$category_env=${!category_env}")
+    fi
+  done
+
+  env_arg="^~^$(join_by '~' "${env_vars[@]}")"
+
+  prepare_website_context "$context"
+  submit_cloud_build "$context" "$context/cloudbuild-website.yaml" "_IMAGE=$image"
+
+  gcloud run deploy "$service" \
+    --project="$PROJECT_ID" \
+    --region="$REGION" \
+    --image="$image" \
+    --allow-unauthenticated \
+    --port=8080 \
+    --cpu=1 \
+    --memory=512Mi \
+    --min-instances=0 \
+    --max-instances=4 \
+    --set-env-vars="$env_arg"
+}
+
 deploy_static_services() {
-  log "Deploy static services"
+  log "Deploy frontend services"
   local entry
   local mode
   local service
@@ -534,7 +601,11 @@ deploy_static_services() {
 
   for entry in "${FRONTEND_APPS[@]}"; do
     IFS=: read -r mode service package site_dir <<<"$entry"
-    deploy_static_service "$service" "$site_dir"
+    if [[ "$mode" == "website" ]]; then
+      deploy_website_service "$service"
+    else
+      deploy_static_service "$service" "$site_dir"
+    fi
   done
 }
 
@@ -550,7 +621,11 @@ deploy_frontend_app() {
 
   log "Build and deploy frontend: $mode"
   build_frontend_package "$package"
-  deploy_static_service "$service" "$site_dir"
+  if [[ "$mode" == "website" ]]; then
+    deploy_website_service "$service"
+  else
+    deploy_static_service "$service" "$site_dir"
+  fi
 }
 
 http_check() {

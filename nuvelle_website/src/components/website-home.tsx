@@ -16,25 +16,28 @@ import {
   top10,
   type Drama
 } from "@/data/dramas";
-
-const footerLinks = {
-  Explore: ["New Releases", "Categories", "Trending", "For Creators"],
-  Company: ["About Nuvelle", "Careers", "Press", "Contact"],
-  Legal: ["Terms of Service", "Privacy Policy", "Content Policy", "Support"]
-};
+import { categoryRowKeys, getLocale, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
 const searchDisplayAliases: Record<string, string> = {
   mafia_wife: "Mafia Wife"
+};
+
+type WebsiteHomeProps = {
+  locale: LocaleKey;
 };
 
 function scrollToApp() {
   document.getElementById("app")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export default function WebsiteHome() {
+export default function WebsiteHome({ locale }: WebsiteHomeProps) {
   const [query, setQuery] = useState("");
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const searchResults = useMemo(() => searchDramas(query), [query]);
+  const copy = websiteCopy[locale];
+  const localeInfo = getLocale(locale);
+  const homeHref = homePathForLocale(locale);
+  const blogHref = `${localeInfo.prefix}/blog` || "/blog";
 
   function openDrama(drama: Drama) {
     setSelectedDrama(drama);
@@ -49,37 +52,40 @@ export default function WebsiteHome() {
     <>
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b0d16]/80 backdrop-blur-xl">
         <div className="mx-auto flex min-h-16 max-w-[1320px] flex-wrap items-center gap-4 px-5 py-3 sm:flex-nowrap sm:px-7 sm:py-0">
-          <a href="#" aria-label="Nuvelle home">
+          <a href={homeHref} aria-label={copy.homeAriaLabel}>
             <BrandMark />
           </a>
           <nav className="hidden items-center gap-7 text-sm font-medium text-[#a8b0cc] md:flex">
-            <a className="transition-colors hover:text-white" href="#new">
-              Home
+            <a className="transition-colors hover:text-white" href={homeHref}>
+              {copy.nav.home}
             </a>
             <a className="transition-colors hover:text-white" href="#categories">
-              Categories
+              {copy.nav.categories}
             </a>
             <a className="transition-colors hover:text-white" href="#app">
-              Fandom
+              {copy.nav.fandom}
             </a>
             <a className="transition-colors hover:text-white" href="#app">
-              Creators
+              {copy.nav.creators}
+            </a>
+            <a className="transition-colors hover:text-white" href={blogHref}>
+              {copy.nav.blog}
             </a>
           </nav>
           <div className="flex-1" />
           <label className="order-last flex w-full items-center gap-2 rounded-full border border-white/10 bg-[#0c0f1a] px-4 py-2 text-[#8f98b6] sm:order-none sm:min-w-[13rem] sm:max-w-xs">
             <Search className="h-4 w-4" />
             <input
-              aria-label="Search dramas"
+              aria-label={copy.search.label}
               className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#6b7290]"
-              placeholder="Search dramas"
+              placeholder={copy.search.placeholder}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
           <Button type="button" variant="gradient" onClick={scrollToApp}>
             <Smartphone className="h-4 w-4" />
-            Get the App
+            {copy.hero.getApp}
           </Button>
         </div>
       </header>
@@ -89,15 +95,15 @@ export default function WebsiteHome() {
 
         <section className="mx-auto max-w-[1320px] px-5 py-12 sm:px-7">
           {query.trim() ? (
-            <section className="mb-11" aria-label="Search results">
+            <section className="mb-11" aria-label={copy.search.results}>
               <div className="mb-4 flex items-center justify-between gap-4">
                 <div className="flex items-end gap-3">
-                  <h2 className="text-2xl font-semibold tracking-normal text-white">Results</h2>
+                  <h2 className="text-2xl font-semibold tracking-normal text-white">{copy.search.results}</h2>
                   <span className="pb-0.5 text-sm text-[#8f98b6]">{searchResults.length}</span>
                 </div>
                 <Button type="button" variant="ghost" size="sm" onClick={() => setQuery("")}>
                   <X className="h-4 w-4" />
-                  Clear
+                  {copy.search.clear}
                 </Button>
               </div>
               {searchResults.length ? (
@@ -113,16 +119,22 @@ export default function WebsiteHome() {
                 </div>
               ) : (
                 <p className="rounded-lg border border-white/10 bg-white/5 px-4 py-5 text-sm text-[#a8b0cc]">
-                  No dramas match “{query}”.
+                  {copy.search.empty(query)}
                 </p>
               )}
             </section>
           ) : null}
 
-          <CatalogRow id="new" title="New Releases" slugs={rows["New Releases"]} onOpen={openDrama} />
+          <CatalogRow
+            id="new"
+            title={copy.rows.newReleases}
+            slugs={rows["New Releases"]}
+            viewAllLabel={copy.rows.viewAll}
+            onOpen={openDrama}
+          />
 
           <section className="mb-11">
-            <RowHeader title="Top 10 This Week" />
+            <RowHeader title={copy.rows.top10} viewAllLabel={copy.rows.viewAll} />
             <div className="flex snap-x gap-5 overflow-x-auto pb-3 [scrollbar-color:#2a3050_transparent]">
               {top10.map((slug, index) => {
                 const drama = getDramaBySlug(slug);
@@ -132,16 +144,25 @@ export default function WebsiteHome() {
           </section>
 
           <div id="categories">
-            {Object.entries(rows)
-              .filter(([title]) => title !== "New Releases" && title !== "Second Chance")
-              .map(([title, slugs]) => (
-                <CatalogRow key={title} title={title} slugs={slugs} onOpen={openDrama} />
-              ))}
+            {categoryRowKeys.map((title) => (
+              <CatalogRow
+                key={title}
+                title={copy.rowTitles[title]}
+                slugs={rows[title]}
+                viewAllLabel={copy.rows.viewAll}
+                onOpen={openDrama}
+              />
+            ))}
           </div>
 
-          <AppBand />
+          <AppBand copy={copy.appBand} />
 
-          <CatalogRow title="Second Chance" slugs={rows["Second Chance"]} onOpen={openDrama} />
+          <CatalogRow
+            title={copy.rows.secondChance}
+            slugs={rows["Second Chance"]}
+            viewAllLabel={copy.rows.viewAll}
+            onOpen={openDrama}
+          />
         </section>
       </main>
 
@@ -149,11 +170,9 @@ export default function WebsiteHome() {
         <div className="mx-auto grid max-w-[1320px] gap-8 px-5 py-10 sm:px-7 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <BrandMark compact />
-            <p className="mt-4 max-w-xs text-sm leading-relaxed">
-              The home of AI shorts. Premium vertical dramas, reimagined daily. Every story, reimagined.
-            </p>
+            <p className="mt-4 max-w-xs text-sm leading-relaxed">{copy.footer.description}</p>
           </div>
-          {Object.entries(footerLinks).map(([heading, links]) => (
+          {copy.footerLinks.map(({ heading, links }) => (
             <div key={heading}>
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b7290]">{heading}</h3>
               <ul className="mt-4 space-y-2 text-sm">
@@ -170,23 +189,28 @@ export default function WebsiteHome() {
         </div>
         <div className="border-t border-white/10 px-5 py-4 text-xs text-[#6b7290] sm:px-7">
           <div className="mx-auto flex max-w-[1320px] flex-wrap justify-between gap-3">
-            <span>© 2026 Nuvelle, Inc. · nuvelle.ai</span>
-            <span>Every story, reimagined.</span>
+            <span>{copy.footer.copyright}</span>
+            <span>{copy.footer.tagline}</span>
           </div>
         </div>
       </footer>
 
-      <DramaModal drama={selectedDrama} onClose={() => setSelectedDrama(null)} onGetApp={appAndClose} />
+      <DramaModal
+        drama={selectedDrama}
+        onClose={() => setSelectedDrama(null)}
+        onGetApp={appAndClose}
+        copy={copy.modal}
+      />
     </>
   );
 }
 
-function RowHeader({ title }: { title: string }) {
+function RowHeader({ title, viewAllLabel }: { title: string; viewAllLabel: string }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-4">
       <h2 className="text-2xl font-semibold tracking-normal text-white">{title}</h2>
       <a className="text-sm font-medium text-[#8f98b6] transition-colors hover:text-white" href="#">
-        View all
+        {viewAllLabel}
       </a>
     </div>
   );
@@ -196,16 +220,18 @@ function CatalogRow({
   id,
   title,
   slugs,
+  viewAllLabel,
   onOpen
 }: {
   id?: string;
   title: string;
   slugs: string[];
+  viewAllLabel: string;
   onOpen: (drama: Drama) => void;
 }) {
   return (
     <section id={id} className="mb-11">
-      <RowHeader title={title} />
+      <RowHeader title={title} viewAllLabel={viewAllLabel} />
       <div className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-color:#2a3050_transparent]">
         {slugs.map((slug) => {
           const drama = getDramaBySlug(slug);

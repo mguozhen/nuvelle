@@ -2,6 +2,9 @@
 *
 
 !.dockerignore
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
 !deploy/
 !deploy/**
 !nuvelle_api/
@@ -9,8 +12,16 @@
 !nuvelle_kit/
 !nuvelle_kit/**
 !nuvelle_website/
+!nuvelle_website/.next/
+!nuvelle_website/.next/**
+nuvelle_website/.next/cache/
+nuvelle_website/.next/cache/**
+!nuvelle_website/next.config.mjs
 !nuvelle_website/out/
 !nuvelle_website/out/**
+!nuvelle_website/package.json
+!nuvelle_website/public/
+!nuvelle_website/public/**
 !nuvelle_mobile/
 !nuvelle_mobile/dist/
 !nuvelle_mobile/dist/**

@@ -1,0 +1,16 @@
+# Cloud Build 配置：构建官网 Next.js SSR 镜像。
+# _IMAGE 是最终推送到 Artifact Registry 的镜像地址。
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - deploy/Dockerfile.website
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  # 本地手动执行 Cloud Build 时的默认值；部署脚本会按服务覆盖它。
+  _IMAGE: us-west1-docker.pkg.dev/nuvelle/nuvelle/nuvelle-website:manual
