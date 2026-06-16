@@ -10,6 +10,10 @@ shopt -s inherit_errexit 2>/dev/null || true
 # 常用分段执行：
 #   pnpm deploy:api
 #   pnpm deploy:frontend
+#   pnpm deploy:website
+#   pnpm deploy:mobile
+#   pnpm deploy:web
+#   pnpm deploy:admin
 #   pnpm deploy:verify
 #   CF_API_TOKEN=... pnpm deploy:domain
 #   SKIP_BACKEND_BUILD=true pnpm deploy
@@ -47,11 +51,12 @@ ADMIN_SERVICE="nuvelle-admin"
 
 API_URL=""
 
-STATIC_SERVICES=(
-  "$WEBSITE_SERVICE:nuvelle_website/out"
-  "$MOBILE_SERVICE:nuvelle_mobile/dist"
-  "$WEB_SERVICE:nuvelle_web/dist"
-  "$ADMIN_SERVICE:nuvelle_admin/dist"
+# 前端应用映射格式：部署模式:Cloud Run 服务名:pnpm 包名:构建产物目录。
+FRONTEND_APPS=(
+  "website:$WEBSITE_SERVICE:nuvelle_website:nuvelle_website/out"
+  "mobile:$MOBILE_SERVICE:nuvelle_mobile:nuvelle_mobile/dist"
+  "web:$WEB_SERVICE:nuvelle_web:nuvelle_web/dist"
+  "admin:$ADMIN_SERVICE:nuvelle_admin:nuvelle_admin/dist"
 )
 
 DOMAIN_MAPPINGS=(
@@ -93,7 +98,7 @@ Usage:
   pnpm deploy
 
 Environment:
-  ONLY=all|api|frontend|static|verify|domain
+  ONLY=all|api|frontend|static|website|mobile|web|admin|verify|domain
   PROJECT_ID=$PROJECT_ID
   REGION=$REGION
   REPOSITORY=$REPOSITORY
@@ -105,7 +110,11 @@ Environment:
 Examples:
   pnpm deploy
   pnpm deploy:api
-  SKIP_BACKEND_BUILD=true pnpm deploy:frontend
+  pnpm deploy:frontend
+  pnpm deploy:website
+  pnpm deploy:mobile
+  pnpm deploy:web
+  pnpm deploy:admin
   pnpm deploy:verify
   CF_API_TOKEN=... pnpm deploy:domain
 EOF
@@ -129,7 +138,7 @@ run_mode_in() {
 
 validate_mode() {
   case "$ONLY" in
-    all | api | frontend | static | verify | domain)
+    all | api | frontend | static | website | mobile | web | admin | verify | domain)
       ;;
     help | -h | --help)
       usage
@@ -147,7 +156,7 @@ preflight() {
   require_cmd gcloud
   require_cmd python3
 
-  if run_mode_in all api frontend static; then
+  if run_mode_in all api frontend static website mobile web admin; then
     require_cmd rsync
   fi
 
@@ -155,11 +164,11 @@ preflight() {
     require_cmd openssl
   fi
 
-  if run_mode_in all frontend; then
+  if run_mode_in all frontend website mobile web admin; then
     require_cmd pnpm
   fi
 
-  if run_mode_in all verify; then
+  if run_mode_in all frontend static verify website mobile web admin; then
     require_cmd curl
   fi
 
@@ -308,6 +317,11 @@ ensure_infra() {
   ensure_database
 }
 
+ensure_container_infra() {
+  enable_google_cloud_services
+  ensure_artifact_repository
+}
+
 prepare_api_context() {
   local context="$1"
 
@@ -441,6 +455,7 @@ build_frontend_package() {
   local package="$1"
 
   if [[ "$package" == "nuvelle_admin" ]]; then
+    resolve_api_url_for_frontend
     VITE_NUVELLE_API_URL="$API_URL/api/v1" pnpm --filter "$package" build
   else
     pnpm --filter "$package" build
@@ -449,11 +464,43 @@ build_frontend_package() {
 
 build_frontends() {
   log "Build frontends"
-  resolve_api_url_for_frontend
-  build_frontend_package nuvelle_website
-  build_frontend_package nuvelle_mobile
-  build_frontend_package nuvelle_web
-  build_frontend_package nuvelle_admin
+  local entry
+  local mode
+  local service
+  local package
+  local site_dir
+
+  for entry in "${FRONTEND_APPS[@]}"; do
+    IFS=: read -r mode service package site_dir <<<"$entry"
+    build_frontend_package "$package"
+  done
+}
+
+frontend_mode_is() {
+  case "$ONLY" in
+    website | mobile | web | admin)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+frontend_entry_for_mode() {
+  local target="$1"
+  local entry
+  local mode
+
+  for entry in "${FRONTEND_APPS[@]}"; do
+    mode="${entry%%:*}"
+    if [[ "$mode" == "$target" ]]; then
+      printf '%s\n' "$entry"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 deploy_static_service() {
@@ -480,14 +527,30 @@ deploy_static_service() {
 deploy_static_services() {
   log "Deploy static services"
   local entry
+  local mode
   local service
+  local package
   local site_dir
 
-  for entry in "${STATIC_SERVICES[@]}"; do
-    service="${entry%%:*}"
-    site_dir="${entry#*:}"
+  for entry in "${FRONTEND_APPS[@]}"; do
+    IFS=: read -r mode service package site_dir <<<"$entry"
     deploy_static_service "$service" "$site_dir"
   done
+}
+
+deploy_frontend_app() {
+  local mode="$1"
+  local entry
+  local service
+  local package
+  local site_dir
+
+  entry="$(frontend_entry_for_mode "$mode")" || die "Unknown frontend mode: $mode"
+  IFS=: read -r mode service package site_dir <<<"$entry"
+
+  log "Build and deploy frontend: $mode"
+  build_frontend_package "$package"
+  deploy_static_service "$service" "$site_dir"
 }
 
 http_check() {
@@ -500,11 +563,19 @@ http_check() {
   echo "$label OK $url"
 }
 
+verify_cloud_run_service() {
+  local service="$1"
+  local url
+
+  url="$(service_url "$service")"
+  [[ -n "$url" ]] || die "$service is missing."
+  http_check "$url" "$service"
+}
+
 verify_deploy() {
   log "Verify deploy"
   local api_url
   local service
-  local url
 
   api_url="$(service_url "$API_SERVICE")"
   [[ -n "$api_url" ]] || die "$API_SERVICE is missing."
@@ -513,10 +584,22 @@ verify_deploy() {
   http_check "$api_url/api/v1/votes" "$API_SERVICE votes"
 
   for service in "$WEBSITE_SERVICE" "$MOBILE_SERVICE" "$WEB_SERVICE" "$ADMIN_SERVICE"; do
-    url="$(service_url "$service")"
-    [[ -n "$url" ]] || die "$service is missing."
-    http_check "$url" "$service"
+    verify_cloud_run_service "$service"
   done
+}
+
+verify_frontend_app() {
+  local target="$1"
+  local entry
+  local mode
+  local service
+  local package
+  local site_dir
+
+  log "Verify frontend: $target"
+  entry="$(frontend_entry_for_mode "$target")" || die "Unknown frontend mode: $target"
+  IFS=: read -r mode service package site_dir <<<"$entry"
+  verify_cloud_run_service "$service"
 }
 
 cloudflare_api() {
@@ -726,6 +809,17 @@ main() {
   if run_mode_in all api; then
     ensure_infra
     deploy_api
+  fi
+
+  if run_mode_in frontend static || frontend_mode_is; then
+    ensure_container_infra
+  fi
+
+  if frontend_mode_is; then
+    deploy_frontend_app "$ONLY"
+    verify_frontend_app "$ONLY"
+    print_summary
+    return
   fi
 
   if run_mode_in all frontend static; then

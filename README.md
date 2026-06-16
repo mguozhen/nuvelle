@@ -153,8 +153,8 @@ The pnpm command delegates to `deploy/google-cloud.sh`. The script:
 1. Enables required Google Cloud APIs.
 2. Creates or reuses Artifact Registry and Cloud SQL resources.
 3. Builds and deploys `nuvelle-api`.
-4. Builds all frontend apps.
-5. Builds static Nginx images for the four frontend surfaces.
+4. Builds frontend apps.
+5. Builds static Nginx images for frontend surfaces.
 6. Deploys all five Cloud Run services.
 7. Verifies the API and static services.
 
@@ -163,11 +163,19 @@ Scoped runs:
 ```bash
 pnpm deploy:api
 pnpm deploy:frontend
+pnpm deploy:website
+pnpm deploy:mobile
+pnpm deploy:web
+pnpm deploy:admin
 pnpm deploy:static
 pnpm deploy:verify
 CF_API_TOKEN=... pnpm deploy:domain
 SKIP_BACKEND_BUILD=true pnpm deploy
 ```
+
+`pnpm deploy:frontend` builds and deploys all frontend apps. Use
+`deploy:website`, `deploy:mobile`, `deploy:web`, or `deploy:admin` when only
+one frontend needs to be released.
 
 See `deploy/README-google-cloud.md` for the detailed deployment flow.
 

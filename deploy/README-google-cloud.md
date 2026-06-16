@@ -26,6 +26,10 @@ deployment framework:
 | `pnpm deploy` | Full deploy: infra, API, frontends, static services, verify |
 | `pnpm deploy:api` | Rebuild and deploy only FastAPI |
 | `pnpm deploy:frontend` | Build all frontends and deploy static services |
+| `pnpm deploy:website` | Build and deploy only the public website |
+| `pnpm deploy:mobile` | Build and deploy only the mobile PWA |
+| `pnpm deploy:web` | Build and deploy only the CPS portal |
+| `pnpm deploy:admin` | Build and deploy only the admin dashboard |
 | `pnpm deploy:static` | Deploy existing `out/dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
 | `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS and Cloud Run domain mappings |
