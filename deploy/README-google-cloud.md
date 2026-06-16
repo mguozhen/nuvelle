@@ -30,7 +30,7 @@ deployment framework:
 | `pnpm deploy:mobile` | Build and deploy only the mobile PWA |
 | `pnpm deploy:web` | Build and deploy only the CPS portal |
 | `pnpm deploy:admin` | Build and deploy only the admin dashboard |
-| `pnpm deploy:static` | Deploy existing `out/dist` folders without rebuilding frontends |
+| `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
 | `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS and Cloud Run domain mappings |
 | `pnpm deploy:help` | Show all supported script options |
@@ -62,10 +62,34 @@ SQL_TIER=db-custom-1-3840
 | Cloud Run service | Source |
 |---|---|
 | `nuvelle-api` | `nuvelle_api/Dockerfile` |
-| `nuvelle-website` | `nuvelle_website/out` |
+| `nuvelle-website` | `nuvelle_website/.next` SSR service |
 | `nuvelle-mobile` | `nuvelle_mobile/dist` |
 | `nuvelle-web` | `nuvelle_web/dist` |
 | `nuvelle-admin` | `nuvelle_admin/dist` |
+
+## Website Blog Runtime
+
+The public website runs as a Next.js SSR service on Cloud Run. The deploy script
+sets these runtime defaults:
+
+```bash
+BLOG_SITE_KEY=nuvelle.ai
+NEXT_PUBLIC_SITE_ORIGIN=https://nuvelle.ai
+BLOG_SLX_HOST=https://apps.voc.ai
+BLOG_PAGE_SIZE=12
+```
+
+Optional category filters can be provided when deploying:
+
+```bash
+BLOG_CATEGORY_IDS_EN=...
+BLOG_CATEGORY_IDS_CN=...
+BLOG_CATEGORY_IDS_JP=...
+BLOG_CATEGORY_IDS_DE=...
+BLOG_CATEGORY_IDS_FR=...
+BLOG_CATEGORY_IDS_ES=...
+BLOG_CATEGORY_IDS_PT=...
+```
 
 ## Secrets
 

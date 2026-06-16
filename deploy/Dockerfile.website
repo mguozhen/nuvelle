@@ -1,0 +1,25 @@
+FROM node:22-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=8080
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY nuvelle_website/package.json nuvelle_website/package.json
+
+RUN pnpm install --filter nuvelle_website --prod --frozen-lockfile
+
+COPY nuvelle_website/.next nuvelle_website/.next
+COPY nuvelle_website/public nuvelle_website/public
+COPY nuvelle_website/next.config.mjs nuvelle_website/next.config.mjs
+COPY nuvelle_website/package.json nuvelle_website/package.json
+
+WORKDIR /app/nuvelle_website
+
+EXPOSE 8080
+
+CMD ["pnpm", "start"]

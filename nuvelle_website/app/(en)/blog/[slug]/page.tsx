@@ -4,12 +4,6 @@ type EnglishBlogDetailPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export const dynamicParams = false;
-
-export async function generateStaticParams(): Promise<Array<{ slug: string }>> {
-  return [];
-}
-
 export async function generateMetadata({ params }: EnglishBlogDetailPageProps) {
   const { slug } = await params;
 
