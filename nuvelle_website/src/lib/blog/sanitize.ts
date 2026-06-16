@@ -1,71 +1,101 @@
-const blockedElementPattern = /<(script|style|iframe|object|embed|form|button|textarea|select)\b[^>]*>[\s\S]*?<\/\1>/gi;
-const blockedTagPattern = /<\/?(script|style|iframe|object|embed|form|input|button|textarea|select)\b[^>]*>/gi;
-const eventAttributePattern = /\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
-const urlAttributePattern = /\s+(href|src)\s*=\s*("[^"]*"|'[^']*'|[^\s"'<>`]+)/gi;
-const asciiWhitespaceAndControlPattern = /[\u0000-\u0020\u007f]+/g;
-const safeImageDataUrlPattern = /^data:image\/(?:png|jpeg|jpg|gif|webp);/;
-const namedCharacterReferences: Record<string, string> = {
-  amp: "&",
-  apos: "'",
-  colon: ":",
-  gt: ">",
-  lt: "<",
-  newline: "\n",
-  quot: '"',
-  tab: "\t"
+import sanitizeHtml from "sanitize-html";
+
+type AttributeMap = Record<string, string>;
+
+const allowedTags = [
+  "p",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "ul",
+  "ol",
+  "li",
+  "table",
+  "thead",
+  "tbody",
+  "tr",
+  "th",
+  "td",
+  "a",
+  "img",
+  "strong",
+  "b",
+  "em",
+  "i",
+  "blockquote",
+  "code",
+  "pre",
+  "br",
+  "hr",
+  "span"
+];
+
+const allowedAttributes = {
+  a: ["href", "name", "target", "rel"],
+  img: ["src", "alt", "title", "width", "height"],
+  td: ["colspan", "rowspan"],
+  th: ["colspan", "rowspan"]
 };
 
-function decodeHtmlCharacterReferences(value: string) {
-  return value
-    .replace(/&#x([0-9a-f]+);?/gi, (reference, codePoint: string) =>
-      decodeNumericCharacterReference(reference, Number.parseInt(codePoint, 16))
-    )
-    .replace(/&#([0-9]+);?/g, (reference, codePoint: string) =>
-      decodeNumericCharacterReference(reference, Number.parseInt(codePoint, 10))
-    )
-    .replace(/&([a-z][a-z0-9]+);?/gi, (reference, name: string) => {
-      return namedCharacterReferences[name.toLowerCase()] ?? reference;
-    });
-}
-
-function decodeNumericCharacterReference(reference: string, codePoint: number) {
-  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
-    return reference;
-  }
-
-  return String.fromCodePoint(codePoint);
-}
+const asciiWhitespaceAndControlPattern = /[\u0000-\u0020\u007f]+/g;
+const safeImageDataUrlPattern = /^data:image\/(?:png|jpeg|jpg|gif|webp);/i;
 
 function normalizeUrlForSchemeCheck(value: string) {
-  return decodeHtmlCharacterReferences(value.replace(/^["']|["']$/g, ""))
-    .replace(asciiWhitespaceAndControlPattern, "")
-    .toLowerCase();
+  return value.replace(asciiWhitespaceAndControlPattern, "").toLowerCase();
 }
 
-function sanitizeUrlAttributes(html: string) {
-  return html.replace(urlAttributePattern, (attribute, _name: string, rawValue: string) => {
-    const normalizedValue = normalizeUrlForSchemeCheck(rawValue);
+function transformAnchor(tagName: string, attribs: AttributeMap) {
+  const nextAttributes = { ...attribs };
 
-    if (normalizedValue.startsWith("javascript:")) {
-      return "";
-    }
+  if (nextAttributes.target === "_blank") {
+    const relTokens = new Set((nextAttributes.rel ?? "").split(/\s+/).filter(Boolean));
+    relTokens.add("noopener");
+    relTokens.add("noreferrer");
+    nextAttributes.rel = [...relTokens].join(" ");
+  }
 
-    if (normalizedValue.startsWith("data:") && !safeImageDataUrlPattern.test(normalizedValue)) {
-      return "";
-    }
-
-    return attribute;
-  });
+  return { tagName, attribs: nextAttributes };
 }
+
+function transformImage(tagName: string, attribs: AttributeMap) {
+  const nextAttributes = { ...attribs };
+  const src = nextAttributes.src ? normalizeUrlForSchemeCheck(nextAttributes.src) : "";
+
+  if (src.startsWith("data:") && !safeImageDataUrlPattern.test(src)) {
+    delete nextAttributes.src;
+  }
+
+  return { tagName, attribs: nextAttributes };
+}
+
+const articleSanitizeOptions = {
+  allowedTags,
+  allowedAttributes,
+  allowedSchemes: ["http", "https", "mailto", "tel"],
+  allowedSchemesByTag: {
+    img: ["http", "https", "data"]
+  },
+  allowedSchemesAppliedToAttributes: ["href", "src"],
+  allowProtocolRelative: false,
+  parseStyleAttributes: false,
+  transformTags: {
+    a: transformAnchor,
+    img: transformImage
+  }
+};
+
+const textOnlySanitizeOptions = {
+  allowedTags: [],
+  allowedAttributes: {}
+};
 
 export function sanitizeArticleHtml(html: string | null | undefined) {
   if (!html) {
     return "";
   }
 
-  return sanitizeUrlAttributes(
-    html.replace(blockedElementPattern, "").replace(blockedTagPattern, "").replace(eventAttributePattern, "")
-  );
+  return sanitizeHtml(html, articleSanitizeOptions);
 }
 
 export function stripHtml(html: string | null | undefined) {
@@ -73,5 +103,5 @@ export function stripHtml(html: string | null | undefined) {
     return "";
   }
 
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+  return sanitizeHtml(html, textOnlySanitizeOptions).replace(/\s+/g, " ");
 }

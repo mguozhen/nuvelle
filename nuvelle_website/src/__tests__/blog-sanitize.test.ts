@@ -30,8 +30,9 @@ describe("blog sanitizer", () => {
     expect(sanitized).toContain("<a>Unquoted</a>");
     expect(sanitized).toContain("<a>Mixed</a>");
     expect(sanitized).toContain("<a>Obfuscated</a>");
-    expect(sanitized).toContain('<img alt="bad">');
-    expect(sanitized).toContain('<img src="data:image/png;base64,AAAA" alt="safe">');
+    expect(sanitized).toContain('alt="bad"');
+    expect(sanitized).toContain('src="data:image/png;base64,AAAA"');
+    expect(sanitized).toContain('alt="safe"');
     expect(sanitized.toLowerCase()).not.toContain("javascript:");
     expect(sanitized.toLowerCase()).not.toContain("data:text/html");
   });
@@ -52,11 +53,28 @@ describe("blog sanitizer", () => {
     expect(sanitized).toContain("<a>Decimal</a>");
     expect(sanitized).toContain("<a>Numeric colon</a>");
     expect(sanitized).toContain("<a>Named colon</a>");
-    expect(sanitized).toContain('<img alt="bad">');
+    expect(sanitized).toContain('alt="bad"');
     expect(sanitized).toContain('<a href="https://nuvelle.ai?x=1&amp;y=2">Safe link</a>');
-    expect(sanitized).toContain('<img src="data:image/webp;base64,AAAA" alt="safe">');
+    expect(sanitized).toContain('src="data:image/webp;base64,AAAA"');
+    expect(sanitized).toContain('alt="safe"');
     expect(sanitized.toLowerCase()).not.toContain("javascript");
     expect(sanitized.toLowerCase()).not.toContain("data:text/html");
+  });
+
+  it("sanitizes slash-separated href attributes parsed by browsers", () => {
+    const sanitized = sanitizeArticleHtml("<a/href=javascript:alert(1)>Slash href</a>");
+
+    expect(sanitized).toContain("<a>Slash href</a>");
+    expect(sanitized.toLowerCase()).not.toContain("javascript:");
+    expect(sanitized.toLowerCase()).not.toContain("href=");
+  });
+
+  it("removes slash-separated event handlers while preserving safe image attributes", () => {
+    const sanitized = sanitizeArticleHtml('<img/onerror=alert(1) src=x alt="bad">');
+
+    expect(sanitized).not.toContain("onerror");
+    expect(sanitized).toContain('src="x"');
+    expect(sanitized).toContain('alt="bad"');
   });
 
   it("strips html for descriptions", () => {
