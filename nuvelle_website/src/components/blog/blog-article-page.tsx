@@ -1,6 +1,6 @@
 import { BlogBreadcrumbs } from "@/components/blog/blog-breadcrumbs";
 import { blogConfig } from "@/lib/blog/config";
-import { breadcrumbJsonLd, blogPostingJsonLd, type BreadcrumbItem } from "@/lib/blog/seo";
+import { breadcrumbJsonLd, blogPostingJsonLd, serializeJsonLd, type BreadcrumbItem } from "@/lib/blog/seo";
 import { sanitizeArticleHtml } from "@/lib/blog/sanitize";
 import type { BlogArticleDetail } from "@/lib/blog/types";
 import { blogPath, canonicalUrl } from "@/lib/blog/urls";
@@ -74,13 +74,13 @@ export function BlogArticlePage({ locale, article }: BlogArticlePageProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd(breadcrumbs))
+          __html: serializeJsonLd(breadcrumbJsonLd(breadcrumbs))
         }}
       />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(articleJsonLd)
+          __html: serializeJsonLd(articleJsonLd)
         }}
       />
     </article>

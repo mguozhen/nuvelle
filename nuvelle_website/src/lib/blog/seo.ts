@@ -27,6 +27,18 @@ export function breadcrumbJsonLd(items: BreadcrumbItem[]) {
   };
 }
 
+const jsonLdScriptEscapes: Record<string, string> = {
+  "<": "\\u003c",
+  ">": "\\u003e",
+  "&": "\\u0026",
+  "\u2028": "\\u2028",
+  "\u2029": "\\u2029"
+};
+
+export function serializeJsonLd(value: unknown) {
+  return (JSON.stringify(value) ?? "null").replace(/[<>&\u2028\u2029]/g, (character) => jsonLdScriptEscapes[character]);
+}
+
 const htmlEntityMap: Record<string, string> = {
   amp: "&",
   apos: "'",

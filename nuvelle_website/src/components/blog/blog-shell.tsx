@@ -18,8 +18,8 @@ export function BlogShell({ locale, title, description, searchValue, children }:
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
   const blogHref = blogPath(locale, { kind: "list" });
-  const categoriesHref = `${homeHref === "/" ? "" : homeHref}#categories`;
-  const appHref = `${homeHref === "/" ? "" : homeHref}#app`;
+  const categoriesHref = `${homeHref}#categories`;
+  const appHref = `${homeHref}#app`;
 
   return (
     <>
@@ -50,7 +50,7 @@ export function BlogShell({ locale, title, description, searchValue, children }:
               className="w-full bg-transparent text-sm text-white outline-none placeholder:text-[#6b7290]"
               defaultValue={searchValue}
               name="value"
-              placeholder="Search the blog"
+              placeholder={copy.search.placeholder}
             />
           </form>
           <Button asChild variant="gradient">
