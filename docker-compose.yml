@@ -23,6 +23,29 @@ services:
       postgres:
         condition: service_healthy
 
+  crawler:
+    build:
+      context: .
+      dockerfile: nuvelle_crawler/Dockerfile
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.11-slim}
+    command: uvicorn nuvelle_crawler.main:app --host 0.0.0.0 --port 8080 --reload
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-nuvelle}:${POSTGRES_PASSWORD:-nuvelle_dev_password}@postgres:5432/${POSTGRES_DB:-nuvelle}
+      CRAWLER_BASE_URL: ${CRAWLER_BASE_URL:-http://crawler:8080}
+      GCP_PROJECT: ${GCP_PROJECT:-}
+      GCP_LOCATION: ${GCP_LOCATION:-us-west1}
+      CLOUD_TASKS_SERVICE_ACCOUNT: ${CLOUD_TASKS_SERVICE_ACCOUNT:-}
+      REELSHORT_CPS_TOKEN: ${REELSHORT_CPS_TOKEN:-}
+      PYTHONPATH: /app
+    ports:
+      - "${CRAWLER_PORT:-8080}:8080"
+    volumes:
+      - ./nuvelle_crawler/nuvelle_crawler:/app/nuvelle_crawler
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     environment:

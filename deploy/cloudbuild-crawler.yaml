@@ -1,0 +1,12 @@
+# Cloud Build config for the standalone crawler service image.
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - nuvelle_crawler/Dockerfile
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
