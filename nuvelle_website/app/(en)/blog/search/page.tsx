@@ -1,7 +1,7 @@
-import { blogSearchMetadata, renderBlogSearch } from "@/lib/blog/page-data";
+import { blogSearchMetadata, renderBlogSearch, type SearchParamValue } from "@/lib/blog/page-data";
 
 type EnglishBlogSearchPageProps = {
-  searchParams: Promise<{ value?: string }>;
+  searchParams: Promise<{ value?: SearchParamValue }>;
 };
 
 export async function generateMetadata({ searchParams }: EnglishBlogSearchPageProps) {

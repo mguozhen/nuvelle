@@ -1,9 +1,9 @@
-import { blogSearchMetadata, renderBlogSearch, resolveLocaleParam } from "@/lib/blog/page-data";
+import { blogSearchMetadata, renderBlogSearch, resolveLocaleParam, type SearchParamValue } from "@/lib/blog/page-data";
 import { localeOptions } from "@/lib/i18n";
 
 type LocalizedBlogSearchPageProps = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ value?: string }>;
+  searchParams: Promise<{ value?: SearchParamValue }>;
 };
 
 export function generateStaticParams() {

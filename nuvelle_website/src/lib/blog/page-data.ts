@@ -17,6 +17,8 @@ type SafeListFetchOptions = {
   type?: string;
 };
 
+export type SearchParamValue = string | string[] | undefined;
+
 function titleFromSlug(slug: string) {
   return slug
     .split(/[-_\s]+/)
@@ -25,8 +27,10 @@ function titleFromSlug(slug: string) {
     .join(" ");
 }
 
-function searchQuery(query: string | undefined) {
-  return query?.trim() ?? "";
+function searchQuery(query: SearchParamValue) {
+  const value = Array.isArray(query) ? query[0] : query;
+
+  return value?.trim() ?? "";
 }
 
 function emptyListResult(options: SafeListFetchOptions): BlogListResult {
@@ -41,7 +45,9 @@ function emptyListResult(options: SafeListFetchOptions): BlogListResult {
 async function safeListFetch(options: SafeListFetchOptions): Promise<BlogListResult> {
   try {
     return await fetchBlogList(options);
-  } catch {
+  } catch (error) {
+    console.warn("Failed to fetch blog list", { options, error });
+
     return emptyListResult(options);
   }
 }
@@ -124,7 +130,7 @@ export async function renderBlogCategory(locale: LocaleKey, slug: string) {
   });
 }
 
-export async function renderBlogSearch(locale: LocaleKey, query: string | undefined) {
+export async function renderBlogSearch(locale: LocaleKey, query: SearchParamValue) {
   const value = searchQuery(query);
   const text = searchText(locale, value);
   const result = await safeListFetch({ locale, search: value });
@@ -170,7 +176,7 @@ export function blogCategoryMetadata(locale: LocaleKey, slug: string) {
   return metadataForBlogList(locale, { kind: "category", slug }, text.title, text.description);
 }
 
-export function blogSearchMetadata(locale: LocaleKey, query: string | undefined) {
+export function blogSearchMetadata(locale: LocaleKey, query: SearchParamValue) {
   const value = searchQuery(query);
   const text = searchText(locale, value);
 
@@ -180,7 +186,7 @@ export function blogSearchMetadata(locale: LocaleKey, query: string | undefined)
 export async function blogDetailMetadata(locale: LocaleKey, slug: string) {
   const article = await fetchBlogDetail({ locale, slug });
 
-  if (!article) {
+  if (!article || (article.type && article.type !== "blog")) {
     return {};
   }
 
