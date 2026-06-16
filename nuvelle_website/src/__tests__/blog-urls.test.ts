@@ -4,7 +4,8 @@ import {
   buildAlternateLinks,
   buildDetailAlternateLinks,
   canonicalUrl,
-  normalizeSiteOrigin
+  normalizeSiteOrigin,
+  siteRelativeUrl
 } from "../lib/blog/urls";
 
 describe("blog urls", () => {
@@ -39,5 +40,15 @@ describe("blog urls", () => {
       { hrefLang: "ja-JP", href: "https://nuvelle.ai/jp/blog/konnichiwa" },
       { hrefLang: "x-default", href: "https://nuvelle.ai/jp/blog/konnichiwa" }
     ]);
+  });
+
+  it("converts same-site absolute links into root-relative links", () => {
+    expect(siteRelativeUrl("https://nuvelle.ai", "https://nuvelle.ai")).toBe("/");
+    expect(siteRelativeUrl("https://nuvelle.ai", "https://nuvelle.ai/cn/blog?value=ai#top")).toBe(
+      "/cn/blog?value=ai#top"
+    );
+    expect(siteRelativeUrl("https://preview.example", "https://nuvelle.ai/blog")).toBe("/blog");
+    expect(siteRelativeUrl("https://nuvelle.ai", "https://example.com/blog")).toBe("https://example.com/blog");
+    expect(siteRelativeUrl("https://nuvelle.ai", "/blog")).toBe("/blog");
   });
 });

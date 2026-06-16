@@ -11,6 +11,8 @@ export type AlternateLink = {
   href: string;
 };
 
+const productionSiteOrigin = "https://nuvelle.ai";
+
 export function normalizeSiteOrigin(origin: string) {
   return origin.replace(/\/+$/, "");
 }
@@ -41,6 +43,21 @@ export function blogPath(locale: LocaleKey, route: BlogRoute) {
 
 export function canonicalUrl(origin: string, locale: LocaleKey, route: BlogRoute) {
   return `${normalizeSiteOrigin(origin)}${blogPath(locale, route)}`;
+}
+
+export function siteRelativeUrl(origin: string, href: string) {
+  try {
+    const url = new URL(href);
+    const sameSiteOrigins = new Set([normalizeSiteOrigin(origin), productionSiteOrigin]);
+
+    if (!sameSiteOrigins.has(url.origin)) {
+      return href;
+    }
+
+    return `${url.pathname}${url.search}${url.hash}` || "/";
+  } catch {
+    return href;
+  }
 }
 
 export function buildAlternateLinks(origin: string, route: Exclude<BlogRoute, { kind: "detail" }>): AlternateLink[] {

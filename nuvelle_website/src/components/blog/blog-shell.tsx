@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Search, Smartphone } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { BlogBreadcrumbs } from "@/components/blog/blog-breadcrumbs";
+import { SiteNav } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
 import { breadcrumbJsonLd, serializeJsonLd, type BreadcrumbItem } from "@/lib/blog/seo";
 import { blogPath } from "@/lib/blog/urls";
@@ -20,8 +21,6 @@ export function BlogShell({ locale, title, description, searchValue, breadcrumbs
   const copy = websiteCopy[locale];
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
-  const blogHref = blogPath(locale, { kind: "list" });
-  const categoriesHref = `${homeHref}#categories`;
   const appHref = `${homeHref}#app`;
 
   return (
@@ -31,17 +30,7 @@ export function BlogShell({ locale, title, description, searchValue, breadcrumbs
           <a href={homeHref} aria-label={copy.homeAriaLabel}>
             <BrandMark />
           </a>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-[#a8b0cc] md:flex">
-            <a className="transition-colors hover:text-white" href={homeHref}>
-              {copy.nav.home}
-            </a>
-            <a className="transition-colors hover:text-white" href={blogHref}>
-              {copy.nav.blog}
-            </a>
-            <a className="transition-colors hover:text-white" href={categoriesHref}>
-              {copy.nav.categories}
-            </a>
-          </nav>
+          <SiteNav locale={locale} />
           <div className="flex-1" />
           <form
             action={blogPath(locale, { kind: "search" })}

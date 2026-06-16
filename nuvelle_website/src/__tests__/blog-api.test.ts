@@ -93,7 +93,7 @@ describe("blog api adapter", () => {
     });
   });
 
-  it("builds list request with site, configured category ids, search, and pagination", async () => {
+  it("builds list request with site, hardcoded category ids, search, and pagination", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 200, data: { total: 0, list: [] } })
@@ -111,14 +111,14 @@ describe("blog api adapter", () => {
     const url = new URL(fetchMock.mock.calls[0][0] as string);
     expect(url.pathname).toBe("/n/blog/listDataV2");
     expect(url.searchParams.get("site")).toBe("nuvelle.ai");
-    expect(url.searchParams.get("categoryIds")).toBe("1,2");
+    expect(url.searchParams.get("categoryIds")).toBe("373");
     expect(url.searchParams.get("search")).toBe("ai shorts");
-    expect(url.searchParams.get("pageNum")).toBe("2");
+    expect(url.searchParams.get("pageNum")).toBe("1");
     expect(url.searchParams.get("pageSize")).toBe("24");
     expect(fetchMock.mock.calls[0][1]).toEqual({ cache: "no-store" });
   });
 
-  it("omits category ids when they are not configured for the locale", async () => {
+  it("uses hardcoded category ids when locale config is empty", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ code: 200, data: { total: 0, list: [] } })
@@ -131,7 +131,7 @@ describe("blog api adapter", () => {
     });
 
     const url = new URL(fetchMock.mock.calls[0][0] as string);
-    expect(url.searchParams.has("categoryIds")).toBe(false);
+    expect(url.searchParams.get("categoryIds")).toBe("373");
   });
 
   it("returns null for empty backend detail data", async () => {

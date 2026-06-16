@@ -13,7 +13,7 @@ describe("blog sanitizer", () => {
     expect(sanitized).not.toContain("onclick");
     expect(sanitized).not.toContain("onerror");
     expect(sanitized).not.toContain("javascript:");
-    expect(sanitized).toContain('href="https://nuvelle.ai"');
+    expect(sanitized).toContain('href="/"');
     expect(sanitized).toContain('src="x.jpg"');
   });
 
@@ -54,7 +54,7 @@ describe("blog sanitizer", () => {
     expect(sanitized).toContain("<a>Numeric colon</a>");
     expect(sanitized).toContain("<a>Named colon</a>");
     expect(sanitized).toContain('alt="bad"');
-    expect(sanitized).toContain('<a href="https://nuvelle.ai?x=1&amp;y=2">Safe link</a>');
+    expect(sanitized).toContain('<a href="/?x=1&amp;y=2">Safe link</a>');
     expect(sanitized).toContain('src="data:image/webp;base64,AAAA"');
     expect(sanitized).toContain('alt="safe"');
     expect(sanitized.toLowerCase()).not.toContain("javascript");

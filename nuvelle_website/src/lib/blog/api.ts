@@ -36,6 +36,8 @@ type BlogApiResponse<T> = {
   data?: T;
 };
 
+const NUVELLE_BLOG_CATEGORY_IDS = "373";
+
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
 }
@@ -69,12 +71,8 @@ function categoryFromBackend(item: BackendBlogListItem) {
     : undefined;
 }
 
-function appendCategoryIds(params: URLSearchParams, config: BlogConfig, locale: LocaleKey) {
-  const ids = config.categoryIdsByLocale[locale];
-
-  if (ids.length > 0) {
-    params.set("categoryIds", ids.join(","));
-  }
+function appendCategoryIds(params: URLSearchParams) {
+  params.set("categoryIds", NUVELLE_BLOG_CATEGORY_IDS);
 }
 
 function endpointUrl(config: BlogConfig, path: string, params: URLSearchParams) {
@@ -131,15 +129,16 @@ export function mapBlogDetail(item: BackendBlogDetail | null | undefined): BlogA
 export async function fetchBlogList(options: FetchBlogListOptions): Promise<BlogListResult> {
   const config = options.config ?? blogConfig;
   const fetcher = options.fetcher ?? fetch;
-  const pageNum = options.pageNum ?? 1;
+  const pageNum = Math.max(1, Math.trunc(options.pageNum ?? 1));
+  const requestPageNum = pageNum - 1;
   const pageSize = options.pageSize ?? config.pageSize;
   const params = new URLSearchParams({
     site: config.siteKey,
-    pageNum: String(pageNum),
+    pageNum: String(requestPageNum),
     pageSize: String(pageSize)
   });
 
-  appendCategoryIds(params, config, options.locale);
+  appendCategoryIds(params);
 
   const search = options.search?.trim();
   if (search) {
@@ -155,6 +154,7 @@ export async function fetchBlogList(options: FetchBlogListOptions): Promise<Blog
     cache: "no-store"
   });
   const json = await readJson<BlogApiResponse<BlogListPayload>>(response, "Blog list");
+
   const data = json.data ?? {};
   const list = Array.isArray(data.list) ? data.list : [];
 
@@ -174,7 +174,7 @@ export async function fetchBlogDetail(options: FetchBlogDetailOptions): Promise<
     slug: options.slug
   });
 
-  appendCategoryIds(params, config, options.locale);
+  appendCategoryIds(params);
 
   const response = await fetcher(endpointUrl(config, "/n/blog/detailData", params), {
     cache: "no-store"

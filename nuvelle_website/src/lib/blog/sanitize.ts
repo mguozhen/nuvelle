@@ -1,4 +1,6 @@
 import sanitizeHtml from "sanitize-html";
+import { blogConfig } from "@/lib/blog/config";
+import { siteRelativeUrl } from "@/lib/blog/urls";
 
 type AttributeMap = Record<string, string>;
 
@@ -47,6 +49,10 @@ function normalizeUrlForSchemeCheck(value: string) {
 
 function transformAnchor(tagName: string, attribs: AttributeMap) {
   const nextAttributes = { ...attribs };
+
+  if (nextAttributes.href) {
+    nextAttributes.href = siteRelativeUrl(blogConfig.siteOrigin, nextAttributes.href);
+  }
 
   if (nextAttributes.target === "_blank") {
     const relTokens = new Set((nextAttributes.rel ?? "").split(/\s+/).filter(Boolean));

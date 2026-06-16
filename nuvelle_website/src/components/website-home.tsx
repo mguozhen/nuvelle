@@ -7,6 +7,7 @@ import { BrandMark } from "@/components/brand-mark";
 import { DramaCard } from "@/components/drama-card";
 import { DramaModal } from "@/components/drama-modal";
 import { HeroCarousel } from "@/components/hero-carousel";
+import { SiteNav } from "@/components/site-nav";
 import { Button } from "@/components/ui/button";
 import {
   bannerItems,
@@ -16,7 +17,7 @@ import {
   top10,
   type Drama
 } from "@/data/dramas";
-import { categoryRowKeys, getLocale, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
+import { categoryRowKeys, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
 const searchDisplayAliases: Record<string, string> = {
   mafia_wife: "Mafia Wife"
@@ -35,9 +36,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const searchResults = useMemo(() => searchDramas(query), [query]);
   const copy = websiteCopy[locale];
-  const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
-  const blogHref = `${localeInfo.prefix}/blog` || "/blog";
 
   function openDrama(drama: Drama) {
     setSelectedDrama(drama);
@@ -55,23 +54,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
           <a href={homeHref} aria-label={copy.homeAriaLabel}>
             <BrandMark />
           </a>
-          <nav className="hidden items-center gap-7 text-sm font-medium text-[#a8b0cc] md:flex">
-            <a className="transition-colors hover:text-white" href={homeHref}>
-              {copy.nav.home}
-            </a>
-            <a className="transition-colors hover:text-white" href="#categories">
-              {copy.nav.categories}
-            </a>
-            <a className="transition-colors hover:text-white" href="#app">
-              {copy.nav.fandom}
-            </a>
-            <a className="transition-colors hover:text-white" href="#app">
-              {copy.nav.creators}
-            </a>
-            <a className="transition-colors hover:text-white" href={blogHref}>
-              {copy.nav.blog}
-            </a>
-          </nav>
+          <SiteNav locale={locale} />
           <div className="flex-1" />
           <label className="order-last flex w-full items-center gap-2 rounded-full border border-white/10 bg-[#0c0f1a] px-4 py-2 text-[#8f98b6] sm:order-none sm:min-w-[13rem] sm:max-w-xs">
             <Search className="h-4 w-4" />
