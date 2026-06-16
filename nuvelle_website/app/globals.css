@@ -18,6 +18,7 @@ body {
 }
 
 body {
+  overflow-x: hidden;
   background: linear-gradient(180deg, #0b0d16 0%, #101421 52%, #0b0d16 100%);
   color: #eef0f8;
   font-family:

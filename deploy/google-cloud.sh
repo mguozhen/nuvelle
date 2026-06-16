@@ -369,7 +369,10 @@ prepare_website_context() {
   cp deploy/cloudbuild-website.yaml "$context/cloudbuild-website.yaml"
   cp nuvelle_website/package.json "$context/nuvelle_website/package.json"
   cp nuvelle_website/next.config.mjs "$context/nuvelle_website/next.config.mjs"
-  rsync -a --delete nuvelle_website/.next "$context/nuvelle_website/"
+  rsync -aL --delete \
+    --exclude=cache/ \
+    --exclude=dev/ \
+    nuvelle_website/.next "$context/nuvelle_website/"
   rsync -a --delete nuvelle_website/public "$context/nuvelle_website/"
 }
 
