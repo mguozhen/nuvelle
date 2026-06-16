@@ -55,13 +55,15 @@ nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli backfill \
 
 `backfill` sends live source requests only when `--confirm-live` is present.
 `--with-details` roughly doubles the request volume, so keep the delay conservative.
-Progress logs are printed while the command runs. Detail request failures are
-retried twice by default, then counted and written to
-`third_party_crawl_logs.metadata.failed_details` so they can be compensated by a
-later rerun. Add `--detail-retries N` to tune retry count. Add
-`--fail-fast-detail-errors` when you want the command to stop on the first detail
-failure. Source protection signals such as HTTP 401, 403, 429, and 503 stop the
-run immediately and are recorded in the crawl log.
+Progress logs are printed while the command runs. List-page and detail request
+failures are retried twice by default. List failures that still fail are written
+to `third_party_crawl_logs.metadata.failed_list_pages`; detail failures that
+still fail are written to `third_party_crawl_logs.metadata.failed_details` so
+they can be compensated by a later rerun. Add `--list-retries N` or
+`--detail-retries N` to tune retry count. Add `--fail-fast-detail-errors` when
+you want the command to stop on the first detail failure. Source protection
+signals such as HTTP 401, 403, 429, and 503 stop the run immediately and are
+recorded in the crawl log.
 
 ## Manual DramaCPS Materials Backfill
 

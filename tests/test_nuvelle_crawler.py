@@ -41,18 +41,24 @@ class FakeDramaAdapter:
         *,
         pages: dict[tuple[str | None, str, int], list[dict]],
         details: dict[str, dict] | None = None,
+        list_errors: dict[tuple[str | None, str, int], list[Exception]] | None = None,
         detail_errors: dict[str, Exception] | None = None,
     ):
         self.pages = pages
         self.details = details or {}
+        self.list_errors = list_errors or {}
         self.detail_errors = detail_errors or {}
         self.mapper = ReelShortCpsMapper()
         self.list_calls: list[tuple[str | None, str, int]] = []
         self.detail_calls: list[tuple[str, str]] = []
 
     def list_page(self, *, page: int, language: str | None, sort: str) -> list[dict]:
-        self.list_calls.append((language, sort, page))
-        return self.pages.get((language, sort, page), [])
+        key = (language, sort, page)
+        self.list_calls.append(key)
+        errors = self.list_errors.get(key)
+        if errors:
+            raise errors.pop(0)
+        return self.pages.get(key, [])
 
     def get_detail(self, *, external_id: str, book_type: str) -> dict:
         self.detail_calls.append((external_id, book_type))
@@ -397,6 +403,66 @@ def test_local_backfill_can_start_from_later_page() -> None:
     assert summary.list_pages_scanned == 2
     assert summary.resources_scanned == 1
     assert len(rows) == 1
+
+
+def test_local_backfill_retries_list_page_errors() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "First", "lang": "English", "book_type": 1}],
+            ("en", "time", 2): [],
+        },
+        list_errors={("en", "time", 1): [RuntimeError("list timeout")]},
+    )
+
+    summary = LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+        list_retry_attempts=1,
+    )
+
+    assert adapter.list_calls == [("en", "time", 1), ("en", "time", 1), ("en", "time", 2)]
+    assert summary.resources_scanned == 1
+
+
+def test_local_backfill_records_failed_list_page_after_retries() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={},
+        list_errors={
+            ("en", "time", 3): [
+                RuntimeError("list timeout"),
+                RuntimeError("list timeout again"),
+            ]
+        },
+    )
+
+    try:
+        LocalDramaBackfillService(db=db, adapter=adapter, sleep=lambda _: None).run(
+            source="reelshort_cps",
+            languages=["en"],
+            sorts=["time"],
+            start_page=3,
+            max_pages=1,
+            delay_seconds=0,
+            list_retry_attempts=1,
+        )
+    except RuntimeError:
+        pass
+    else:
+        raise AssertionError("expected list page failure")
+
+    log = db.scalar(select(ThirdPartyCrawlLog).order_by(ThirdPartyCrawlLog.id.desc()))
+    assert adapter.list_calls == [("en", "time", 3), ("en", "time", 3)]
+    assert log is not None
+    assert log.status == "error"
+    assert log.error_count == 1
+    assert log.log_metadata["failed_list_pages"] == [
+        {"language": "en", "sort": "time", "page": 3, "error": "list timeout again"}
+    ]
 
 
 def test_local_backfill_can_fetch_details_for_each_row() -> None:

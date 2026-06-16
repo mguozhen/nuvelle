@@ -27,6 +27,7 @@ class LocalBackfillSummary:
     details_scanned: int = 0
     details_changed: int = 0
     detail_errors: int = 0
+    failed_list_pages: list[dict] = field(default_factory=list)
     failed_details: list[dict] = field(default_factory=list)
 
 
@@ -57,6 +58,7 @@ class LocalDramaBackfillService:
         delay_seconds: float = 3.0,
         with_details: bool = False,
         continue_on_detail_error: bool = True,
+        list_retry_attempts: int = 2,
         detail_retry_attempts: int = 2,
     ) -> LocalBackfillSummary:
         if start_page < 1:
@@ -65,6 +67,8 @@ class LocalDramaBackfillService:
             raise ValueError("max_pages must be >= 1")
         if delay_seconds < 0:
             raise ValueError("delay_seconds must be >= 0")
+        if list_retry_attempts < 0:
+            raise ValueError("list_retry_attempts must be >= 0")
         if detail_retry_attempts < 0:
             raise ValueError("detail_retry_attempts must be >= 0")
 
@@ -75,6 +79,7 @@ class LocalDramaBackfillService:
         details_scanned = 0
         details_changed = 0
         detail_errors = 0
+        failed_list_pages: list[dict] = []
         failed_details: list[dict] = []
         fatal_error_already_counted = False
         self._report(
@@ -82,6 +87,7 @@ class LocalDramaBackfillService:
             f"source={source} languages={','.join(str(language) for language in languages)} "
             f"sorts={','.join(sorts)} start_page={start_page} max_pages={max_pages or 'none'} "
             f"with_details={with_details} delay_seconds={delay_seconds} "
+            f"list_retry_attempts={list_retry_attempts} "
             f"detail_retry_attempts={detail_retry_attempts}"
         )
 
@@ -95,7 +101,29 @@ class LocalDramaBackfillService:
                         self._report(
                             f"list start source={source} language={language or '-'} sort={sort} page={page}"
                         )
-                        rows = self.adapter.list_page(page=page, language=language, sort=sort)
+                        try:
+                            rows = self._get_list_page_with_retries(
+                                page=page,
+                                language=language,
+                                sort=sort,
+                                retry_attempts=list_retry_attempts,
+                                delay_seconds=delay_seconds,
+                            )
+                        except SourceProtectionDetectedError as exc:
+                            failed_list_pages.append(
+                                self._list_failure(
+                                    language=language,
+                                    sort=sort,
+                                    page=page,
+                                    exc=exc.__cause__ or exc,
+                                )
+                            )
+                            raise
+                        except Exception as exc:
+                            failed_list_pages.append(
+                                self._list_failure(language=language, sort=sort, page=page, exc=exc)
+                            )
+                            raise
                         list_pages_scanned += 1
                         pages_scanned_for_slice += 1
                         if not rows:
@@ -168,6 +196,7 @@ class LocalDramaBackfillService:
                 details_scanned=details_scanned,
                 details_changed=details_changed,
                 detail_errors=detail_errors,
+                failed_list_pages=failed_list_pages,
                 failed_details=failed_details,
             )
             self.logs.create(
@@ -186,10 +215,12 @@ class LocalDramaBackfillService:
                     "max_pages": max_pages,
                     "with_details": with_details,
                     "continue_on_detail_error": continue_on_detail_error,
+                    "list_retry_attempts": list_retry_attempts,
                     "detail_retry_attempts": detail_retry_attempts,
                     "list_pages_scanned": summary.list_pages_scanned,
                     "details_scanned": summary.details_scanned,
                     "detail_errors": summary.detail_errors,
+                    "failed_list_pages": summary.failed_list_pages,
                     "failed_details": summary.failed_details,
                 },
             )
@@ -221,10 +252,12 @@ class LocalDramaBackfillService:
                     "max_pages": max_pages,
                     "with_details": with_details,
                     "continue_on_detail_error": continue_on_detail_error,
+                    "list_retry_attempts": list_retry_attempts,
                     "detail_retry_attempts": detail_retry_attempts,
                     "list_pages_scanned": list_pages_scanned,
                     "details_scanned": details_scanned,
                     "detail_errors": detail_errors,
+                    "failed_list_pages": failed_list_pages,
                     "failed_details": failed_details,
                     "source_protection_detected": isinstance(exc, SourceProtectionDetectedError),
                 },
@@ -238,6 +271,36 @@ class LocalDramaBackfillService:
         existing_hash = existing.raw_hash if existing else None
         resource = self.resources.upsert(payload)
         return int(existing_hash != resource.raw_hash), payload
+
+    def _get_list_page_with_retries(
+        self,
+        *,
+        page: int,
+        language: str | None,
+        sort: str,
+        retry_attempts: int,
+        delay_seconds: float,
+    ) -> list[dict]:
+        failed_attempts = 0
+        while True:
+            try:
+                return self.adapter.list_page(page=page, language=language, sort=sort)
+            except Exception as exc:
+                if self._is_source_protection_error(exc):
+                    status_code = self._status_code(exc)
+                    raise SourceProtectionDetectedError(
+                        f"source protection detected status_code={status_code} error={exc}"
+                    ) from exc
+                if failed_attempts >= retry_attempts:
+                    raise
+                failed_attempts += 1
+                self._report(
+                    "list retry "
+                    f"language={language or '-'} sort={sort} page={page} "
+                    f"attempt={failed_attempts}/{retry_attempts} error={exc}"
+                )
+                if delay_seconds:
+                    self.sleep(delay_seconds)
 
     def _get_detail_with_retries(
         self,
@@ -288,6 +351,19 @@ class LocalDramaBackfillService:
             "language": payload.language,
             "source_app": payload.source_app,
             "title": payload.title,
+        }
+        status_code = cls._status_code(exc)
+        if status_code is not None:
+            failure["status_code"] = status_code
+        return failure
+
+    @classmethod
+    def _list_failure(cls, *, language: str | None, sort: str, page: int, exc: Exception) -> dict:
+        failure = {
+            "language": language,
+            "sort": sort,
+            "page": page,
+            "error": str(exc),
         }
         status_code = cls._status_code(exc)
         if status_code is not None:

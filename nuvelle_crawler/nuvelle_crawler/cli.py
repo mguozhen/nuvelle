@@ -32,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument("--no-page-limit", action="store_true")
     backfill.add_argument("--delay-seconds", type=float, default=3.0)
     backfill.add_argument("--with-details", action="store_true")
+    backfill.add_argument("--list-retries", type=int, default=2)
     backfill.add_argument("--detail-retries", type=int, default=2)
     backfill.add_argument("--fail-fast-detail-errors", action="store_true")
     backfill.add_argument("--create-tables", action="store_true")
@@ -80,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
                 max_pages=max_pages,
                 delay_seconds=args.delay_seconds,
                 with_details=args.with_details,
+                list_retry_attempts=args.list_retries,
                 detail_retry_attempts=args.detail_retries,
                 continue_on_detail_error=not args.fail_fast_detail_errors,
             )
