@@ -188,6 +188,7 @@ export async function renderBlogDetail(locale: LocaleKey, slug: string) {
     locale,
     title: article.title,
     description: article.excerpt,
+    showHero: false,
     children: createElement(BlogArticlePage, { locale, article })
   });
 }

@@ -14,10 +14,11 @@ type BlogShellProps = {
   description: string;
   searchValue?: string;
   breadcrumbs?: BreadcrumbItem[];
+  showHero?: boolean;
   children: ReactNode;
 };
 
-export function BlogShell({ locale, title, description, searchValue, breadcrumbs, children }: BlogShellProps) {
+export function BlogShell({ locale, title, description, searchValue, breadcrumbs, showHero = true, children }: BlogShellProps) {
   const copy = websiteCopy[locale];
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
@@ -55,15 +56,17 @@ export function BlogShell({ locale, title, description, searchValue, breadcrumbs
       </header>
 
       <main className="min-h-screen bg-[#0b0d16] text-white">
-        <section className="border-b border-white/10 bg-[#0f1320]">
-          <div className="mx-auto max-w-[1320px] px-5 py-12 sm:px-7 sm:py-16">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#ff96d0]">{copy.nav.blog}</p>
-            <h1 className="mt-3 max-w-4xl text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl">
-              {title}
-            </h1>
-            <p className="mt-4 max-w-3xl text-base leading-relaxed text-[#a8b0cc] sm:text-lg">{description}</p>
-          </div>
-        </section>
+        {showHero ? (
+          <section className="border-b border-white/10 bg-[#0f1320]">
+            <div className="mx-auto max-w-[1320px] px-5 py-12 sm:px-7 sm:py-16">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#ff96d0]">{copy.nav.blog}</p>
+              <h1 className="mt-3 max-w-4xl text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl">
+                {title}
+              </h1>
+              <p className="mt-4 max-w-3xl text-base leading-relaxed text-[#a8b0cc] sm:text-lg">{description}</p>
+            </div>
+          </section>
+        ) : null}
         <section className="mx-auto max-w-[1320px] px-5 py-10 sm:px-7 sm:py-12">
           {breadcrumbs?.length ? (
             <div className="mb-6">

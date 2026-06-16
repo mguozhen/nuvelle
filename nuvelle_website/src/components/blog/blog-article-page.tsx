@@ -42,18 +42,8 @@ export function BlogArticlePage({ locale, article }: BlogArticlePageProps) {
       <BlogBreadcrumbs items={breadcrumbs} />
 
       <header className="mt-8">
-        {article.category ? (
-          <a
-            className="text-xs font-semibold uppercase tracking-[0.14em] text-[#ff96d0] transition-colors hover:text-[#ffd0e8]"
-            href={blogPath(locale, { kind: "category", slug: article.category.slug })}
-          >
-            {article.category.name}
-          </a>
-        ) : null}
-        <h1 className="mt-3 text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl">{article.title}</h1>
+        <h1 className="text-4xl font-bold leading-tight tracking-normal text-white sm:text-5xl">{article.title}</h1>
         <div className="mt-5 flex flex-wrap items-center gap-3 text-sm text-[#8f98b6]">
-          {article.authorName ? <span>{article.authorName}</span> : null}
-          {article.authorName ? <span className="text-[#4e5674]">/</span> : null}
           <time dateTime={article.date}>{article.date}</time>
         </div>
       </header>
