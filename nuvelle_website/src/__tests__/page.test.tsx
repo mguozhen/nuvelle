@@ -47,7 +47,10 @@ describe("website home page", () => {
     render(<WebsiteHome locale="cn" />);
     expect(screen.getByRole("link", { name: "博客" })).toHaveAttribute("href", "/cn/blog");
     expect(screen.getByPlaceholderText("搜索短剧")).toBeInTheDocument();
-    expect(screen.getByText("最新上线")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "最新上线" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "隐藏身份" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "公司" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "关于 Nuvelle" })).toBeInTheDocument();
     expect(screen.getAllByText("获取 App").length).toBeGreaterThan(0);
   });
 

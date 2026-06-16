@@ -18,10 +18,111 @@ import {
 } from "@/data/dramas";
 import { getLocale, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
-const footerLinks = {
-  Explore: ["New Releases", "Categories", "Trending", "For Creators"],
-  Company: ["About Nuvelle", "Careers", "Press", "Contact"],
-  Legal: ["Terms of Service", "Privacy Policy", "Content Policy", "Support"]
+type FooterLinkGroup = {
+  heading: string;
+  links: string[];
+};
+
+type WebsiteHomeLocalCopy = {
+  rowTitles: Record<string, string>;
+  footerLinks: FooterLinkGroup[];
+};
+
+const localizedHomeCopy: Record<LocaleKey, WebsiteHomeLocalCopy> = {
+  en: {
+    rowTitles: {
+      "Hidden Identity": "Hidden Identity",
+      "Magic & Mates": "Magic & Mates",
+      "Love at First Sight": "Love at First Sight",
+      "Revenge & Reversal": "Revenge & Reversal"
+    },
+    footerLinks: [
+      { heading: "Explore", links: ["New Releases", "Categories", "Trending", "For Creators"] },
+      { heading: "Company", links: ["About Nuvelle", "Careers", "Press", "Contact"] },
+      { heading: "Legal", links: ["Terms of Service", "Privacy Policy", "Content Policy", "Support"] }
+    ]
+  },
+  cn: {
+    rowTitles: {
+      "Hidden Identity": "隐藏身份",
+      "Magic & Mates": "魔法与伴侣",
+      "Love at First Sight": "一见钟情",
+      "Revenge & Reversal": "复仇逆袭"
+    },
+    footerLinks: [
+      { heading: "探索", links: ["最新上线", "分类", "热门", "创作者"] },
+      { heading: "公司", links: ["关于 Nuvelle", "招贤纳士", "媒体报道", "联系我们"] },
+      { heading: "法务", links: ["服务条款", "隐私政策", "内容政策", "支持"] }
+    ]
+  },
+  jp: {
+    rowTitles: {
+      "Hidden Identity": "秘密の正体",
+      "Magic & Mates": "魔法と運命の相手",
+      "Love at First Sight": "一目惚れ",
+      "Revenge & Reversal": "復讐と逆転"
+    },
+    footerLinks: [
+      { heading: "探す", links: ["新着作品", "カテゴリ", "トレンド", "クリエイター向け"] },
+      { heading: "会社", links: ["Nuvelleについて", "採用情報", "プレス", "お問い合わせ"] },
+      { heading: "法務", links: ["利用規約", "プライバシーポリシー", "コンテンツポリシー", "サポート"] }
+    ]
+  },
+  de: {
+    rowTitles: {
+      "Hidden Identity": "Verborgene Identität",
+      "Magic & Mates": "Magie & Gefährten",
+      "Love at First Sight": "Liebe auf den ersten Blick",
+      "Revenge & Reversal": "Rache & Wendepunkt"
+    },
+    footerLinks: [
+      { heading: "Entdecken", links: ["Neuheiten", "Kategorien", "Trends", "Für Creators"] },
+      { heading: "Unternehmen", links: ["Über Nuvelle", "Karriere", "Presse", "Kontakt"] },
+      { heading: "Rechtliches", links: ["Nutzungsbedingungen", "Datenschutzrichtlinie", "Inhaltsrichtlinie", "Support"] }
+    ]
+  },
+  fr: {
+    rowTitles: {
+      "Hidden Identity": "Identité cachée",
+      "Magic & Mates": "Magie & âmes soeurs",
+      "Love at First Sight": "Coup de foudre",
+      "Revenge & Reversal": "Vengeance & retournement"
+    },
+    footerLinks: [
+      { heading: "Explorer", links: ["Nouveautés", "Catégories", "Tendances", "Pour les créateurs"] },
+      { heading: "Entreprise", links: ["À propos de Nuvelle", "Carrières", "Presse", "Contact"] },
+      {
+        heading: "Légal",
+        links: ["Conditions d'utilisation", "Politique de confidentialité", "Politique de contenu", "Support"]
+      }
+    ]
+  },
+  es: {
+    rowTitles: {
+      "Hidden Identity": "Identidad oculta",
+      "Magic & Mates": "Magia y parejas",
+      "Love at First Sight": "Amor a primera vista",
+      "Revenge & Reversal": "Venganza y giro"
+    },
+    footerLinks: [
+      { heading: "Explorar", links: ["Estrenos", "Categorías", "Tendencias", "Para creadores"] },
+      { heading: "Empresa", links: ["Acerca de Nuvelle", "Empleo", "Prensa", "Contacto"] },
+      { heading: "Legal", links: ["Términos de servicio", "Política de privacidad", "Política de contenido", "Soporte"] }
+    ]
+  },
+  pt: {
+    rowTitles: {
+      "Hidden Identity": "Identidade oculta",
+      "Magic & Mates": "Magia e pares",
+      "Love at First Sight": "Amor à primeira vista",
+      "Revenge & Reversal": "Vingança e reviravolta"
+    },
+    footerLinks: [
+      { heading: "Explorar", links: ["Lançamentos", "Categorias", "Em alta", "Para criadores"] },
+      { heading: "Empresa", links: ["Sobre a Nuvelle", "Carreiras", "Imprensa", "Contato"] },
+      { heading: "Legal", links: ["Termos de serviço", "Política de privacidade", "Política de conteúdo", "Suporte"] }
+    ]
+  }
 };
 
 const searchDisplayAliases: Record<string, string> = {
@@ -41,6 +142,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
   const [selectedDrama, setSelectedDrama] = useState<Drama | null>(null);
   const searchResults = useMemo(() => searchDramas(query), [query]);
   const copy = websiteCopy[locale];
+  const localCopy = localizedHomeCopy[locale];
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
   const blogHref = `${localeInfo.prefix}/blog` || "/blog";
@@ -155,7 +257,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
               .map(([title, slugs]) => (
                 <CatalogRow
                   key={title}
-                  title={title}
+                  title={localCopy.rowTitles[title] ?? title}
                   slugs={slugs}
                   viewAllLabel={copy.rows.viewAll}
                   onOpen={openDrama}
@@ -180,7 +282,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
             <BrandMark compact />
             <p className="mt-4 max-w-xs text-sm leading-relaxed">{copy.footer.description}</p>
           </div>
-          {Object.entries(footerLinks).map(([heading, links]) => (
+          {localCopy.footerLinks.map(({ heading, links }) => (
             <div key={heading}>
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6b7290]">{heading}</h3>
               <ul className="mt-4 space-y-2 text-sm">
