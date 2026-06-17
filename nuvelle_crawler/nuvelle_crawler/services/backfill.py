@@ -22,6 +22,7 @@ class SourceProtectionDetectedError(RuntimeError):
 
 @dataclass(frozen=True)
 class LocalBackfillSummary:
+    crawl_log_id: int | None = None
     list_pages_scanned: int = 0
     resources_scanned: int = 0
     resources_changed: int = 0
@@ -30,6 +31,10 @@ class LocalBackfillSummary:
     detail_errors: int = 0
     failed_list_pages: list[dict] = field(default_factory=list)
     failed_details: list[dict] = field(default_factory=list)
+
+    @property
+    def failure_count(self) -> int:
+        return len(self.failed_list_pages) + len(self.failed_details)
 
 
 class LocalDramaBackfillService:
@@ -190,25 +195,15 @@ class LocalDramaBackfillService:
                         )
                         page += 1
 
-            summary = LocalBackfillSummary(
-                list_pages_scanned=list_pages_scanned,
-                resources_scanned=resources_scanned,
-                resources_changed=resources_changed,
-                details_scanned=details_scanned,
-                details_changed=details_changed,
-                detail_errors=detail_errors,
-                failed_list_pages=failed_list_pages,
-                failed_details=failed_details,
-            )
-            self.logs.create(
+            log = self.logs.create(
                 source=source,
                 run_type="local_backfill",
                 status="success",
                 started_at=started_at,
                 finished_at=datetime.now(UTC),
-                scanned_count=summary.resources_scanned,
-                changed_count=summary.resources_changed + summary.details_changed,
-                error_count=summary.detail_errors,
+                scanned_count=resources_scanned,
+                changed_count=resources_changed + details_changed,
+                error_count=detail_errors,
                 metadata={
                     "languages": languages,
                     "sorts": sorts,
@@ -218,12 +213,23 @@ class LocalDramaBackfillService:
                     "continue_on_detail_error": continue_on_detail_error,
                     "list_retry_attempts": list_retry_attempts,
                     "detail_retry_attempts": detail_retry_attempts,
-                    "list_pages_scanned": summary.list_pages_scanned,
-                    "details_scanned": summary.details_scanned,
-                    "detail_errors": summary.detail_errors,
-                    "failed_list_pages": summary.failed_list_pages,
-                    "failed_details": summary.failed_details,
+                    "list_pages_scanned": list_pages_scanned,
+                    "details_scanned": details_scanned,
+                    "detail_errors": detail_errors,
+                    "failed_list_pages": failed_list_pages,
+                    "failed_details": failed_details,
                 },
+            )
+            summary = LocalBackfillSummary(
+                crawl_log_id=log.id,
+                list_pages_scanned=list_pages_scanned,
+                resources_scanned=resources_scanned,
+                resources_changed=resources_changed,
+                details_scanned=details_scanned,
+                details_changed=details_changed,
+                detail_errors=detail_errors,
+                failed_list_pages=failed_list_pages,
+                failed_details=failed_details,
             )
             self.db.commit()
             self._report(

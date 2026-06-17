@@ -20,6 +20,37 @@ By default, the crawler uses the same local Postgres database as `nuvelle_api`:
 `postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle`.
 Override `DATABASE_URL` only when you intentionally want a different database.
 
+## Production Run
+
+Use `run-source` for scheduled jobs. It runs the backfill, records failures,
+automatically retries failures from the current crawl log, and exits with a
+non-zero status if source protection or uncompensated failures remain.
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+REELSHORT_CPS_TOKEN="$REELSHORT_CPS_TOKEN" \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli run-source \
+  --source reelshort_cps \
+  --all-languages \
+  --sort time \
+  --no-page-limit \
+  --delay-seconds 0.2 \
+  --confirm-live
+```
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli run-source \
+  --source dramacps_materials \
+  --no-page-limit \
+  --delay-seconds 0.2 \
+  --confirm-live
+```
+
+`run-source` fetches details by default. Use `--without-details` only for a
+list-only smoke run. Keep `--max-pages 1` for smoke checks; use
+`--no-page-limit` only for a deliberate full crawl.
+
 ## Manual ReelShort Backfill
 
 Run a one-page smoke crawl before any broader run:

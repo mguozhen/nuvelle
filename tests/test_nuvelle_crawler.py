@@ -10,6 +10,7 @@ from nuvelle_crawler.config import Settings
 from nuvelle_crawler.services.backfill import LocalDramaBackfillService, SourceProtectionDetectedError
 from nuvelle_crawler.services.compensation import FailedCrawlCompensationService
 from nuvelle_crawler.services.planner import CrawlerPlanner
+from nuvelle_crawler.services.runner import ManagedCrawlerRunService
 from nuvelle_crawler.sources.config import get_source_config
 from nuvelle_crawler.sources.dramacps_materials.client import DramaCpsMaterialsClient
 from nuvelle_crawler.sources.dramacps_materials.mapper import DramaCpsMaterialsMapper
@@ -51,7 +52,7 @@ class FakeDramaAdapter:
         pages: dict[tuple[str | None, str, int], list[dict]],
         details: dict[str, dict] | None = None,
         list_errors: dict[tuple[str | None, str, int], list[Exception]] | None = None,
-        detail_errors: dict[str, Exception] | None = None,
+        detail_errors: dict[str, Exception | list[Exception]] | None = None,
     ):
         self.pages = pages
         self.details = details or {}
@@ -71,8 +72,12 @@ class FakeDramaAdapter:
 
     def get_detail(self, *, external_id: str, book_type: str) -> dict:
         self.detail_calls.append((external_id, book_type))
-        if external_id in self.detail_errors:
-            raise self.detail_errors[external_id]
+        error = self.detail_errors.get(external_id)
+        if isinstance(error, list):
+            if error:
+                raise error.pop(0)
+        elif error is not None:
+            raise error
         return self.details[external_id]
 
     def to_resource_payload(self, raw: dict):
@@ -731,3 +736,49 @@ def test_failure_compensation_retries_failed_detail_and_records_log() -> None:
     assert compensation_log.run_type == "failure_compensation"
     assert compensation_log.status == "success"
     assert compensation_log.log_metadata["source_crawl_log_ids"] == [source_log.id]
+
+
+def test_managed_run_auto_compensates_backfill_detail_failures() -> None:
+    db = make_session()
+    adapter = FakeDramaAdapter(
+        pages={
+            ("en", "time", 1): [{"id": "book-1", "title": "List Title", "lang": "English", "book_type": 1}],
+            ("en", "time", 2): [],
+        },
+        details={
+            "book-1": {
+                "id": "book-1",
+                "title": "Detail Title",
+                "lang": "English",
+                "book_type": 1,
+                "introduction": "Detail synopsis",
+            }
+        },
+        detail_errors={"book-1": [RuntimeError("temporary 502")]},
+    )
+
+    summary = ManagedCrawlerRunService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        languages=["en"],
+        sorts=["time"],
+        max_pages=10,
+        delay_seconds=0,
+        with_details=True,
+        detail_retry_attempts=0,
+        compensation_rounds=2,
+        compensation_detail_retry_attempts=1,
+    )
+
+    logs = list(db.scalars(select(ThirdPartyCrawlLog).order_by(ThirdPartyCrawlLog.id)).all())
+    row = db.scalar(select(ThirdPartyDramaResource))
+    assert summary.ok is True
+    assert summary.remaining_error_count == 0
+    assert summary.backfill.failure_count == 1
+    assert len(summary.compensations) == 1
+    assert summary.compensations[0].error_count == 0
+    assert adapter.detail_calls == [("book-1", "1"), ("book-1", "1")]
+    assert [log.run_type for log in logs] == ["local_backfill", "failure_compensation"]
+    assert logs[1].log_metadata["source_crawl_log_ids"] == [logs[0].id]
+    assert row is not None
+    assert row.title == "Detail Title"
+    assert row.synopsis == "Detail synopsis"

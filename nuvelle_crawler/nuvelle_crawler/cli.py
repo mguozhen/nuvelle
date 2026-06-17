@@ -8,6 +8,7 @@ from nuvelle_crawler.db.session import SessionLocal, engine
 from nuvelle_crawler.services.backfill import LocalDramaBackfillService
 from nuvelle_crawler.services.compensation import FailedCrawlCompensationService
 from nuvelle_crawler.services.planner import CrawlerPlanner
+from nuvelle_crawler.services.runner import ManagedCrawlerRunService
 from nuvelle_crawler.sources.config import get_source_config
 from nuvelle_crawler.sources.registry import get_adapter
 from nuvelle_crawler.tasks.enqueuer import InMemoryTaskEnqueuer
@@ -49,6 +50,24 @@ def main(argv: list[str] | None = None) -> int:
     compensate.add_argument("--detail-retries", type=int, default=2)
     compensate.add_argument("--without-list-details", action="store_true")
     compensate.add_argument("--confirm-live", action="store_true")
+
+    run_source = subparsers.add_parser("run-source")
+    run_source.add_argument("--source", default="reelshort_cps")
+    run_source.add_argument("--language", action="append")
+    run_source.add_argument("--all-languages", action="store_true")
+    run_source.add_argument("--sort", action="append")
+    run_source.add_argument("--start-page", type=int, default=1)
+    run_source.add_argument("--max-pages", type=int, default=1)
+    run_source.add_argument("--no-page-limit", action="store_true")
+    run_source.add_argument("--delay-seconds", type=float, default=DEFAULT_BACKFILL_DELAY_SECONDS)
+    run_source.add_argument("--without-details", action="store_true")
+    run_source.add_argument("--list-retries", type=int, default=2)
+    run_source.add_argument("--detail-retries", type=int, default=2)
+    run_source.add_argument("--compensation-rounds", type=int, default=2)
+    run_source.add_argument("--compensation-delay-seconds", type=float)
+    run_source.add_argument("--compensation-detail-retries", type=int, default=5)
+    run_source.add_argument("--create-tables", action="store_true")
+    run_source.add_argument("--confirm-live", action="store_true")
 
     args = parser.parse_args(argv)
     if args.command == "plan-incremental":
@@ -99,6 +118,45 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(json.dumps(summary.__dict__, ensure_ascii=False, sort_keys=True))
             return 0
+        finally:
+            db.close()
+    if args.command == "run-source":
+        if not args.confirm_live:
+            parser.error("run-source sends live source requests; pass --confirm-live to run it")
+        if args.no_page_limit and args.max_pages != 1:
+            parser.error("--max-pages cannot be combined with --no-page-limit")
+        config = get_source_config(args.source)
+        languages = list(config["languages"]) if args.all_languages else args.language or list(
+            config.get("default_languages", ["en"])
+        )
+        sorts = args.sort or list(config.get("default_sorts", ["time"]))
+        max_pages = None if args.no_page_limit else args.max_pages
+        if args.create_tables:
+            Base.metadata.create_all(bind=engine)
+
+        db = SessionLocal()
+        try:
+            service = ManagedCrawlerRunService(
+                db=db,
+                adapter=get_adapter(args.source),
+                reporter=lambda message: print(message, file=sys.stderr, flush=True),
+            )
+            summary = service.run(
+                source=args.source,
+                languages=languages,
+                sorts=sorts,
+                start_page=args.start_page,
+                max_pages=max_pages,
+                delay_seconds=args.delay_seconds,
+                with_details=not args.without_details,
+                list_retry_attempts=args.list_retries,
+                detail_retry_attempts=args.detail_retries,
+                compensation_rounds=args.compensation_rounds,
+                compensation_delay_seconds=args.compensation_delay_seconds,
+                compensation_detail_retry_attempts=args.compensation_detail_retries,
+            )
+            print(json.dumps(summary.to_dict(), ensure_ascii=False, sort_keys=True))
+            return 0 if summary.ok else 2
         finally:
             db.close()
     if args.command == "compensate-failures":

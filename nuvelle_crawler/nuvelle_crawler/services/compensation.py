@@ -21,6 +21,7 @@ from nuvelle_crawler.sources.base import DramaSourceAdapter
 
 @dataclass(frozen=True)
 class FailureCompensationSummary:
+    crawl_log_id: int | None = None
     crawl_logs_scanned: int = 0
     list_pages_attempted: int = 0
     list_pages_changed: int = 0
@@ -178,7 +179,7 @@ class FailedCrawlCompensationService:
                 failed_details=failed_details,
             )
             status = "success" if summary.error_count == 0 else "error"
-            self.logs.create(
+            log = self.logs.create(
                 source=source,
                 run_type="failure_compensation",
                 status=status,
@@ -194,6 +195,16 @@ class FailedCrawlCompensationService:
                     "failed_list_pages": summary.failed_list_pages,
                     "failed_details": summary.failed_details,
                 },
+            )
+            summary = FailureCompensationSummary(
+                crawl_log_id=log.id,
+                crawl_logs_scanned=len(logs),
+                list_pages_attempted=list_pages_attempted,
+                list_pages_changed=list_pages_changed,
+                details_attempted=details_attempted,
+                details_changed=details_changed,
+                failed_list_pages=failed_list_pages,
+                failed_details=failed_details,
             )
             self.db.commit()
             self._report(
@@ -231,12 +242,11 @@ class FailedCrawlCompensationService:
             raise
 
     def _load_logs(self, *, source: str, crawl_log_ids: list[int] | None) -> list[ThirdPartyCrawlLog]:
-        statement = select(ThirdPartyCrawlLog).where(
-            ThirdPartyCrawlLog.source == source,
-            ThirdPartyCrawlLog.run_type == "local_backfill",
-        )
+        statement = select(ThirdPartyCrawlLog).where(ThirdPartyCrawlLog.source == source)
         if crawl_log_ids:
             statement = statement.where(ThirdPartyCrawlLog.id.in_(crawl_log_ids))
+        else:
+            statement = statement.where(ThirdPartyCrawlLog.run_type == "local_backfill")
         statement = statement.order_by(ThirdPartyCrawlLog.id)
         return list(self.db.scalars(statement).all())
 
