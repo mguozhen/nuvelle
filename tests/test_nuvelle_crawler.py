@@ -8,6 +8,7 @@ from nuvelle_crawler.db.models import Base, ThirdPartyCrawlLog, ThirdPartyDramaR
 from nuvelle_crawler.db.repositories import ThirdPartyDramaRepository
 from nuvelle_crawler.config import Settings
 from nuvelle_crawler.services.backfill import LocalDramaBackfillService, SourceProtectionDetectedError
+from nuvelle_crawler.services.compensation import FailedCrawlCompensationService
 from nuvelle_crawler.services.planner import CrawlerPlanner
 from nuvelle_crawler.sources.config import get_source_config
 from nuvelle_crawler.sources.dramacps_materials.client import DramaCpsMaterialsClient
@@ -659,3 +660,74 @@ def test_local_backfill_stops_on_source_protection_and_records_failed_detail() -
     assert log.log_metadata["source_protection_detected"] is True
     assert log.log_metadata["failed_details"][0]["external_id"] == "book-1"
     assert log.log_metadata["failed_details"][0]["status_code"] == 429
+
+
+def test_failure_compensation_retries_failed_detail_and_records_log() -> None:
+    db = make_session()
+    repository = ThirdPartyDramaRepository(db)
+    mapper = ReelShortCpsMapper()
+    list_payload = mapper.to_resource_payload(
+        {
+            "id": "book-1",
+            "title": "List Title",
+            "lang": "English",
+            "book_type": 1,
+        }
+    )
+    repository.upsert(list_payload)
+    source_log = ThirdPartyCrawlLog(
+        source="reelshort_cps",
+        run_type="local_backfill",
+        status="success",
+        scanned_count=1,
+        changed_count=1,
+        error_count=1,
+        log_metadata={
+            "failed_details": [
+                {
+                    "external_id": "book-1",
+                    "book_type": "1",
+                    "language": "English",
+                    "source_app": "reelshort",
+                    "title": "List Title",
+                    "error": "temporary detail failure",
+                }
+            ],
+            "failed_list_pages": [],
+        },
+    )
+    db.add(source_log)
+    db.commit()
+    adapter = FakeDramaAdapter(
+        pages={},
+        details={
+            "book-1": {
+                "id": "book-1",
+                "title": "Detail Title",
+                "lang": "English",
+                "book_type": 1,
+                "introduction": "Detail synopsis",
+            }
+        },
+    )
+
+    summary = FailedCrawlCompensationService(db=db, adapter=adapter, sleep=lambda _: None).run(
+        source="reelshort_cps",
+        crawl_log_ids=[source_log.id],
+        delay_seconds=0,
+    )
+
+    row = db.scalar(select(ThirdPartyDramaResource))
+    compensation_log = db.scalar(select(ThirdPartyCrawlLog).order_by(ThirdPartyCrawlLog.id.desc()))
+    assert adapter.detail_calls == [("book-1", "1")]
+    assert summary.crawl_logs_scanned == 1
+    assert summary.details_attempted == 1
+    assert summary.details_changed == 1
+    assert summary.failed_details == []
+    assert row is not None
+    assert row.title == "Detail Title"
+    assert row.synopsis == "Detail synopsis"
+    assert compensation_log is not None
+    assert compensation_log.run_type == "failure_compensation"
+    assert compensation_log.status == "success"
+    assert compensation_log.log_metadata["source_crawl_log_ids"] == [source_log.id]

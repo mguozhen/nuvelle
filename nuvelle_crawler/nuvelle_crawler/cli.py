@@ -6,6 +6,7 @@ from nuvelle_crawler.config import get_settings
 from nuvelle_crawler.db.models import Base
 from nuvelle_crawler.db.session import SessionLocal, engine
 from nuvelle_crawler.services.backfill import LocalDramaBackfillService
+from nuvelle_crawler.services.compensation import FailedCrawlCompensationService
 from nuvelle_crawler.services.planner import CrawlerPlanner
 from nuvelle_crawler.sources.config import get_source_config
 from nuvelle_crawler.sources.registry import get_adapter
@@ -39,6 +40,15 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument("--fail-fast-detail-errors", action="store_true")
     backfill.add_argument("--create-tables", action="store_true")
     backfill.add_argument("--confirm-live", action="store_true")
+
+    compensate = subparsers.add_parser("compensate-failures")
+    compensate.add_argument("--source", default="reelshort_cps")
+    compensate.add_argument("--crawl-log-id", action="append", type=int)
+    compensate.add_argument("--delay-seconds", type=float, default=DEFAULT_BACKFILL_DELAY_SECONDS)
+    compensate.add_argument("--list-retries", type=int, default=2)
+    compensate.add_argument("--detail-retries", type=int, default=2)
+    compensate.add_argument("--without-list-details", action="store_true")
+    compensate.add_argument("--confirm-live", action="store_true")
 
     args = parser.parse_args(argv)
     if args.command == "plan-incremental":
@@ -86,6 +96,28 @@ def main(argv: list[str] | None = None) -> int:
                 list_retry_attempts=args.list_retries,
                 detail_retry_attempts=args.detail_retries,
                 continue_on_detail_error=not args.fail_fast_detail_errors,
+            )
+            print(json.dumps(summary.__dict__, ensure_ascii=False, sort_keys=True))
+            return 0
+        finally:
+            db.close()
+    if args.command == "compensate-failures":
+        if not args.confirm_live:
+            parser.error("compensate-failures sends live source requests; pass --confirm-live to run it")
+        db = SessionLocal()
+        try:
+            service = FailedCrawlCompensationService(
+                db=db,
+                adapter=get_adapter(args.source),
+                reporter=lambda message: print(message, file=sys.stderr, flush=True),
+            )
+            summary = service.run(
+                source=args.source,
+                crawl_log_ids=args.crawl_log_id,
+                delay_seconds=args.delay_seconds,
+                with_details=not args.without_list_details,
+                list_retry_attempts=args.list_retries,
+                detail_retry_attempts=args.detail_retries,
             )
             print(json.dumps(summary.__dict__, ensure_ascii=False, sort_keys=True))
             return 0

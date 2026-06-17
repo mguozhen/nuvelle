@@ -65,6 +65,21 @@ you want the command to stop on the first detail failure. Source protection
 signals such as HTTP 401, 403, 429, and 503 stop the run immediately and are
 recorded in the crawl log.
 
+Compensate failures recorded by a backfill crawl log:
+
+```bash
+PYTHONPATH=nuvelle_crawler \
+REELSHORT_CPS_TOKEN="$REELSHORT_CPS_TOKEN" \
+nuvelle_api/.venv/bin/python -m nuvelle_crawler.cli compensate-failures \
+  --source reelshort_cps \
+  --crawl-log-id 8 \
+  --delay-seconds 0.2 \
+  --confirm-live
+```
+
+Omit `--crawl-log-id` only when you intentionally want to retry failures from
+all historical local backfill logs for that source.
+
 ## Manual DramaCPS Materials Backfill
 
 DramaCPS materials come from the dashboard Material Library. The crawler stores
