@@ -14,6 +14,7 @@ shopt -s inherit_errexit 2>/dev/null || true
 #   pnpm deploy:mobile
 #   pnpm deploy:web
 #   pnpm deploy:admin
+#   pnpm deploy:import-reelshort
 #   pnpm deploy:verify
 #   CF_API_TOKEN=... pnpm deploy:domain
 #   SKIP_BACKEND_BUILD=true pnpm deploy
@@ -48,6 +49,11 @@ WEBSITE_SERVICE="nuvelle-website"
 MOBILE_SERVICE="nuvelle-mobile"
 WEB_SERVICE="nuvelle-web"
 ADMIN_SERVICE="nuvelle-admin"
+IMPORT_REELSHORT_JOB="${IMPORT_REELSHORT_JOB:-nuvelle-import-reelshort}"
+IMPORT_REELSHORT_LIMIT="${IMPORT_REELSHORT_LIMIT:-500}"
+IMPORT_REELSHORT_RESOURCE_ID="${IMPORT_REELSHORT_RESOURCE_ID:-}"
+IMPORT_REELSHORT_DRY_RUN="${IMPORT_REELSHORT_DRY_RUN:-false}"
+IMPORT_REELSHORT_TIMEOUT="${IMPORT_REELSHORT_TIMEOUT:-3600}"
 
 API_URL=""
 
@@ -98,12 +104,15 @@ Usage:
   pnpm deploy
 
 Environment:
-  ONLY=all|api|frontend|static|website|mobile|web|admin|verify|domain
+  ONLY=all|api|frontend|static|website|mobile|web|admin|import-reelshort|verify|domain
   PROJECT_ID=$PROJECT_ID
   REGION=$REGION
   REPOSITORY=$REPOSITORY
   TAG=$TAG
   SKIP_BACKEND_BUILD=true|false
+  IMPORT_REELSHORT_LIMIT=$IMPORT_REELSHORT_LIMIT
+  IMPORT_REELSHORT_RESOURCE_ID=<optional third_party_drama_resources.id>
+  IMPORT_REELSHORT_DRY_RUN=true|false
   CF_API_TOKEN=<Cloudflare token, only for ONLY=domain>
   USE_CUSTOM_API_DOMAIN=true|false
 
@@ -115,6 +124,7 @@ Examples:
   pnpm deploy:mobile
   pnpm deploy:web
   pnpm deploy:admin
+  IMPORT_REELSHORT_DRY_RUN=true pnpm deploy:import-reelshort
   pnpm deploy:verify
   CF_API_TOKEN=... pnpm deploy:domain
 EOF
@@ -138,7 +148,7 @@ run_mode_in() {
 
 validate_mode() {
   case "$ONLY" in
-    all | api | frontend | static | website | mobile | web | admin | verify | domain)
+    all | api | frontend | static | website | mobile | web | admin | import-reelshort | verify | domain)
       ;;
     help | -h | --help)
       usage
@@ -156,11 +166,11 @@ preflight() {
   require_cmd gcloud
   require_cmd python3
 
-  if run_mode_in all api frontend static website mobile web admin; then
+  if run_mode_in all api frontend static website mobile web admin import-reelshort; then
     require_cmd rsync
   fi
 
-  if run_mode_in all api; then
+  if run_mode_in all api import-reelshort; then
     require_cmd openssl
   fi
 
@@ -460,6 +470,50 @@ deploy_api() {
 
   API_URL="$(service_url "$API_SERVICE")"
   [[ -n "$API_URL" ]] || die "Could not resolve $API_SERVICE URL after deploy."
+}
+
+reelshort_import_args() {
+  local args="-m,app.tasks.import_reelshort,--limit,$IMPORT_REELSHORT_LIMIT"
+
+  if [[ -n "$IMPORT_REELSHORT_RESOURCE_ID" ]]; then
+    args="$args,--resource-id,$IMPORT_REELSHORT_RESOURCE_ID"
+  fi
+
+  if [[ "$IMPORT_REELSHORT_DRY_RUN" == "true" ]]; then
+    args="$args,--dry-run"
+  fi
+
+  printf '%s' "$args"
+}
+
+run_reelshort_import_job() {
+  log "Run ReelShort import Cloud Run Job"
+  local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$API_SERVICE:$TAG"
+  local context="$BUILD_DIR/import-reelshort"
+
+  if [[ "${SKIP_BACKEND_BUILD:-false}" == "true" ]]; then
+    echo "Skipping $API_SERVICE image build; reusing $image" >&2
+  else
+    prepare_api_context "$context"
+    submit_cloud_build "$context" "$context/cloudbuild-api.yaml" "_IMAGE=$image"
+  fi
+
+  gcloud run jobs deploy "$IMPORT_REELSHORT_JOB" \
+    --project="$PROJECT_ID" \
+    --region="$REGION" \
+    --image="$image" \
+    --command=python \
+    --args="$(reelshort_import_args)" \
+    --cpu=1 \
+    --memory=1Gi \
+    --tasks=1 \
+    --max-retries=0 \
+    --task-timeout="$IMPORT_REELSHORT_TIMEOUT" \
+    --set-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
+    --set-env-vars=ENVIRONMENT=production \
+    --set-secrets=DATABASE_URL="$DATABASE_URL_SECRET":latest \
+    --execute-now \
+    --wait
 }
 
 resolve_api_url_for_frontend() {
@@ -880,6 +934,13 @@ main() {
 
   if run_mode_is domain; then
     setup_domain
+    print_summary
+    return
+  fi
+
+  if run_mode_is import-reelshort; then
+    ensure_infra
+    run_reelshort_import_job
     print_summary
     return
   fi

@@ -30,6 +30,7 @@ deployment framework:
 | `pnpm deploy:mobile` | Build and deploy only the mobile PWA |
 | `pnpm deploy:web` | Build and deploy only the CPS portal |
 | `pnpm deploy:admin` | Build and deploy only the admin dashboard |
+| `pnpm deploy:import-reelshort` | Build the API image, deploy a Cloud Run Job, and run ReelShort resource import |
 | `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
 | `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS and Cloud Run domain mappings |
@@ -56,6 +57,69 @@ USE_CUSTOM_API_DOMAIN=true
 TAG=my-release-tag
 SQL_TIER=db-custom-1-3840
 ```
+
+## ReelShort Resource Import
+
+The importer converts crawler rows from `third_party_drama_resources` into
+Nuvelle `dramas` and `drama_episodes`. It intentionally reuses the same
+`ReelShortImportService` as the admin API endpoint, so local runs, API-triggered
+runs, and Cloud Run Job runs share one conversion path.
+
+Local dry-run:
+
+```bash
+cd nuvelle_api
+DATABASE_URL=postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle \
+  ../.venv/bin/python -m app.tasks.import_reelshort --limit 50 --dry-run --pretty
+```
+
+Local write run:
+
+```bash
+cd nuvelle_api
+DATABASE_URL=postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle \
+  ../.venv/bin/python -m app.tasks.import_reelshort --limit 500 --pretty
+```
+
+Single-resource retry:
+
+```bash
+cd nuvelle_api
+../.venv/bin/python -m app.tasks.import_reelshort --resource-id 123 --limit 1 --pretty
+```
+
+Google Cloud dry-run job:
+
+```bash
+IMPORT_REELSHORT_DRY_RUN=true IMPORT_REELSHORT_LIMIT=50 pnpm deploy:import-reelshort
+```
+
+Google Cloud write job:
+
+```bash
+IMPORT_REELSHORT_LIMIT=500 pnpm deploy:import-reelshort
+```
+
+Useful Cloud Run Job overrides:
+
+```bash
+IMPORT_REELSHORT_RESOURCE_ID=123
+IMPORT_REELSHORT_DRY_RUN=true
+IMPORT_REELSHORT_TIMEOUT=3600
+SKIP_BACKEND_BUILD=true
+```
+
+The job name defaults to `nuvelle-import-reelshort`. The deploy script builds or
+reuses the `nuvelle-api` image, attaches the `nuvelle-database-url` Secret
+Manager value as `DATABASE_URL`, mounts the configured Cloud SQL instance, and
+executes:
+
+```bash
+python -m app.tasks.import_reelshort --limit "$IMPORT_REELSHORT_LIMIT"
+```
+
+Use `IMPORT_REELSHORT_DRY_RUN=true` before the first production write run, then
+remove it when the JSON summary looks correct.
 
 ## Services
 
