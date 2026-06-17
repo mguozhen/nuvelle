@@ -1,0 +1,37 @@
+{
+  "id": "6a2787e89a16b83b9c05c631",
+  "pic": "https://v-img.crazymaplestudios.com/v-images/book_cover_batch/201300000000005141/cover.jpg",
+  "title": "My Father's Billionaire Boss Treasured Me as His Bride",
+  "lang": "English",
+  "desc": "Julia, a bartender, was drugged by Pete and rescued by Eric.",
+  "tag": ["Female"],
+  "chapter_count": 66,
+  "publish_at": 1781176900,
+  "pay_start": 12,
+  "chapters": [
+    {
+      "chapter_id": "g9917szqen",
+      "content": "",
+      "play_url": "https://example.com/episode-0001.mp4",
+      "video_pic": "https://v-mps.crazymaplestudios.com/Snapshots/81aadc099f54584f.jpg",
+      "t_chapter_id": "0001",
+      "iframe_src": "https://www.reelshort.com/en/embed/6a2787e89a16b83b9c05c631-g9917szqen?show_controls=true&cps_id=13282&code=1449917\n"
+    },
+    {
+      "chapter_id": "g39v4woh1r",
+      "content": "",
+      "play_url": "https://example.com/episode-0002.mp4",
+      "video_pic": "https://v-mps.crazymaplestudios.com/Snapshots/f758b3be60cc677c.jpg",
+      "t_chapter_id": "0002",
+      "iframe_src": "https://www.reelshort.com/en/embed/6a2787e89a16b83b9c05c631-g39v4woh1r?show_controls=true&cps_id=13282&code=1449917\n"
+    }
+  ],
+  "book_type": 1,
+  "is_valid": false,
+  "show_tag": ["Female"],
+  "recent_revenue": 2000,
+  "promoters_cnt": 1000,
+  "app_promotion_link": "https://reelslink.com/cps/y2drkZ",
+  "book_promotion_link": "https://reelslink.com/cps/7DYiOR",
+  "promotion_code": 1449917
+}
