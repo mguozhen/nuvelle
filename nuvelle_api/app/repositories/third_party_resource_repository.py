@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.third_party_resource import ThirdPartyDramaResource
@@ -15,6 +15,21 @@ class ThirdPartyResourceRepository:
         if resource_id is not None:
             stmt = stmt.where(ThirdPartyDramaResource.id == resource_id)
         else:
-            stmt = stmt.where(ThirdPartyDramaResource.import_status != "failed")
-        stmt = stmt.order_by(ThirdPartyDramaResource.last_seen_at.desc()).limit(limit)
+            import_priority = case(
+                (
+                    or_(
+                        ThirdPartyDramaResource.import_status.is_(None),
+                        ThirdPartyDramaResource.import_status == "pending",
+                    ),
+                    0,
+                ),
+                else_=1,
+            )
+            stmt = stmt.where(
+                or_(
+                    ThirdPartyDramaResource.import_status.is_(None),
+                    ThirdPartyDramaResource.import_status != "failed",
+                )
+            ).order_by(import_priority, ThirdPartyDramaResource.last_seen_at.desc())
+        stmt = stmt.limit(limit)
         return list(self.db.scalars(stmt).all())

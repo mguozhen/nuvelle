@@ -46,9 +46,11 @@ def seed_resource(
     *,
     source: str = "reelshort",
     source_app: str = "reelshort",
+    import_status: str = "pending",
+    last_seen_at: datetime | None = None,
 ) -> ThirdPartyDramaResource:
     payload = raw_data or fixture_payload()
-    now = datetime(2026, 6, 17, tzinfo=UTC)
+    now = last_seen_at or datetime(2026, 6, 17, tzinfo=UTC)
     resource = ThirdPartyDramaResource(
         source=source,
         external_id=payload.get("id", "material-1"),
@@ -61,7 +63,7 @@ def seed_resource(
         release_date=None,
         episode_count=payload["chapter_count"],
         free_episode_count=payload["pay_start"],
-        import_status="pending",
+        import_status=import_status,
         raw_data=payload,
         raw_hash="hash-1",
         first_seen_at=now,
@@ -80,7 +82,12 @@ def test_reelshort_resource_imports_drama_and_episodes(client: TestClient, db: S
     response = client.post("/api/v1/admin/imports/reelshort/sync", headers=auth_header(client, db))
 
     drama = db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").one()
-    episodes = db.query(DramaEpisode).filter(DramaEpisode.drama_id == drama.id).order_by(DramaEpisode.episode_no).all()
+    episodes = (
+        db.query(DramaEpisode)
+        .filter(DramaEpisode.drama_id == drama.id)
+        .order_by(DramaEpisode.episode_no)
+        .all()
+    )
 
     assert response.status_code == 200
     assert response.json()["imported"] == 1
@@ -106,6 +113,41 @@ def test_reelshort_import_accepts_crawler_source_app_shape(client: TestClient, d
     assert response.status_code == 200
     assert response.json()["imported"] == 1
     assert db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").count() == 1
+
+
+def test_reelshort_import_prioritizes_pending_resources(client: TestClient, db: Session) -> None:
+    imported_payload = fixture_payload()
+    imported_payload["id"] = "already-imported"
+    imported_payload["title"] = "Already Imported"
+    seed_resource(
+        db,
+        imported_payload,
+        source="reelshort_cps",
+        source_app="reelshort",
+        import_status="imported",
+        last_seen_at=datetime(2026, 6, 18, tzinfo=UTC),
+    )
+    pending_payload = fixture_payload()
+    pending_payload["id"] = "pending-resource"
+    pending_payload["title"] = "Pending Resource"
+    seed_resource(
+        db,
+        pending_payload,
+        source="reelshort_cps",
+        source_app="reelshort",
+        last_seen_at=datetime(2026, 6, 17, tzinfo=UTC),
+    )
+
+    response = client.post(
+        "/api/v1/admin/imports/reelshort/sync",
+        headers=auth_header(client, db),
+        json={"limit": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    assert db.query(Drama).filter(Drama.rs_book_id == "pending-resource").count() == 1
+    assert db.query(Drama).filter(Drama.rs_book_id == "already-imported").count() == 0
 
 
 def test_reelshort_import_skips_non_cps_material_shape(client: TestClient, db: Session) -> None:
@@ -161,7 +203,11 @@ def test_reelshort_import_updates_existing_drama(client: TestClient, db: Session
     )
 
     dramas = db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").all()
-    episode = db.query(DramaEpisode).filter(DramaEpisode.drama_id == dramas[0].id, DramaEpisode.episode_no == 1).one()
+    episode = (
+        db.query(DramaEpisode)
+        .filter(DramaEpisode.drama_id == dramas[0].id, DramaEpisode.episode_no == 1)
+        .one()
+    )
 
     assert response.status_code == 200
     assert response.json()["updated"] == 1
@@ -173,7 +219,10 @@ def test_reelshort_import_updates_existing_drama(client: TestClient, db: Session
 def test_reelshort_sync_requires_admin(client: TestClient, db: Session) -> None:
     seed_resource(db)
 
-    response = client.post("/api/v1/admin/imports/reelshort/sync", headers=auth_header(client, db, "promoter"))
+    response = client.post(
+        "/api/v1/admin/imports/reelshort/sync",
+        headers=auth_header(client, db, "promoter"),
+    )
 
     assert response.status_code == 403
     assert response.json()["detail"] == "admin role required"
