@@ -6,6 +6,7 @@ import App from "../App";
 
 describe("admin app", () => {
   beforeEach(() => {
+    expect(typeof window.localStorage.clear).toBe("function");
     localStorage.clear();
     vi.stubGlobal(
       "fetch",

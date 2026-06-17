@@ -1,45 +1,12 @@
-from collections.abc import Generator
-
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-from app.api.deps import db_session
-from app.db.base import Base
-from app.main import app
 
 
-def install_test_db_override() -> None:
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    testing_session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-
-    def override_db() -> Generator[Session, None, None]:
-        db = testing_session()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    app.dependency_overrides[db_session] = override_db
-
-
-def test_votes_are_recorded_and_returned() -> None:
-    install_test_db_override()
-    client = TestClient(app)
-
+def test_votes_are_recorded_and_returned(client: TestClient) -> None:
     response = client.post(
         "/api/v1/votes",
         json={"drama_id": "7", "taster": "alex", "verdict": "fire", "score": 82, "tags": ["hook"]},
     )
     votes = client.get("/api/v1/votes")
-
-    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json() == {"ok": True, "rated": 1}
@@ -49,8 +16,9 @@ def test_votes_are_recorded_and_returned() -> None:
     assert votes.json()["votes"]["7"][0]["verdict"] == "fire"
 
 
-def test_promo_job_api_queues_and_finishes_with_mocked_generator(monkeypatch, tmp_path) -> None:
-    install_test_db_override()
+def test_promo_job_api_queues_and_finishes_with_mocked_generator(
+    client: TestClient, monkeypatch, tmp_path
+) -> None:
     from nuvelle_kit.schemas import PromoGenerationResult
 
     from app.services import promo_service
@@ -76,7 +44,6 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(monkeypatch, tm
         )
 
     monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
-    client = TestClient(app)
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -93,8 +60,6 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(monkeypatch, tm
     payload = response.json()
     job = client.get(f"/api/v1/promo/jobs/{payload['job_id']}")
 
-    app.dependency_overrides.clear()
-
     assert response.status_code == 200
     assert payload["job_id"]
     assert payload["status"] == "queued"
@@ -104,8 +69,7 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(monkeypatch, tm
     assert job.json()["files"]["teaser"].endswith("/teaser.mp4")
 
 
-def test_batch_api_queues_jobs_and_reports_status(monkeypatch, tmp_path) -> None:
-    install_test_db_override()
+def test_batch_api_queues_jobs_and_reports_status(client: TestClient, monkeypatch, tmp_path) -> None:
     from nuvelle_kit.schemas import PromoGenerationResult
 
     from app.services import promo_service
@@ -131,7 +95,6 @@ def test_batch_api_queues_jobs_and_reports_status(monkeypatch, tmp_path) -> None
         )
 
     monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
-    client = TestClient(app)
 
     response = client.post(
         "/api/v1/promo/batches",
@@ -144,8 +107,6 @@ def test_batch_api_queues_jobs_and_reports_status(monkeypatch, tmp_path) -> None
     payload = response.json()
     batch = client.get(f"/api/v1/promo/batches/{payload['batch_id']}")
 
-    app.dependency_overrides.clear()
-
     assert response.status_code == 200
     assert len(payload["jobs"]) == 2
     assert batch.status_code == 200
@@ -153,8 +114,7 @@ def test_batch_api_queues_jobs_and_reports_status(monkeypatch, tmp_path) -> None
     assert batch.json()["done"] == 2
 
 
-def test_promo_job_api_passes_no_ai_to_generator(monkeypatch, tmp_path) -> None:
-    install_test_db_override()
+def test_promo_job_api_passes_no_ai_to_generator(client: TestClient, monkeypatch, tmp_path) -> None:
     from nuvelle_kit.schemas import PromoGenerationResult
 
     from app.services import promo_service
@@ -181,7 +141,6 @@ def test_promo_job_api_passes_no_ai_to_generator(monkeypatch, tmp_path) -> None:
         )
 
     monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
-    client = TestClient(app)
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -195,8 +154,6 @@ def test_promo_job_api_passes_no_ai_to_generator(monkeypatch, tmp_path) -> None:
     )
     payload = response.json()
     job = client.get(f"/api/v1/promo/jobs/{payload['job_id']}")
-
-    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert job.json()["status"] == "done"
