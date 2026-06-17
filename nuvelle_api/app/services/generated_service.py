@@ -61,7 +61,11 @@ class GeneratedService:
             error=job.error,
             files=files,
             drama=GeneratedDramaRef(id=drama.id, title=drama.title) if drama else None,
-            episode_ref=GeneratedEpisodeRef(id=episode.id, episode_no=episode.episode_no) if episode else None,
+            episode_ref=(
+                GeneratedEpisodeRef(id=episode.id, episode_no=episode.episode_no)
+                if episode
+                else None
+            ),
             created_at=job.created_at,
         )
 

@@ -31,7 +31,13 @@ def auth_header(client: TestClient, db: Session, email: str, code: str) -> dict[
     return {"Authorization": f"Bearer {registered.json()['access_token']}"}
 
 
-def seed_drama(db: Session, title: str, *, language: str = "English", tag: str = "Female") -> tuple[Drama, DramaEpisode]:
+def seed_drama(
+    db: Session,
+    title: str,
+    *,
+    language: str = "English",
+    tag: str = "Female",
+) -> tuple[Drama, DramaEpisode]:
     drama = Drama(
         title=title,
         platform="ReelShort",

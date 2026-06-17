@@ -1,5 +1,5 @@
-from enum import StrEnum
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
@@ -24,8 +24,12 @@ class AdminUser(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     email: Mapped[str] = mapped_column(String(320), nullable=False, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(40), nullable=False, default=AdminUserRole.promoter.value, index=True)
-    status: Mapped[str] = mapped_column(String(40), nullable=False, default=AdminUserStatus.active.value, index=True)
+    role: Mapped[str] = mapped_column(
+        String(40), nullable=False, default=AdminUserRole.promoter.value, index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(40), nullable=False, default=AdminUserStatus.active.value, index=True
+    )
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -34,7 +38,9 @@ class AdminInvite(TimestampMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     code_hash: Mapped[str] = mapped_column(String(128), nullable=False, unique=True, index=True)
-    role: Mapped[str] = mapped_column(String(40), nullable=False, default=AdminUserRole.promoter.value, index=True)
+    role: Mapped[str] = mapped_column(
+        String(40), nullable=False, default=AdminUserRole.promoter.value, index=True
+    )
     max_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     used_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)

@@ -25,7 +25,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 def hash_invite_code(code: str) -> str:
     settings = get_settings()
     normalized = code.strip().upper()
-    return sha256(f"{settings.jwt_secret}:{normalized}".encode("utf-8")).hexdigest()
+    return sha256(f"{settings.jwt_secret}:{normalized}".encode()).hexdigest()
 
 
 def create_access_token(subject: str) -> str:

@@ -103,7 +103,10 @@ class ReelShortImportService:
         return self.db.scalars(stmt).first()
 
     def _find_episode(self, drama_id: int, episode_no: int) -> DramaEpisode | None:
-        stmt = select(DramaEpisode).where(DramaEpisode.drama_id == drama_id, DramaEpisode.episode_no == episode_no)
+        stmt = select(DramaEpisode).where(
+            DramaEpisode.drama_id == drama_id,
+            DramaEpisode.episode_no == episode_no,
+        )
         return self.db.scalars(stmt).first()
 
     @staticmethod

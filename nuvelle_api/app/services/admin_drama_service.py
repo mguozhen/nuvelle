@@ -39,16 +39,24 @@ class AdminDramaService:
             stmt = stmt.where(Drama.language == language)
         stmt = stmt.order_by(Drama.platform_publish_at.desc().nullslast(), Drama.id.desc())
         dramas = list(self.db.scalars(stmt).all())
-        filtered = [drama for drama in dramas if self._matches_python_filters(drama, tag=tag, has_video=has_video)]
+        filtered = [
+            drama for drama in dramas if self._matches_python_filters(drama, tag=tag, has_video=has_video)
+        ]
         page = filtered[offset : offset + limit]
-        return AdminDramaListResponse(items=[self.to_read(drama, user) for drama in page], total=len(filtered))
+        return AdminDramaListResponse(
+            items=[self.to_read(drama, user) for drama in page],
+            total=len(filtered),
+        )
 
     def get_drama(self, drama_id: int, user: AdminUser) -> AdminDramaDetail | None:
         drama = self.db.get(Drama, drama_id)
         if drama is None:
             return None
         episodes = self.episodes_for(drama.id)
-        return AdminDramaDetail(**self.to_read(drama, user).model_dump(), episodes=[self.to_episode(item) for item in episodes])
+        return AdminDramaDetail(
+            **self.to_read(drama, user).model_dump(),
+            episodes=[self.to_episode(item) for item in episodes],
+        )
 
     def swipe_next(self, user: AdminUser) -> AdminDramaRead | None:
         handled = select(UserDramaEvent.drama_id).where(
@@ -90,11 +98,19 @@ class AdminDramaService:
         )
 
     def episodes_for(self, drama_id: int) -> list[DramaEpisode]:
-        stmt = select(DramaEpisode).where(DramaEpisode.drama_id == drama_id).order_by(DramaEpisode.episode_no.asc())
+        stmt = (
+            select(DramaEpisode)
+            .where(DramaEpisode.drama_id == drama_id)
+            .order_by(DramaEpisode.episode_no.asc())
+        )
         return list(self.db.scalars(stmt).all())
 
     def has_video(self, drama_id: int) -> bool:
-        stmt = select(DramaEpisode.id).where(DramaEpisode.drama_id == drama_id, DramaEpisode.play_url.is_not(None)).limit(1)
+        stmt = (
+            select(DramaEpisode.id)
+            .where(DramaEpisode.drama_id == drama_id, DramaEpisode.play_url.is_not(None))
+            .limit(1)
+        )
         return self.db.scalars(stmt).first() is not None
 
     def seen(self, drama_id: int, user_id: int) -> bool:
