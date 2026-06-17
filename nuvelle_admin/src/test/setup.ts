@@ -32,3 +32,8 @@ Object.defineProperty(window, "localStorage", {
   configurable: true,
   value: new MemoryStorage()
 });
+
+Object.defineProperty(HTMLMediaElement.prototype, "load", {
+  configurable: true,
+  value: () => undefined
+});

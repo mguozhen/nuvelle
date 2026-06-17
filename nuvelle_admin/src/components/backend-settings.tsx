@@ -29,7 +29,7 @@ export function BackendSettings({ backendUrl, open, onOpenChange, onSave }: Back
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Backend URL</DialogTitle>
-          <DialogDescription>Promo generator and vote sync endpoint.</DialogDescription>
+          <DialogDescription>Admin API and promo generator endpoint.</DialogDescription>
         </DialogHeader>
         <Input value={value} onChange={(event) => setValue(event.target.value)} />
         <DialogFooter>

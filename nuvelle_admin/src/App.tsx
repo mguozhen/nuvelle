@@ -5,45 +5,115 @@ import { BoardView } from "@/components/board-view";
 import { GeneratedLibrary } from "@/components/generated-library";
 import { LoginGate } from "@/components/login-gate";
 import { SwipeView } from "@/components/swipe-view";
+import { clearAuthState, loadAuthState, saveAuthState, type AuthState } from "@/lib/auth";
 import { DEFAULT_BACKEND_URL, PromoBackendClient } from "@/lib/backend";
-import {
-  loadAdminState,
-  loadBackendUrl,
-  saveAdminState,
-  saveBackendUrl,
-  type AdminState,
-  type GeneratedPromo
-} from "@/lib/storage";
+import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
 import { nuvelleScore } from "@/lib/scoring";
-import type { DramaRecord, PromoRequest, VoteVerdict } from "@/types/drama";
+import type {
+  AuthResponse,
+  DramaEpisodeRecord,
+  DramaRecord,
+  GeneratedJob,
+  LoginRequest,
+  PromoRequest,
+  RegisterRequest,
+  VoteVerdict
+} from "@/types/drama";
 
-type VotesResponse = {
-  rated?: Array<string | number>;
+type EpisodeCandidate = {
+  id?: number;
+  episode_no: number;
+  play_url?: string | null;
+  poster_url?: string | null;
 };
 
-function sortDramas(dramas: DramaRecord[]): DramaRecord[] {
-  return [...dramas].sort((a, b) => Number(Boolean(b.video_url)) - Number(Boolean(a.video_url)));
+function toEpisodeRecords(drama: DramaRecord): EpisodeCandidate[] {
+  if (Array.isArray(drama.episode_list) && drama.episode_list.length) {
+    return drama.episode_list;
+  }
+
+  if (Array.isArray(drama.episodes)) {
+    return drama.episodes;
+  }
+
+  if (drama.episodes && typeof drama.episodes === "object") {
+    return Object.entries(drama.episodes).map(([episode, url]) => ({
+      episode_no: Number(episode),
+      play_url: url
+    }));
+  }
+
+  if (drama.video_url) {
+    return [{ episode_no: 1, play_url: drama.video_url }];
+  }
+
+  return [];
 }
 
-function normalizeSeed(raw: DramaRecord[]): DramaRecord[] {
-  return sortDramas(raw.map((drama, index) => ({ ...drama, id: drama.id ?? index + 1 })));
+function firstPlayableEpisode(drama: DramaRecord, episodeNo?: number, videoUrl?: string | null): EpisodeCandidate | null {
+  if (videoUrl) {
+    return { episode_no: episodeNo || 1, play_url: videoUrl };
+  }
+
+  const episodes = toEpisodeRecords(drama);
+  const requested = episodeNo ? episodes.find((episode) => episode.episode_no === episodeNo) : null;
+  return requested || episodes.find((episode) => Boolean(episode.play_url)) || null;
+}
+
+function normalizeDrama(raw: DramaRecord): DramaRecord {
+  const episodeList = toEpisodeRecords(raw)
+    .map((episode) => ({
+      id: episode.id ?? episode.episode_no,
+      episode_no: episode.episode_no,
+      play_url: episode.play_url ?? null,
+      poster_url: episode.poster_url ?? null
+    }))
+    .sort((a, b) => a.episode_no - b.episode_no) as DramaEpisodeRecord[];
+  const firstPlayUrl = episodeList.find((episode) => episode.play_url)?.play_url || raw.video_url || null;
+
+  return {
+    ...raw,
+    episode_list: episodeList,
+    video_url: firstPlayUrl,
+    has_video: raw.has_video ?? Boolean(firstPlayUrl)
+  };
+}
+
+function sortDramas(dramas: DramaRecord[]): DramaRecord[] {
+  return [...dramas].sort((a, b) => Number(Boolean(b.has_video || b.video_url)) - Number(Boolean(a.has_video || a.video_url)));
+}
+
+function toAssetUrl(baseUrl: string, value?: string | null): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  return `${baseUrl}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function authFromResponse(response: AuthResponse): AuthState {
+  return {
+    token: response.access_token,
+    user: response.user
+  };
 }
 
 export default function App() {
-  const [adminState, setAdminState] = useState<AdminState>(() => loadAdminState());
+  const [auth, setAuth] = useState<AuthState>(() => loadAuthState());
   const [backendUrl, setBackendUrl] = useState(() => loadBackendUrl());
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("board");
   const [dramas, setDramas] = useState<DramaRecord[]>([]);
-  const [remoteRated, setRemoteRated] = useState<Set<string>>(new Set());
+  const [swipeDrama, setSwipeDrama] = useState<DramaRecord | null>(null);
+  const [votes, setVotes] = useState<Record<string, VoteVerdict>>({});
+  const [generated, setGenerated] = useState<GeneratedJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
-  const client = useMemo(() => new PromoBackendClient(backendUrl), [backendUrl]);
-
-  const persistState = useCallback((next: AdminState) => {
-    saveAdminState(next);
-    setAdminState(next);
-  }, []);
+  const client = useMemo(() => new PromoBackendClient(backendUrl, undefined, auth.token || undefined), [auth.token, backendUrl]);
 
   const showStatus = useCallback((message: string) => {
     setStatus(message);
@@ -58,208 +128,252 @@ export default function App() {
     return () => window.clearTimeout(timeout);
   }, [status]);
 
+  const applyAuth = useCallback((response: AuthResponse) => {
+    const next = authFromResponse(response);
+    saveAuthState(next);
+    setAuth(next);
+  }, []);
+
+  const loadBoard = useCallback(async () => {
+    setLoading(true);
+
+    try {
+      const response = await client.listAdminDramas();
+      setDramas(sortDramas(response.items.map(normalizeDrama)));
+    } catch {
+      showStatus("Material library failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [client, showStatus]);
+
+  const loadGenerated = useCallback(async () => {
+    try {
+      const response = await client.listGenerated();
+      setGenerated(response.items);
+    } catch {
+      setGenerated([]);
+    }
+  }, [client]);
+
+  const loadSwipeNext = useCallback(async () => {
+    try {
+      const next = await client.swipeNext();
+      setSwipeDrama(normalizeDrama(next));
+    } catch {
+      setSwipeDrama(null);
+    }
+  }, [client]);
+
   useEffect(() => {
-    if (!adminState.loggedIn) {
+    if (!auth.token) {
       return;
     }
 
-    let cancelled = false;
+    void loadBoard();
+    void loadGenerated();
+  }, [auth.token, loadBoard, loadGenerated]);
 
-    async function loadData() {
-      setLoading(true);
-
-      try {
-        const response = await fetch("/seed_dramas.json");
-        const raw = (await response.json()) as DramaRecord[];
-
-        if (!cancelled) {
-          setDramas(normalizeSeed(raw));
-        }
-      } catch {
-        if (!cancelled) {
-          showStatus("Seed data failed to load");
-        }
-      }
-
-      try {
-        const votes = await client.getVotes<VotesResponse>();
-
-        if (!cancelled) {
-          setRemoteRated(new Set((votes.rated || []).map(String)));
-        }
-      } catch {
-        if (!cancelled) {
-          setRemoteRated(new Set());
-        }
-      }
-
-      if (!cancelled) {
-        setLoading(false);
-      }
+  useEffect(() => {
+    if (!auth.token) {
+      return;
     }
 
-    void loadData();
+    if (activeTab === "swipe") {
+      void loadSwipeNext();
+    }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [adminState.loggedIn, client, showStatus]);
+    if (activeTab === "generated") {
+      void loadGenerated();
+    }
+  }, [activeTab, auth.token, loadGenerated, loadSwipeNext]);
 
   const login = useCallback(
-    (username: string, password: string): boolean => {
-      if (username !== "admin" || password !== "admin") {
-        return false;
-      }
-
-      persistState({ ...adminState, loggedIn: true });
-      return true;
+    async (payload: LoginRequest) => {
+      applyAuth(await client.login(payload));
     },
-    [adminState, persistState]
+    [applyAuth, client]
+  );
+
+  const register = useCallback(
+    async (payload: RegisterRequest) => {
+      applyAuth(await client.register(payload));
+    },
+    [applyAuth, client]
   );
 
   const signOut = useCallback(() => {
-    persistState({ ...adminState, loggedIn: false });
-  }, [adminState, persistState]);
+    clearAuthState();
+    setAuth({ token: "", user: null });
+    setDramas([]);
+    setSwipeDrama(null);
+    setVotes({});
+    setGenerated([]);
+  }, []);
 
-  const saveBackend = useCallback((url: string) => {
-    const normalized = url.trim() || DEFAULT_BACKEND_URL;
-    saveBackendUrl(normalized);
-    setBackendUrl(loadBackendUrl());
-    setBackendSettingsOpen(false);
-    showStatus("Backend URL saved");
-  }, [showStatus]);
+  const saveBackend = useCallback(
+    (url: string) => {
+      const normalized = url.trim() || DEFAULT_BACKEND_URL;
+      saveBackendUrl(normalized);
+      setBackendUrl(loadBackendUrl());
+      setBackendSettingsOpen(false);
+      showStatus("Backend URL saved");
+    },
+    [showStatus]
+  );
 
   const vote = useCallback(
     (drama: DramaRecord, verdict: VoteVerdict) => {
-      const next: AdminState = {
-        ...adminState,
-        votes: { ...adminState.votes, [String(drama.id)]: verdict }
-      };
+      setVotes((current) => ({ ...current, [String(drama.id)]: verdict }));
+      if (activeTab === "swipe") {
+        setSwipeDrama(null);
+      }
 
-      persistState(next);
-      setRemoteRated((current) => new Set(current).add(String(drama.id)));
-      void client.postVote({ dramaId: drama.id, verdict, score: nuvelleScore(drama) }).catch((error: unknown) => {
-        console.error("Remote vote sync failed", error);
-        showStatus("Remote vote sync failed");
-      });
+      void client
+        .postDramaEvent({
+          drama_id: drama.id,
+          event_type: "vote",
+          verdict,
+          score: nuvelleScore(drama)
+        })
+        .then(() => {
+          if (activeTab === "swipe") {
+            void loadSwipeNext();
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Drama event sync failed", error);
+          showStatus("Drama event sync failed");
+        });
     },
-    [adminState, client, persistState, showStatus]
+    [activeTab, client, loadSwipeNext, showStatus]
   );
 
-  const addGenerated = useCallback(
-    (promo: GeneratedPromo) => {
-      const next: AdminState = {
-        ...adminState,
-        generated: [promo, ...adminState.generated].slice(0, 40)
-      };
+  const resolveDramaForGeneration = useCallback(
+    async (drama: DramaRecord, episode?: number, videoUrl?: string | null) => {
+      if (firstPlayableEpisode(drama, episode, videoUrl)) {
+        return drama;
+      }
 
-      persistState(next);
+      const detail = await client.getAdminDrama(drama.id);
+      return normalizeDrama(detail);
     },
-    [adminState, persistState]
+    [client]
   );
 
   const generatePromo = useCallback(
-    async (request: PromoRequest, source: Omit<GeneratedPromo, "createdAt" | "status">) => {
-      try {
-        const result = await client.generatePromo<{
-          id?: string;
-          job_id?: string;
-          files?: { teaser?: string; cover?: string };
-          caption?: string;
-          status?: string;
-        }>(request);
-        const jobId = result.job_id || result.id;
-        const promo: GeneratedPromo = {
-          ...source,
-          id: jobId,
-          teaserUrl: result.files?.teaser ? `${backendUrl}${result.files.teaser}` : source.teaserUrl,
-          coverUrl: result.files?.cover ? `${backendUrl}${result.files.cover}` : source.coverUrl,
-          caption: result.caption || source.caption,
-          status: result.status || (jobId ? "queued" : "submitted"),
-          createdAt: Date.now()
-        };
+    async (request: PromoRequest) => {
+      return client.generatePromo<{
+        id?: string;
+        job_id?: string;
+        files?: { teaser?: string | null; cover?: string | null } | null;
+        caption?: string | null;
+        status?: string;
+        title?: string | null;
+      }>(request);
+    },
+    [client]
+  );
 
-        addGenerated(promo);
+  const generateForDrama = useCallback(
+    async (drama: DramaRecord, duration: number, prompt = "", episode?: number, videoUrl?: string | null) => {
+      try {
+        const detail = await resolveDramaForGeneration(drama, episode, videoUrl);
+        const selectedEpisode = firstPlayableEpisode(detail, episode, videoUrl);
+
+        if (!selectedEpisode?.play_url) {
+          showStatus("This drama has no video to generate from");
+          return;
+        }
+
+        const episodeNo = selectedEpisode.episode_no || episode || 1;
+        const result = await generatePromo({
+          url: selectedEpisode.play_url,
+          title: detail.title || "Promo",
+          ep: episodeNo,
+          dur: duration,
+          beats: [],
+          prompt,
+          cover_image: detail.cover_image_url || selectedEpisode.poster_url || undefined,
+          drama_id: detail.id,
+          episode_id: selectedEpisode.id
+        });
+
+        const jobId = result.job_id || result.id;
+        setGenerated((current) => [
+          {
+            id: jobId || `${detail.id}-${Date.now()}`,
+            job_id: jobId || `${detail.id}-${Date.now()}`,
+            status: result.status || "queued",
+            title: result.title || detail.title || "Promo",
+            episode: episodeNo,
+            duration,
+            source_url: selectedEpisode.play_url,
+            prompt,
+            caption: result.caption || null,
+            files: result.files || null,
+            drama: { id: Number(detail.id), title: detail.title || "Untitled" },
+            episode_ref: selectedEpisode.id ? { id: selectedEpisode.id, episode_no: episodeNo } : null
+          },
+          ...current
+        ]);
+        void loadGenerated();
         showStatus(jobId ? "Promo job submitted" : "Promo request submitted");
       } catch {
         showStatus("Can't reach the cloud generator. Check backend URL.");
       }
     },
-    [addGenerated, backendUrl, client, showStatus]
-  );
-
-  const generateForDrama = useCallback(
-    (drama: DramaRecord, duration: number, prompt = "", episode = 1, videoUrl = drama.video_url) => {
-      if (!videoUrl) {
-        showStatus("This drama has no video to generate from");
-        return;
-      }
-
-      void generatePromo(
-        {
-          url: videoUrl,
-          title: drama.title || "Promo",
-          ep: episode,
-          dur: duration,
-          beats: [],
-          prompt,
-          cover_image: drama.cover_image_url || undefined
-        },
-        {
-          title: `${drama.title || "Promo"} EP${episode}`,
-          sourceUrl: videoUrl,
-          coverUrl: drama.cover_image_url || undefined,
-          episode,
-          duration,
-          prompt
-        }
-      );
-    },
-    [generatePromo, showStatus]
+    [generatePromo, loadGenerated, resolveDramaForGeneration, showStatus]
   );
 
   const generateBatch = useCallback(
     async (drama: DramaRecord, duration: number) => {
-      const episodes = drama.episodes || (drama.video_url ? { "1": drama.video_url } : {});
-      const items = Object.entries(episodes).map(([episode, url]) => ({
-        url,
-        title: drama.title || "Promo",
-        ep: Number(episode),
-        dur: duration,
-        cover_image: drama.cover_image_url || undefined
-      }));
-
-      if (!items.length) {
-        showStatus("No available episodes for batch generation");
-        return;
-      }
-
       try {
+        const detail = await resolveDramaForGeneration(drama);
+        const items = toEpisodeRecords(detail)
+          .filter((episode) => Boolean(episode.play_url))
+          .map((episode) => ({
+            url: episode.play_url || "",
+            title: detail.title || "Promo",
+            ep: episode.episode_no,
+            dur: duration,
+            cover_image: detail.cover_image_url || episode.poster_url || undefined,
+            drama_id: detail.id,
+            episode_id: episode.id
+          }));
+
+        if (!items.length) {
+          showStatus("No available episodes for batch generation");
+          return;
+        }
+
         const result = await client.generateBatch<{ batch_id?: string; id?: string }>({ items });
         showStatus(result.batch_id || result.id ? "Batch submitted" : "Batch request submitted");
       } catch {
         showStatus("Can't reach the cloud generator. Check backend URL.");
       }
     },
-    [client, showStatus]
+    [client, resolveDramaForGeneration, showStatus]
   );
 
-  if (!adminState.loggedIn) {
+  const activeSwipeDrama =
+    swipeDrama || dramas.find((drama) => !votes[String(drama.id)] && Boolean(drama.has_video || drama.video_url)) || null;
+  const ratedCount = new Set([...Object.keys(votes), ...dramas.filter((drama) => drama.seen).map((drama) => String(drama.id))]).size;
+  const fireCount = Object.values(votes).filter((verdict) => verdict === "fire").length;
+
+  if (!auth.token) {
     return (
       <>
-        <LoginGate onLogin={login} />
+        <LoginGate onLogin={login} onRegister={register} />
         <Toast message={status} />
       </>
     );
   }
 
-  const ratedCount = Object.keys(adminState.votes).length + remoteRated.size;
-  const fireCount = Object.values(adminState.votes).filter((verdict) => verdict === "fire").length;
-
   return (
     <AdminShell
       activeTab={activeTab}
-      generatedCount={adminState.generated.length}
+      generatedCount={generated.length}
       libraryCount={dramas.length}
       loading={loading}
       picksCount={fireCount}
@@ -269,43 +383,36 @@ export default function App() {
       onTabChange={setActiveTab}
     >
       {activeTab === "swipe" ? (
-        <SwipeView
-          dramas={dramas}
-          remoteRated={remoteRated}
-          votes={adminState.votes}
-          onGenerate={generateForDrama}
-          onVote={vote}
-        />
+        <SwipeView current={activeSwipeDrama} onGenerate={generateForDrama} onVote={vote} />
       ) : null}
       {activeTab === "board" ? (
-        <BoardView
-          dramas={dramas}
-          votes={adminState.votes}
-          onGenerate={generateForDrama}
-          onGenerateBatch={generateBatch}
-          onVote={vote}
-        />
+        <BoardView dramas={dramas} votes={votes} onGenerate={generateForDrama} onGenerateBatch={generateBatch} onVote={vote} />
       ) : null}
       {activeTab === "generated" ? (
         <GeneratedLibrary
-          generated={adminState.generated}
+          assetBaseUrl={backendUrl}
+          generated={generated}
           onRegenerate={(item, prompt) => {
-            if (!item.sourceUrl) {
+            if (!item.source_url) {
               showStatus("Missing source video");
               return;
             }
 
-            void generatePromo(
-              {
-                url: item.sourceUrl,
-                title: item.title || "Promo",
-                ep: item.episode || 1,
-                dur: item.duration || 30,
-                prompt,
-                cover_image: item.coverUrl
-              },
-              { ...item, prompt }
-            );
+            void generatePromo({
+              url: item.source_url,
+              title: item.title || "Promo",
+              ep: item.episode || 1,
+              dur: item.duration || 30,
+              prompt,
+              cover_image: toAssetUrl(backendUrl, item.files?.cover),
+              drama_id: item.drama?.id,
+              episode_id: item.episode_ref?.id
+            })
+              .then(() => {
+                void loadGenerated();
+                showStatus("Promo job submitted");
+              })
+              .catch(() => showStatus("Can't reach the cloud generator. Check backend URL."));
           }}
         />
       ) : null}

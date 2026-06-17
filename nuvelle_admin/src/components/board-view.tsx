@@ -3,6 +3,8 @@ import { Film, Flame, Layers, WandSparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
@@ -12,28 +14,97 @@ type BoardFilter = "top" | "video" | "all";
 type BoardViewProps = {
   dramas: DramaRecord[];
   votes: Record<string, VoteVerdict>;
-  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void;
-  onGenerateBatch: (drama: DramaRecord, duration: number) => void;
+  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
+  onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
+function values(items: Array<string | null | undefined>): string[] {
+  return Array.from(new Set(items.filter((item): item is string => Boolean(item)))).sort((a, b) => a.localeCompare(b));
+}
+
+function episodeCount(drama: DramaRecord): number {
+  if (Array.isArray(drama.episode_list)) {
+    return drama.episode_list.length;
+  }
+
+  if (Array.isArray(drama.episodes)) {
+    return drama.episodes.length;
+  }
+
+  if (drama.episodes) {
+    return Object.keys(drama.episodes).length;
+  }
+
+  if (Number(drama.episode_count) > 0) {
+    return Number(drama.episode_count);
+  }
+
+  return drama.video_url ? 1 : 0;
+}
+
+function formatCompact(value?: number | null): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
+function optionLabel(value: string): string {
+  return value.replace(/([a-z])([A-Z])/g, "$1 $2");
+}
+
 export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }: BoardViewProps) {
   const [filter, setFilter] = useState<BoardFilter>("video");
+  const [query, setQuery] = useState("");
+  const [platform, setPlatform] = useState("");
+  const [language, setLanguage] = useState("");
+  const [tag, setTag] = useState("");
   const [selectedDrama, setSelectedDrama] = useState<DramaRecord | null>(null);
   const [duration, setDuration] = useState(30);
+  const options = useMemo(
+    () => ({
+      platforms: values(dramas.map((drama) => drama.platform)),
+      languages: values(dramas.map((drama) => drama.language)),
+      tags: values(dramas.flatMap((drama) => [...(drama.tags || []), ...(drama.show_tags || [])]))
+    }),
+    [dramas]
+  );
   const ranked = useMemo(
-    () =>
-      dramas
+    () => {
+      const needle = query.trim().toLowerCase();
+
+      return dramas
         .map((drama) => ({ drama, score: nuvelleScore(drama) }))
-        .filter((item) => (filter === "video" ? Boolean(item.drama.video_url || item.drama.episodes) : true))
+        .filter((item) => (filter === "video" ? Boolean(item.drama.has_video || item.drama.video_url || episodeCount(item.drama)) : true))
         .filter((item) => (filter === "top" ? item.score >= 70 : true))
-        .sort((a, b) => b.score - a.score),
-    [dramas, filter]
+        .filter((item) => (platform ? item.drama.platform === platform : true))
+        .filter((item) => (language ? item.drama.language === language : true))
+        .filter((item) => (tag ? [...(item.drama.tags || []), ...(item.drama.show_tags || [])].includes(tag) : true))
+        .filter((item) =>
+          needle
+            ? [item.drama.title, item.drama.synopsis_or_hook, item.drama.platform]
+                .filter(Boolean)
+                .some((value) => String(value).toLowerCase().includes(needle))
+            : true
+        )
+        .sort((a, b) => b.score - a.score);
+    },
+    [dramas, filter, language, platform, query, tag]
   );
 
   return (
     <section>
-      <div className="mb-5 flex flex-wrap items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">Board</h1>
         <div className="flex rounded-xl border border-white/10 bg-[#0e1119] p-1">
           {[
@@ -72,10 +143,37 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
           </select>
         </label>
       </div>
+      <div className="mb-5 grid gap-2 md:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">
+        <Input placeholder="Search title or hook" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Select value={platform} onChange={(event) => setPlatform(event.target.value)}>
+          <option value="">All platforms</option>
+          {options.platforms.map((value) => (
+            <option key={value} value={value}>
+              {optionLabel(value)}
+            </option>
+          ))}
+        </Select>
+        <Select value={language} onChange={(event) => setLanguage(event.target.value)}>
+          <option value="">All languages</option>
+          {options.languages.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </Select>
+        <Select value={tag} onChange={(event) => setTag(event.target.value)}>
+          <option value="">All tags</option>
+          {options.tags.map((value) => (
+            <option key={value} value={value}>
+              {value}
+            </option>
+          ))}
+        </Select>
+      </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {ranked.map(({ drama, score }) => {
           const verdict = votes[String(drama.id)];
-          const episodeCount = Object.keys(drama.episodes || {}).length || (drama.video_url ? 1 : 0);
+          const count = episodeCount(drama);
 
           return (
             <article key={drama.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
@@ -96,10 +194,10 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
               <div className="p-3">
                 <h2 className="line-clamp-2 text-[13.5px] font-semibold leading-tight">{drama.title || "Untitled"}</h2>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#9aa2c0]">
-                  {episodeCount ? (
+                  {count ? (
                     <span className="inline-flex items-center gap-1">
                       <Layers className="h-3 w-3" />
-                      {episodeCount} eps
+                      {count} eps
                     </span>
                   ) : null}
                   {verdict ? (
@@ -108,6 +206,12 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
                       {verdict}
                     </span>
                   ) : null}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-1 text-[10.5px] text-[#7f88a6]">
+                  <span>Revenue {formatCompact(drama.recent_revenue)}</span>
+                  <span>Promoters {formatCompact(drama.promoters_cnt)}</span>
+                  <span className="col-span-2">Published {formatDate(drama.platform_publish_at)}</span>
+                  {drama.generated_count ? <span className="col-span-2">Generated {drama.generated_count}</span> : null}
                 </div>
                 <div className="mt-3 grid gap-2">
                   <Button size="sm" variant="gradient" onClick={() => onGenerate(drama, duration)}>

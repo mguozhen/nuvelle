@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Flame, ThumbsDown, ThumbsUp, WandSparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,19 +8,13 @@ import { nuvelleScore, tasteScore } from "@/lib/scoring";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
 
 type SwipeViewProps = {
-  dramas: DramaRecord[];
-  remoteRated: Set<string>;
-  votes: Record<string, VoteVerdict>;
-  onGenerate: (drama: DramaRecord, duration: number) => void;
+  current: DramaRecord | null;
+  onGenerate: (drama: DramaRecord, duration: number) => void | Promise<void>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
-export function SwipeView({ dramas, remoteRated, votes, onGenerate, onVote }: SwipeViewProps) {
+export function SwipeView({ current, onGenerate, onVote }: SwipeViewProps) {
   const [duration, setDuration] = useState(30);
-  const current = useMemo(
-    () => dramas.find((drama) => !votes[String(drama.id)] && !remoteRated.has(String(drama.id))),
-    [dramas, remoteRated, votes]
-  );
 
   if (!current) {
     return (

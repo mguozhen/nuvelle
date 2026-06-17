@@ -16,29 +16,63 @@ import type { DramaRecord, VoteVerdict } from "@/types/drama";
 type DramaModalProps = {
   drama: DramaRecord | null;
   duration: number;
-  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void;
-  onGenerateBatch: (drama: DramaRecord, duration: number) => void;
+  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
+  onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   onOpenChange: (open: boolean) => void;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
+function formatCompact(value?: number | null): string {
+  if (value === null || value === undefined) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+}
+
 export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpenChange, onVote }: DramaModalProps) {
   const [customUrl, setCustomUrl] = useState("");
+  const [prompt, setPrompt] = useState("");
   const episodes = useMemo(() => {
     if (!drama) {
       return [];
     }
 
-    const fromEpisodes = Object.entries(drama.episodes || {}).map(([episode, url]) => ({
-      episode: Number(episode),
-      url
-    }));
+    const fromEpisodeList = Array.isArray(drama.episode_list)
+      ? drama.episode_list.map((episode) => ({
+          episode: episode.episode_no,
+          url: episode.play_url || "",
+          posterUrl: episode.poster_url || ""
+        }))
+      : [];
 
-    if (!fromEpisodes.length && drama.video_url) {
+    const fromEpisodes = Array.isArray(drama.episodes)
+      ? drama.episodes.map((episode) => ({
+          episode: episode.episode_no,
+          url: episode.play_url || "",
+          posterUrl: episode.poster_url || ""
+        }))
+      : Object.entries(drama.episodes || {}).map(([episode, url]) => ({
+          episode: Number(episode),
+          url,
+          posterUrl: ""
+        }));
+
+    const combined = fromEpisodeList.length ? fromEpisodeList : fromEpisodes;
+
+    if (!combined.length && drama.video_url) {
       return [{ episode: 1, url: drama.video_url }];
     }
 
-    return fromEpisodes.sort((a, b) => a.episode - b.episode);
+    return combined.sort((a, b) => a.episode - b.episode);
   }, [drama]);
 
   return (
@@ -67,8 +101,44 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                   </Button>
                 </div>
                 {drama.synopsis_or_hook ? <p className="mt-3 text-sm leading-6 text-[#9aa2c0]">{drama.synopsis_or_hook}</p> : null}
+                <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0e1119] p-3 text-xs text-[#9aa2c0] md:grid-cols-4">
+                  <span>
+                    <b className="block text-white">{formatCompact(drama.recent_revenue)}</b>
+                    Revenue
+                  </span>
+                  <span>
+                    <b className="block text-white">{formatCompact(drama.promoters_cnt)}</b>
+                    Promoters
+                  </span>
+                  <span>
+                    <b className="block text-white">{formatDate(drama.platform_publish_at)}</b>
+                    Published
+                  </span>
+                  <span>
+                    <b className="block text-white">{drama.generated_count || 0}</b>
+                    Generated
+                  </span>
+                  {drama.promotion_code ? (
+                    <span className="md:col-span-2">
+                      <b className="block text-white">{drama.promotion_code}</b>
+                      Promotion code
+                    </span>
+                  ) : null}
+                  {drama.app_promotion_link || drama.book_promotion_link ? (
+                    <span className="min-w-0 md:col-span-2">
+                      <b className="block truncate text-white">{drama.app_promotion_link || drama.book_promotion_link}</b>
+                      Promotion link
+                    </span>
+                  ) : null}
+                </div>
+                <Input
+                  className="mt-4"
+                  placeholder="Prompt for this promo"
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
                 <div className="mt-4 grid gap-2">
-                  <Button variant="gradient" onClick={() => onGenerate(drama, duration)}>
+                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, episodes[0]?.episode)}>
                     <WandSparkles className="h-4 w-4" />
                     Generate current episode
                   </Button>
@@ -83,7 +153,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                       <div key={episode.episode} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0e1119] p-3">
                         <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
                         <span className="min-w-0 flex-1 truncate text-xs text-[#9aa2c0]">{episode.url}</span>
-                        <Button size="sm" variant="outline" onClick={() => onGenerate(drama, duration, "", episode.episode, episode.url)}>
+                        <Button size="sm" variant="outline" onClick={() => onGenerate(drama, duration, prompt, episode.episode)}>
                           Generate
                         </Button>
                       </div>
@@ -101,7 +171,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                     variant="outline"
                     onClick={() => {
                       if (customUrl.trim()) {
-                        onGenerate(drama, duration, "", 1, customUrl.trim());
+                        onGenerate(drama, duration, prompt, 1, customUrl.trim());
                       }
                     }}
                   >

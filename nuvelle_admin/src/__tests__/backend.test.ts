@@ -12,20 +12,30 @@ describe("admin backend client", () => {
     expect(normalizeBackendUrl("  http://localhost:8000/api/v1/// ")).toBe("http://localhost:8000/api/v1");
   });
 
-  it("posts votes to the configured backend", async () => {
+  it("authenticates and stores bearer tokens on API requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true })));
-    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock);
-    await client.postVote({ dramaId: 7, verdict: "fire", score: 82 });
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/votes", {
+    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
+    await client.postDramaEvent({ drama_id: 7, event_type: "vote", verdict: "fire", score: 82 });
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/admin/drama-events", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ drama_id: 7, verdict: "fire", score: 82 })
+      headers: { Authorization: "Bearer token-1", "Content-Type": "application/json" },
+      body: JSON.stringify({ drama_id: 7, event_type: "vote", verdict: "fire", score: 82 })
     });
+  });
+
+  it("loads admin dramas with query parameters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0 })));
+    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
+    await client.listAdminDramas({ q: "bride", language: "English", tag: "Female", has_video: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/admin/dramas?q=bride&language=English&tag=Female&has_video=true&limit=50&offset=0",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+    );
   });
 
   it("creates promo generation requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, id: "job-1" })));
-    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock);
+    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
     const result = await client.generatePromo({
       url: "https://cdn.example/video.m3u8",
       title: "Demo",
@@ -33,7 +43,9 @@ describe("admin backend client", () => {
       dur: 30,
       beats: [1.2, 3.4],
       prompt: "angrier hook",
-      cover_image: "https://cdn.example/cover.jpg"
+      cover_image: "https://cdn.example/cover.jpg",
+      drama_id: 1,
+      episode_id: 10
     });
     expect(result).toEqual({ ok: true, id: "job-1" });
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:8000/api/v1/promo/jobs", expect.any(Object));

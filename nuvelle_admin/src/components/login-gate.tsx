@@ -1,19 +1,35 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { LoginRequest, RegisterRequest } from "@/types/drama";
 
 type LoginGateProps = {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (payload: LoginRequest) => Promise<void>;
+  onRegister: (payload: RegisterRequest) => Promise<void>;
 };
 
-export function LoginGate({ onLogin }: LoginGateProps) {
-  const [username, setUsername] = useState("");
+export function LoginGate({ onLogin, onRegister }: LoginGateProps) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [inviteCode, setInviteCode] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const submit = () => {
-    if (!onLogin(username.trim(), password)) {
-      setError("Wrong username or password.");
+  const submit = async () => {
+    setError("");
+    setSubmitting(true);
+
+    try {
+      if (mode === "register") {
+        await onRegister({ invite_code: inviteCode.trim(), email: email.trim(), password });
+      } else {
+        await onLogin({ email: email.trim(), password });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -28,15 +44,25 @@ export function LoginGate({ onLogin }: LoginGateProps) {
         </h1>
         <p className="mt-2 text-sm text-[#9aa2c0]">AI Shorts selection dashboard - internal</p>
         <div className="mt-5 grid gap-2.5">
+          {mode === "register" ? (
+            <Input
+              autoComplete="one-time-code"
+              className="h-12 rounded-xl bg-[#0c0f1a]"
+              placeholder="invite code"
+              value={inviteCode}
+              onChange={(event) => setInviteCode(event.target.value)}
+            />
+          ) : null}
           <Input
-            autoComplete="username"
+            autoComplete="email"
             className="h-12 rounded-xl bg-[#0c0f1a]"
-            placeholder="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            placeholder="email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
           />
           <Input
-            autoComplete="current-password"
+            autoComplete={mode === "register" ? "new-password" : "current-password"}
             className="h-12 rounded-xl bg-[#0c0f1a]"
             placeholder="password"
             type="password"
@@ -44,12 +70,23 @@ export function LoginGate({ onLogin }: LoginGateProps) {
             onChange={(event) => setPassword(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter") {
-                submit();
+                void submit();
               }
             }}
           />
-          <Button className="h-12 rounded-xl" variant="gradient" onClick={submit}>
-            Login
+          <Button className="h-12 rounded-xl" disabled={submitting} variant="gradient" onClick={() => void submit()}>
+            {mode === "register" ? "Register" : "Login"}
+          </Button>
+          <Button
+            className="h-11 rounded-xl"
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setError("");
+              setMode(mode === "register" ? "login" : "register");
+            }}
+          >
+            {mode === "register" ? "Back to login" : "Create account"}
           </Button>
         </div>
         <div className="mt-2 h-5 text-xs text-[#ff7a7a]">{error}</div>

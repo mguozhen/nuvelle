@@ -96,7 +96,7 @@ export function AdminShell({
           {loading ? (
             <span className="ml-auto hidden items-center gap-2 text-xs text-[#9aa2c0] sm:flex">
               <Gauge className="h-4 w-4 animate-pulse text-[#ff5fbf]" />
-              Loading seed data
+              Loading library
             </span>
           ) : null}
         </div>
