@@ -9,7 +9,9 @@ class ThirdPartyResourceRepository:
         self.db = db
 
     def list_reelshort(self, *, limit: int, resource_id: int | None = None) -> list[ThirdPartyDramaResource]:
-        stmt = select(ThirdPartyDramaResource).where(func.lower(ThirdPartyDramaResource.source) == "reelshort")
+        stmt = select(ThirdPartyDramaResource).where(
+            func.lower(ThirdPartyDramaResource.source).in_(["reelshort", "reelshort_cps"])
+        )
         if resource_id is not None:
             stmt = stmt.where(ThirdPartyDramaResource.id == resource_id)
         else:

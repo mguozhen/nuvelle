@@ -13,6 +13,8 @@ from app.models.third_party_resource import ThirdPartyDramaResource
 from app.repositories.third_party_resource_repository import ThirdPartyResourceRepository
 from app.schemas.admin import ReelShortSyncRequest, ReelShortSyncResponse
 
+DRAMA_GENRE_LIMIT = 255
+
 
 class ReelShortImportService:
     def __init__(self, db: Session) -> None:
@@ -52,7 +54,7 @@ class ReelShortImportService:
         chapters = self._chapters(raw)
         drama.title = str(raw.get("title") or resource.title)
         drama.platform = "ReelShort"
-        drama.genre = ", ".join(self._string_list(raw.get("show_tag") or raw.get("tag")))
+        drama.genre = self._genre(raw)
         drama.cover_image_url = self._optional_str(raw.get("pic") or resource.cover_url)
         drama.video_url = self._optional_str(chapters[0].get("play_url")) if chapters else None
         drama.source_url = self._optional_str(raw.get("book_promotion_link") or raw.get("app_promotion_link"))
@@ -160,3 +162,24 @@ class ReelShortImportService:
         if raw.get("promoters_cnt") is not None:
             parts.append(f"{raw['promoters_cnt']} promoters")
         return " | ".join(parts) or None
+
+    @classmethod
+    def _genre(cls, raw: dict[str, Any]) -> str | None:
+        tags = cls._string_list(raw.get("show_tag")) or cls._string_list(raw.get("tag"))
+        return cls._join_with_limit(tags, DRAMA_GENRE_LIMIT)
+
+    @staticmethod
+    def _join_with_limit(values: list[str], limit: int) -> str | None:
+        parts: list[str] = []
+        current_length = 0
+        for value in values:
+            separator_length = 2 if parts else 0
+            next_length = current_length + separator_length + len(value)
+            if next_length <= limit:
+                parts.append(value)
+                current_length = next_length
+                continue
+            if not parts:
+                return value[:limit].rstrip(" ,") or None
+            break
+        return ", ".join(parts) or None
