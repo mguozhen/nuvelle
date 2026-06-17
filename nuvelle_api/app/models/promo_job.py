@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from sqlalchemy import Boolean, Integer, String, Text
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,11 +20,15 @@ class PromoJob(TimestampMixin, Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     batch_id: Mapped[str | None] = mapped_column(String(64), index=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("admin_users.id"), index=True)
+    drama_id: Mapped[int | None] = mapped_column(ForeignKey("dramas.id"), index=True)
+    episode_id: Mapped[int | None] = mapped_column(ForeignKey("drama_episodes.id"), index=True)
     status: Mapped[str] = mapped_column(String(32), index=True, default=PromoJobStatus.queued.value)
     title: Mapped[str] = mapped_column(String(255))
     episode: Mapped[int] = mapped_column(Integer, default=1)
     duration: Mapped[int] = mapped_column(Integer, default=30)
     source_url: Mapped[str | None] = mapped_column(Text)
+    prompt: Mapped[str | None] = mapped_column(Text)
     output_dir: Mapped[str | None] = mapped_column(Text)
     teaser_url: Mapped[str | None] = mapped_column(Text)
     cover_url: Mapped[str | None] = mapped_column(Text)
