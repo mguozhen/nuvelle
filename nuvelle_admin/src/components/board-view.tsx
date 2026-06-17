@@ -63,6 +63,11 @@ function optionLabel(value: string): string {
   return value.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
+const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
+  value: String(value),
+  label: `${value}s`
+}));
+
 export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }: BoardViewProps) {
   const [filter, setFilter] = useState<BoardFilter>("video");
   const [query, setQuery] = useState("");
@@ -128,47 +133,37 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
         <Badge className="border-[#ffc16b33] bg-[#ffc16b18] text-[#ffc16b]">
           Nuvelle Score = signal + taste + video readiness
         </Badge>
-        <label className="ml-auto flex items-center gap-2 text-xs text-[#9aa2c0]">
-          Duration
-          <select
-            className="h-9 rounded-lg border border-white/10 bg-[#0e1119] px-2 text-white"
-            value={duration}
-            onChange={(event) => setDuration(Number(event.target.value))}
-          >
-            {[8, 13, 20, 30, 45, 60].map((value) => (
-              <option key={value} value={value}>
-                {value}s
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="ml-auto flex items-center gap-2 text-xs text-[#9aa2c0]">
+          <span>Duration</span>
+          <Select
+            aria-label="Duration"
+            className="h-9 w-28 px-3"
+            options={durationOptions}
+            value={String(duration)}
+            onValueChange={(value) => setDuration(Number(value))}
+          />
+        </div>
       </div>
       <div className="mb-5 grid gap-2 md:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">
         <Input placeholder="Search title or hook" value={query} onChange={(event) => setQuery(event.target.value)} />
-        <Select value={platform} onChange={(event) => setPlatform(event.target.value)}>
-          <option value="">All platforms</option>
-          {options.platforms.map((value) => (
-            <option key={value} value={value}>
-              {optionLabel(value)}
-            </option>
-          ))}
-        </Select>
-        <Select value={language} onChange={(event) => setLanguage(event.target.value)}>
-          <option value="">All languages</option>
-          {options.languages.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </Select>
-        <Select value={tag} onChange={(event) => setTag(event.target.value)}>
-          <option value="">All tags</option>
-          {options.tags.map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </Select>
+        <Select
+          aria-label="Platform"
+          options={[{ value: "", label: "All platforms" }, ...options.platforms.map((value) => ({ value, label: optionLabel(value) }))]}
+          value={platform}
+          onValueChange={setPlatform}
+        />
+        <Select
+          aria-label="Language"
+          options={[{ value: "", label: "All languages" }, ...options.languages.map((value) => ({ value, label: value }))]}
+          value={language}
+          onValueChange={setLanguage}
+        />
+        <Select
+          aria-label="Tag"
+          options={[{ value: "", label: "All tags" }, ...options.tags.map((value) => ({ value, label: value }))]}
+          value={tag}
+          onValueChange={setTag}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {ranked.map(({ drama, score }) => {

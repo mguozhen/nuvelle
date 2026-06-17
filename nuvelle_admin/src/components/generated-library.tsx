@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import type { GeneratedJob } from "@/types/drama";
 
 type GeneratedLibraryProps = {
@@ -61,8 +62,8 @@ export function GeneratedLibrary({ assetBaseUrl, generated, onRegenerate }: Gene
                 EP{item.episode || item.episode_ref?.episode_no || 1} - {item.duration || 30}s {item.status ? `- ${item.status}` : ""}
               </p>
               {item.caption ? (
-                <textarea
-                  className="mt-3 h-20 w-full resize-none rounded-lg border border-white/10 bg-[#0c0f1a] p-2 text-xs text-[#dfe3ee]"
+                <Textarea
+                  className="mt-3 h-20 min-h-20 resize-none text-xs text-[#dfe3ee]"
                   readOnly
                   value={item.caption}
                 />

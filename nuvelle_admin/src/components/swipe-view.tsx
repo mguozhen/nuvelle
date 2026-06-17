@@ -13,6 +13,11 @@ type SwipeViewProps = {
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
+const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
+  value: String(value),
+  label: `${value}s`
+}));
+
 export function SwipeView({ current, onGenerate, onVote }: SwipeViewProps) {
   const [duration, setDuration] = useState(30);
 
@@ -75,13 +80,13 @@ export function SwipeView({ current, onGenerate, onVote }: SwipeViewProps) {
         </div>
         <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-[#0c0f1a] p-3">
           <span className="text-xs text-[#9aa2c0]">Duration</span>
-          <Select className="max-w-28" value={String(duration)} onChange={(event) => setDuration(Number(event.target.value))}>
-            {[8, 13, 20, 30, 45, 60].map((value) => (
-              <option key={value} value={value}>
-                {value}s
-              </option>
-            ))}
-          </Select>
+          <Select
+            aria-label="Duration"
+            className="w-28"
+            options={durationOptions}
+            value={String(duration)}
+            onValueChange={(value) => setDuration(Number(value))}
+          />
           <Button className="ml-auto" variant="gradient" onClick={() => onGenerate(current, duration)}>
             <WandSparkles className="h-4 w-4" />
             One-click promo
