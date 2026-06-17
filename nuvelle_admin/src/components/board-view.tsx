@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
@@ -44,22 +45,6 @@ function episodeCount(drama: DramaRecord): number {
   return drama.video_url ? 1 : 0;
 }
 
-function formatCompact(value?: number | null): string {
-  if (value === null || value === undefined) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
-}
-
 function optionLabel(value: string): string {
   return value.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
@@ -70,6 +55,7 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
 }));
 
 export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDramaDetail, onVote }: BoardViewProps) {
+  const { formatCompact, formatDate, t } = useI18n();
   const [filter, setFilter] = useState<BoardFilter>("video");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("");
@@ -123,12 +109,12 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
   return (
     <section>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-semibold">Board</h1>
+        <h1 className="text-xl font-semibold">{t("board.title")}</h1>
         <div className="flex rounded-xl border border-white/10 bg-[#0e1119] p-1">
           {[
-            ["video", "All videos"],
-            ["top", "Top picks"],
-            ["all", "All"]
+            ["video", t("board.allVideos")],
+            ["top", t("board.topPicks")],
+            ["all", t("board.all")]
           ].map(([id, label]) => (
             <button
               key={id}
@@ -144,12 +130,12 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
           ))}
         </div>
         <Badge className="border-[#ffc16b33] bg-[#ffc16b18] text-[#ffc16b]">
-          Nuvelle Score = signal + taste + video readiness
+          {t("board.scoreFormula")}
         </Badge>
         <div className="ml-auto flex items-center gap-2 text-xs text-[#9aa2c0]">
-          <span>Duration</span>
+          <span>{t("board.duration")}</span>
           <Select
-            aria-label="Duration"
+            aria-label={t("board.duration")}
             className="h-9 w-28 px-3"
             options={durationOptions}
             value={String(duration)}
@@ -158,22 +144,22 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
         </div>
       </div>
       <div className="mb-5 grid gap-2 md:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">
-        <Input placeholder="Search title or hook" value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Input placeholder={t("board.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} />
         <Select
-          aria-label="Platform"
-          options={[{ value: "", label: "All platforms" }, ...options.platforms.map((value) => ({ value, label: optionLabel(value) }))]}
+          aria-label={t("board.allPlatforms")}
+          options={[{ value: "", label: t("board.allPlatforms") }, ...options.platforms.map((value) => ({ value, label: optionLabel(value) }))]}
           value={platform}
           onValueChange={setPlatform}
         />
         <Select
-          aria-label="Language"
-          options={[{ value: "", label: "All languages" }, ...options.languages.map((value) => ({ value, label: value }))]}
+          aria-label={t("board.allLanguages")}
+          options={[{ value: "", label: t("board.allLanguages") }, ...options.languages.map((value) => ({ value, label: value }))]}
           value={language}
           onValueChange={setLanguage}
         />
         <Select
-          aria-label="Tag"
-          options={[{ value: "", label: "All tags" }, ...options.tags.map((value) => ({ value, label: value }))]}
+          aria-label={t("board.allTags")}
+          options={[{ value: "", label: t("board.allTags") }, ...options.tags.map((value) => ({ value, label: value }))]}
           value={tag}
           onValueChange={setTag}
         />
@@ -189,7 +175,7 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
                 <span className="relative block aspect-[2/3] bg-[#171b28]">
                   {drama.cover_image_url ? (
                     <img
-                      alt={drama.title || "Drama cover"}
+                      alt={drama.title || t("common.dramaCover")}
                       className="h-full w-full object-cover"
                       referrerPolicy="no-referrer"
                       src={drama.cover_image_url}
@@ -200,42 +186,42 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
                 </span>
               </button>
               <div className="p-3">
-                <h2 className="line-clamp-2 text-[13.5px] font-semibold leading-tight">{drama.title || "Untitled"}</h2>
+                <h2 className="line-clamp-2 text-[13.5px] font-semibold leading-tight">{drama.title || t("common.untitled")}</h2>
                 <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#9aa2c0]">
                   {count ? (
                     <span className="inline-flex items-center gap-1">
                       <Layers className="h-3 w-3" />
-                      {count} eps
+                      {t("board.eps", { count })}
                     </span>
                   ) : null}
                   {verdict ? (
                     <span className="inline-flex items-center gap-1 text-[#ff5fbf]">
                       <Flame className="h-3 w-3" />
-                      {verdict}
+                      {verdict === "fire" ? t("swipe.fire") : verdict === "ok" ? t("swipe.solid") : t("swipe.pass")}
                     </span>
                   ) : null}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-1 text-[10.5px] text-[#7f88a6]">
-                  <span>Revenue {formatCompact(drama.recent_revenue)}</span>
-                  <span>Promoters {formatCompact(drama.promoters_cnt)}</span>
-                  <span className="col-span-2">Published {formatDate(drama.platform_publish_at)}</span>
-                  {drama.generated_count ? <span className="col-span-2">Generated {drama.generated_count}</span> : null}
+                  <span>{t("board.revenue", { value: formatCompact(drama.recent_revenue) })}</span>
+                  <span>{t("board.promoters", { value: formatCompact(drama.promoters_cnt) })}</span>
+                  <span className="col-span-2">{t("board.published", { value: formatDate(drama.platform_publish_at) })}</span>
+                  {drama.generated_count ? <span className="col-span-2">{t("board.generated", { count: drama.generated_count })}</span> : null}
                 </div>
                 <div className="mt-3 grid gap-2">
                   <Button size="sm" variant="gradient" onClick={() => onGenerate(drama, duration)}>
                     <WandSparkles className="h-3.5 w-3.5" />
-                    Generate promo
+                    {t("board.generatePromo")}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => void openDrama(drama)}>
                     <Film className="h-3.5 w-3.5" />
-                    Details
+                    {t("board.details")}
                   </Button>
                 </div>
               </div>
             </article>
           );
         })}
-        {ranked.length ? null : <div className="col-span-full py-12 text-center text-sm text-[#9aa2c0]">No dramas match this filter.</div>}
+        {ranked.length ? null : <div className="col-span-full py-12 text-center text-sm text-[#9aa2c0]">{t("board.noMatch")}</div>}
       </div>
       <DramaModal
         drama={selectedDrama}

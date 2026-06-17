@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { VideoPreview } from "@/components/video-preview";
+import { useI18n } from "@/lib/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
 
@@ -28,23 +29,8 @@ type EpisodeOption = {
   url: string;
 };
 
-function formatCompact(value?: number | null): string {
-  if (value === null || value === undefined) {
-    return "-";
-  }
-
-  return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
-}
-
 export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpenChange, onVote }: DramaModalProps) {
+  const { formatCompact, formatDate, t } = useI18n();
   const [customUrl, setCustomUrl] = useState("");
   const [prompt, setPrompt] = useState("");
   const [selectedEpisodeNo, setSelectedEpisodeNo] = useState<number | null>(null);
@@ -102,9 +88,9 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
         {drama ? (
           <>
             <DialogHeader>
-              <DialogTitle className="pr-8 text-2xl">{drama.title || "Untitled"}</DialogTitle>
+              <DialogTitle className="pr-8 text-2xl">{drama.title || t("common.untitled")}</DialogTitle>
               <DialogDescription>
-                {[drama.platform, drama.genre, drama.episode_count ? `${drama.episode_count} episodes` : ""]
+                {[drama.platform, drama.genre, drama.episode_count ? t("swipe.episodes", { count: drama.episode_count }) : ""]
                   .filter(Boolean)
                   .join(" - ")}
               </DialogDescription>
@@ -118,47 +104,47 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
               <div>
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[linear-gradient(135deg,#b25cff,#ff5fbf)] px-3 py-1 text-sm font-bold">
-                    Nuvelle Score {nuvelleScore(drama)}
+                    {t("swipe.nuvelleScore", { score: nuvelleScore(drama) })}
                   </span>
                   <Button size="sm" variant="outline" onClick={() => onVote(drama, "fire")}>
                     <Flame className="h-3.5 w-3.5" />
-                    Mark fire
+                    {t("detail.markFire")}
                   </Button>
                 </div>
                 {drama.synopsis_or_hook ? <p className="mt-3 text-sm leading-6 text-[#9aa2c0]">{drama.synopsis_or_hook}</p> : null}
                 <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0e1119] p-3 text-xs text-[#9aa2c0] md:grid-cols-4">
                   <span>
                     <b className="block text-white">{formatCompact(drama.recent_revenue)}</b>
-                    Revenue
+                    {t("detail.revenue")}
                   </span>
                   <span>
                     <b className="block text-white">{formatCompact(drama.promoters_cnt)}</b>
-                    Promoters
+                    {t("detail.promoters")}
                   </span>
                   <span>
                     <b className="block text-white">{formatDate(drama.platform_publish_at)}</b>
-                    Published
+                    {t("detail.published")}
                   </span>
                   <span>
                     <b className="block text-white">{drama.generated_count || 0}</b>
-                    Generated
+                    {t("detail.generated")}
                   </span>
                   {drama.promotion_code ? (
                     <span className="md:col-span-2">
                       <b className="block text-white">{drama.promotion_code}</b>
-                      Promotion code
+                      {t("detail.promotionCode")}
                     </span>
                   ) : null}
                   {drama.app_promotion_link || drama.book_promotion_link ? (
                     <span className="min-w-0 md:col-span-2">
                       <b className="block truncate text-white">{drama.app_promotion_link || drama.book_promotion_link}</b>
-                      Promotion link
+                      {t("detail.appPromotionLink")}
                     </span>
                   ) : null}
                 </div>
                 {tags.length ? (
                   <div className="mt-4 rounded-xl border border-white/10 bg-[#0e1119] p-3">
-                    <h3 className="mb-2 text-xs font-bold uppercase text-[#6b7290]">Source tags</h3>
+                    <h3 className="mb-2 text-xs font-bold uppercase text-[#6b7290]">{t("detail.sourceTags")}</h3>
                     <div className="flex flex-wrap gap-2">
                       {tags.map((tag) => (
                         <span key={tag} className="rounded-full border border-[#a14bff44] bg-[#a14bff18] px-3 py-1.5 text-xs text-white">
@@ -170,21 +156,21 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                 ) : null}
                 <Input
                   className="mt-4"
-                  placeholder="Prompt for this promo"
+                  placeholder={t("detail.promptPlaceholder")}
                   value={prompt}
                   onChange={(event) => setPrompt(event.target.value)}
                 />
                 <div className="mt-4 grid gap-2">
                   <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
                     <WandSparkles className="h-4 w-4" />
-                    Generate current episode
+                    {t("detail.generateCurrent")}
                   </Button>
                   <Button variant="outline" onClick={() => onGenerateBatch(drama, duration)}>
-                    Generate all available episodes
+                    {t("detail.generateAll")}
                   </Button>
                 </div>
                 <div className="mt-5">
-                  <h3 className="mb-2 text-sm font-semibold">Episodes</h3>
+                  <h3 className="mb-2 text-sm font-semibold">{t("detail.episodes")}</h3>
                   <div className="grid gap-2">
                     {episodes.map((episode) => (
                       <div
@@ -199,25 +185,25 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                         <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
                         <span className="min-w-0 flex-1 truncate text-xs text-[#9aa2c0]">{episode.url}</span>
                         <Button
-                          aria-label={`Play EP ${episode.episode}`}
+                          aria-label={t("detail.playEpisode", { episode: episode.episode })}
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedEpisodeNo(episode.episode)}
                         >
                           <Play className="h-3.5 w-3.5" />
-                          Play
+                          {t("detail.play")}
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => onGenerate(drama, duration, prompt, episode.episode)}>
-                          Generate
+                          {t("detail.generate")}
                         </Button>
                       </div>
                     ))}
-                    {!episodes.length ? <p className="text-sm text-[#9aa2c0]">No episode URLs found.</p> : null}
+                    {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}
                   </div>
                 </div>
                 <div className="mt-4 flex gap-2">
                   <Input
-                    placeholder="Paste an episode video URL"
+                    placeholder={t("detail.urlPlaceholder")}
                     value={customUrl}
                     onChange={(event) => setCustomUrl(event.target.value)}
                   />
@@ -229,7 +215,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                       }
                     }}
                   >
-                    Generate
+                    {t("detail.generate")}
                   </Button>
                 </div>
               </div>

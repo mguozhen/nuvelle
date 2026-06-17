@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
+import { useI18n } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type VideoPreviewProps = {
@@ -14,6 +15,7 @@ type VideoPreviewProps = {
 };
 
 export function VideoPreview({ ariaLabel, autoPlay = false, className, controls = true, muted = true, poster, title, url }: VideoPreviewProps) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -48,7 +50,7 @@ export function VideoPreview({ ariaLabel, autoPlay = false, className, controls 
       {url ? (
         <video
           ref={videoRef}
-          aria-label={ariaLabel || (title ? `${title} video` : "Drama video")}
+          aria-label={ariaLabel || (title ? `${title} video` : t("common.dramaVideo"))}
           className="h-full w-full object-cover"
           autoPlay={autoPlay}
           controls={controls}
@@ -58,9 +60,9 @@ export function VideoPreview({ ariaLabel, autoPlay = false, className, controls 
           poster={poster || undefined}
         />
       ) : poster ? (
-        <img alt={title || "Drama cover"} className="h-full w-full object-cover" referrerPolicy="no-referrer" src={poster} />
+        <img alt={title || t("common.dramaCover")} className="h-full w-full object-cover" referrerPolicy="no-referrer" src={poster} />
       ) : (
-        <div className="flex h-full items-center justify-center text-sm text-[#9aa2c0]">No preview</div>
+        <div className="flex h-full items-center justify-center text-sm text-[#9aa2c0]">{t("common.noPreview")}</div>
       )}
     </div>
   );

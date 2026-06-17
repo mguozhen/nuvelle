@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 import { Gauge, Library, LogOut, PanelTop, Settings, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { LanguageSwitcher } from "@/components/language-switcher";
+import { useI18n, type TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 export type AdminTab = "swipe" | "board" | "generated";
@@ -20,9 +22,9 @@ type AdminShellProps = {
 };
 
 const tabs = [
-  { id: "swipe" as const, label: "Swipe", icon: Sparkles },
-  { id: "board" as const, label: "Board", icon: PanelTop },
-  { id: "generated" as const, label: "Generated", icon: Library }
+  { id: "swipe" as const, labelKey: "shell.swipe" as TranslationKey, icon: Sparkles },
+  { id: "board" as const, labelKey: "shell.board" as TranslationKey, icon: PanelTop },
+  { id: "generated" as const, labelKey: "shell.generated" as TranslationKey, icon: Library }
 ];
 
 export function AdminShell({
@@ -37,6 +39,8 @@ export function AdminShell({
   onSignOut,
   onTabChange
 }: AdminShellProps) {
+  const { t } = useI18n();
+
   return (
     <main className="min-h-screen bg-[#06070d] text-white">
       <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0b0d16]/86 backdrop-blur-xl">
@@ -51,23 +55,24 @@ export function AdminShell({
           <div className="flex-1" />
           <div className="hidden gap-4 text-xs text-[#9aa2c0] md:flex">
             <span>
-              <b className="text-white">{libraryCount}</b> in library
+              <b className="text-white">{libraryCount}</b> {t("shell.inLibrary")}
             </span>
             <span>
-              <b className="text-white">{ratedCount}</b> rated
+              <b className="text-white">{ratedCount}</b> {t("shell.rated")}
             </span>
             <span>
-              <b className="text-white">{picksCount}</b> picks
+              <b className="text-white">{picksCount}</b> {t("shell.picks")}
             </span>
             <span>
-              <b className="text-white">{generatedCount}</b> generated
+              <b className="text-white">{generatedCount}</b> {t("shell.generatedCount")}
             </span>
           </div>
-          <Button aria-label="Backend settings" size="sm" variant="outline" onClick={onBackendSettings}>
+          <LanguageSwitcher />
+          <Button aria-label={t("shell.backendSettings")} size="sm" variant="outline" onClick={onBackendSettings}>
             <Settings className="h-4 w-4" />
-            Backend
+            {t("shell.backend")}
           </Button>
-          <Button aria-label="Sign out" size="icon" variant="ghost" onClick={onSignOut}>
+          <Button aria-label={t("shell.signOut")} size="icon" variant="ghost" onClick={onSignOut}>
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
@@ -89,14 +94,14 @@ export function AdminShell({
                 onClick={() => onTabChange(tab.id)}
               >
                 <Icon className="h-4 w-4" />
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             );
           })}
           {loading ? (
             <span className="ml-auto hidden items-center gap-2 text-xs text-[#9aa2c0] sm:flex">
               <Gauge className="h-4 w-4 animate-pulse text-[#ff5fbf]" />
-              Loading library
+              {t("shell.loadingLibrary")}
             </span>
           ) : null}
         </div>

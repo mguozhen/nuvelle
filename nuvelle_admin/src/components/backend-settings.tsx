@@ -9,6 +9,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n";
 
 type BackendSettingsProps = {
   backendUrl: string;
@@ -18,6 +19,7 @@ type BackendSettingsProps = {
 };
 
 export function BackendSettings({ backendUrl, open, onOpenChange, onSave }: BackendSettingsProps) {
+  const { t } = useI18n();
   const [value, setValue] = useState(backendUrl);
 
   useEffect(() => {
@@ -28,13 +30,13 @@ export function BackendSettings({ backendUrl, open, onOpenChange, onSave }: Back
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Backend URL</DialogTitle>
-          <DialogDescription>Admin API and promo generator endpoint.</DialogDescription>
+          <DialogTitle>{t("backend.title")}</DialogTitle>
+          <DialogDescription>{t("backend.description")}</DialogDescription>
         </DialogHeader>
         <Input value={value} onChange={(event) => setValue(event.target.value)} />
         <DialogFooter>
           <Button variant="gradient" onClick={() => onSave(value)}>
-            Save
+            {t("backend.save")}
           </Button>
         </DialogFooter>
       </DialogContent>

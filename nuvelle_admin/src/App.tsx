@@ -7,6 +7,7 @@ import { LoginGate } from "@/components/login-gate";
 import { SwipeView } from "@/components/swipe-view";
 import { clearAuthState, loadAuthState, saveAuthState, type AuthState } from "@/lib/auth";
 import { DEFAULT_BACKEND_URL, PromoBackendClient } from "@/lib/backend";
+import { I18nProvider, useI18n } from "@/lib/i18n";
 import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
 import { nuvelleScore } from "@/lib/scoring";
 import type {
@@ -103,6 +104,15 @@ function authFromResponse(response: AuthResponse): AuthState {
 }
 
 export default function App() {
+  return (
+    <I18nProvider>
+      <AdminApp />
+    </I18nProvider>
+  );
+}
+
+function AdminApp() {
+  const { t } = useI18n();
   const [auth, setAuth] = useState<AuthState>(() => loadAuthState());
   const [backendUrl, setBackendUrl] = useState(() => loadBackendUrl());
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
@@ -141,11 +151,11 @@ export default function App() {
       const response = await client.listAdminDramas();
       setDramas(sortDramas(response.items.map(normalizeDrama)));
     } catch {
-      showStatus("Material library failed to load");
+      showStatus(t("app.libraryLoadFailed"));
     } finally {
       setLoading(false);
     }
-  }, [client, showStatus]);
+  }, [client, showStatus, t]);
 
   const loadGenerated = useCallback(async () => {
     try {
@@ -218,9 +228,9 @@ export default function App() {
       saveBackendUrl(normalized);
       setBackendUrl(loadBackendUrl());
       setBackendSettingsOpen(false);
-      showStatus("Backend URL saved");
+      showStatus(t("app.backendSaved"));
     },
-    [showStatus]
+    [showStatus, t]
   );
 
   const vote = useCallback(
@@ -244,10 +254,10 @@ export default function App() {
         })
         .catch((error: unknown) => {
           console.error("Drama event sync failed", error);
-          showStatus("Drama event sync failed");
+          showStatus(t("app.dramaEventFailed"));
         });
     },
-    [activeTab, client, loadSwipeNext, showStatus]
+    [activeTab, client, loadSwipeNext, showStatus, t]
   );
 
   const markSeen = useCallback(
@@ -269,10 +279,10 @@ export default function App() {
         })
         .catch((error: unknown) => {
           console.error("Drama seen event sync failed", error);
-          showStatus("Drama event sync failed");
+          showStatus(t("app.dramaEventFailed"));
         });
     },
-    [activeTab, client, loadSwipeNext, showStatus]
+    [activeTab, client, loadSwipeNext, showStatus, t]
   );
 
   const resolveDramaForGeneration = useCallback(
@@ -308,14 +318,14 @@ export default function App() {
         const selectedEpisode = firstPlayableEpisode(detail, episode, videoUrl);
 
         if (!selectedEpisode?.play_url) {
-          showStatus("This drama has no video to generate from");
+          showStatus(t("app.noVideoToGenerate"));
           return;
         }
 
         const episodeNo = selectedEpisode.episode_no || episode || 1;
         const result = await generatePromo({
           url: selectedEpisode.play_url,
-          title: detail.title || "Promo",
+          title: detail.title || t("common.promo"),
           ep: episodeNo,
           dur: duration,
           beats: [],
@@ -331,25 +341,25 @@ export default function App() {
             id: jobId || `${detail.id}-${Date.now()}`,
             job_id: jobId || `${detail.id}-${Date.now()}`,
             status: result.status || "queued",
-            title: result.title || detail.title || "Promo",
+            title: result.title || detail.title || t("common.promo"),
             episode: episodeNo,
             duration,
             source_url: selectedEpisode.play_url,
             prompt,
             caption: result.caption || null,
             files: result.files || null,
-            drama: { id: Number(detail.id), title: detail.title || "Untitled" },
+            drama: { id: Number(detail.id), title: detail.title || t("common.untitled") },
             episode_ref: selectedEpisode.id ? { id: selectedEpisode.id, episode_no: episodeNo } : null
           },
           ...current
         ]);
         void loadGenerated();
-        showStatus(jobId ? "Promo job submitted" : "Promo request submitted");
+        showStatus(jobId ? t("app.promoJobSubmitted") : t("app.promoRequestSubmitted"));
       } catch {
-        showStatus("Can't reach the cloud generator. Check backend URL.");
+        showStatus(t("app.cantReachGenerator"));
       }
     },
-    [generatePromo, loadGenerated, resolveDramaForGeneration, showStatus]
+    [generatePromo, loadGenerated, resolveDramaForGeneration, showStatus, t]
   );
 
   const generateBatch = useCallback(
@@ -360,7 +370,7 @@ export default function App() {
           .filter((episode) => Boolean(episode.play_url))
           .map((episode) => ({
             url: episode.play_url || "",
-            title: detail.title || "Promo",
+            title: detail.title || t("common.promo"),
             ep: episode.episode_no,
             dur: duration,
             cover_image: detail.cover_image_url || episode.poster_url || undefined,
@@ -369,17 +379,17 @@ export default function App() {
           }));
 
         if (!items.length) {
-          showStatus("No available episodes for batch generation");
+          showStatus(t("app.noBatchEpisodes"));
           return;
         }
 
         const result = await client.generateBatch<{ batch_id?: string; id?: string }>({ items });
-        showStatus(result.batch_id || result.id ? "Batch submitted" : "Batch request submitted");
+        showStatus(result.batch_id || result.id ? t("app.batchSubmitted") : t("app.batchRequestSubmitted"));
       } catch {
-        showStatus("Can't reach the cloud generator. Check backend URL.");
+        showStatus(t("app.cantReachGenerator"));
       }
     },
-    [client, resolveDramaForGeneration, showStatus]
+    [client, resolveDramaForGeneration, showStatus, t]
   );
 
   const activeSwipeDrama =
@@ -427,13 +437,13 @@ export default function App() {
           generated={generated}
           onRegenerate={(item, prompt) => {
             if (!item.source_url) {
-              showStatus("Missing source video");
+              showStatus(t("app.missingSourceVideo"));
               return;
             }
 
             void generatePromo({
               url: item.source_url,
-              title: item.title || "Promo",
+              title: item.title || t("common.promo"),
               ep: item.episode || 1,
               dur: item.duration || 30,
               prompt,
@@ -443,9 +453,9 @@ export default function App() {
             })
               .then(() => {
                 void loadGenerated();
-                showStatus("Promo job submitted");
+                showStatus(t("app.promoJobSubmitted"));
               })
-              .catch(() => showStatus("Can't reach the cloud generator. Check backend URL."));
+              .catch(() => showStatus(t("app.cantReachGenerator")));
           }}
         />
       ) : null}

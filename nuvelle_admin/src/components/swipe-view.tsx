@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { VideoPreview } from "@/components/video-preview";
+import { useI18n } from "@/lib/i18n";
 import { nuvelleScore, tasteScore } from "@/lib/scoring";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
 
@@ -20,14 +21,15 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
 }));
 
 export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProps) {
+  const { t } = useI18n();
   const [duration, setDuration] = useState(30);
   const touchStartY = useRef<number | null>(null);
 
   if (!current) {
     return (
       <div className="rounded-2xl border border-white/10 bg-[#0d0f17] p-10 text-center text-[#9aa2c0]">
-        <b className="block text-lg text-white">All caught up</b>
-        Every drama in the current queue is rated.
+        <b className="block text-lg text-white">{t("swipe.allCaughtUp")}</b>
+        {t("swipe.currentQueueRated")}
       </div>
     );
   }
@@ -73,12 +75,12 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent p-5 pt-24">
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{current.platform || "Unknown"}</Badge>
-            <Badge className="border-[#ff5fbf55] bg-black/35 text-[#ff5fbf]">Nuvelle Score {score}</Badge>
+            <Badge>{current.platform || t("common.unknown")}</Badge>
+            <Badge className="border-[#ff5fbf55] bg-black/35 text-[#ff5fbf]">{t("swipe.nuvelleScore", { score })}</Badge>
           </div>
-          <h1 className="mt-3 text-2xl font-semibold leading-tight drop-shadow">{current.title || "Untitled"}</h1>
+          <h1 className="mt-3 text-2xl font-semibold leading-tight drop-shadow">{current.title || t("common.untitled")}</h1>
           <p className="mt-2 text-sm text-white/72">
-            {[current.genre, current.episode_count ? `${current.episode_count} episodes` : ""].filter(Boolean).join(" - ")}
+            {[current.genre, current.episode_count ? t("swipe.episodes", { count: current.episode_count }) : ""].filter(Boolean).join(" - ")}
           </p>
           {current.synopsis_or_hook ? (
             <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/72">{current.synopsis_or_hook}</p>
@@ -92,11 +94,11 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
           </div>
         </div>
         <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3">
-          <Button aria-label="Next video" className="h-11 w-11 rounded-full bg-black/45" size="icon" variant="ghost" onClick={markSeen}>
+          <Button aria-label={t("swipe.nextVideo")} className="h-11 w-11 rounded-full bg-black/45" size="icon" variant="ghost" onClick={markSeen}>
             <ChevronUp className="h-5 w-5" />
           </Button>
           <Button
-            aria-label="Pass"
+            aria-label={t("swipe.pass")}
             className="h-11 w-11 rounded-full bg-black/45 text-[#ff7a7a]"
             size="icon"
             variant="ghost"
@@ -105,7 +107,7 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
             <ThumbsDown className="h-5 w-5" />
           </Button>
           <Button
-            aria-label="Solid"
+            aria-label={t("swipe.solid")}
             className="h-11 w-11 rounded-full bg-black/45 text-[#5fd39a]"
             size="icon"
             variant="ghost"
@@ -114,7 +116,7 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
             <ThumbsUp className="h-5 w-5" />
           </Button>
           <Button
-            aria-label="Fire"
+            aria-label={t("swipe.fire")}
             className="h-11 w-11 rounded-full bg-black/45 text-[#ff8f4d]"
             size="icon"
             variant="ghost"
@@ -124,9 +126,9 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
           </Button>
         </div>
         <div className="absolute left-4 right-4 top-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/45 p-3 backdrop-blur">
-          <span className="text-xs text-white/70">Duration</span>
+          <span className="text-xs text-white/70">{t("swipe.duration")}</span>
           <Select
-            aria-label="Duration"
+            aria-label={t("swipe.duration")}
             className="h-9 w-28 bg-black/45"
             options={durationOptions}
             value={String(duration)}
@@ -134,7 +136,7 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
           />
           <Button className="ml-auto" size="sm" variant="gradient" onClick={() => onGenerate(current, duration)}>
             <WandSparkles className="h-4 w-4" />
-            Promo
+            {t("common.promo")}
           </Button>
         </div>
       </article>

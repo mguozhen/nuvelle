@@ -128,6 +128,30 @@ describe("admin app", () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("seed_dramas"))).toBe(false);
   });
 
+  it("switches the admin interface to Simplified Chinese", async () => {
+    const user = userEvent.setup();
+    installFetchMock();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "简体中文" }));
+    expect(screen.getByText("AI 短剧遴选后台 - 内部")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "创建账号" }));
+    await user.type(screen.getByPlaceholderText("邀请码"), "JOIN");
+    await user.type(screen.getByPlaceholderText("邮箱"), "promoter@example.com");
+    await user.type(screen.getByPlaceholderText("密码"), "secret123");
+    await user.click(screen.getByRole("button", { name: "注册" }));
+
+    await waitFor(() => expect(screen.getByText("Demo Drama")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /素材库/ })).toBeInTheDocument();
+    expect(screen.getByText("全部视频")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("搜索标题或钩子")).toBeInTheDocument();
+    expect(screen.getByLabelText("时长")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /生成资源/ }));
+    expect(await screen.findByText("生成资源库")).toBeInTheDocument();
+  });
+
   it("records swipe verdict through the admin event API", async () => {
     const fetchMock = installFetchMock();
     const user = userEvent.setup();
