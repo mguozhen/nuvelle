@@ -98,15 +98,17 @@ class FakeHttpClient:
 
     def post(self, path: str, *, json: dict, headers: dict | None = None) -> FakeHttpResponse:
         self.calls.append((path, json, headers))
-        return FakeHttpResponse({"code": 0, "data": {"id": json["book_id"]}})
+        if "book_id" in json:
+            return FakeHttpResponse({"code": 0, "data": {"id": json["book_id"]}})
+        return FakeHttpResponse({"code": 0, "data": {"books": []}})
 
 
 class FakeGetHttpClient:
     def __init__(self):
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, dict, dict | None]] = []
 
-    def get(self, path: str, *, params: dict | None = None) -> FakeHttpResponse:
-        self.calls.append((path, params or {}))
+    def get(self, path: str, *, params: dict | None = None, headers: dict | None = None) -> FakeHttpResponse:
+        self.calls.append((path, params or {}, headers))
         if params and "base_id" in params:
             return FakeHttpResponse(
                 {
@@ -277,13 +279,27 @@ def test_reelshort_client_uses_frontend_detail_payload_shape() -> None:
 
     client.book_detail(external_id="book-1", book_type="0")
 
-    assert fake_http.calls == [
-        (
-            "/api/v1/book/book-detail",
-            {"app": "reelshort", "book_id": "book-1", "book_type": 0},
-            {"Authorization": "Bearer token"},
-        )
-    ]
+    path, payload, headers = fake_http.calls[0]
+    assert path == "/api/v1/book/book-detail"
+    assert payload == {"app": "reelshort", "book_id": "book-1", "book_type": 0}
+    assert headers is not None
+    assert headers["Authorization"] == "Bearer token"
+
+
+def test_reelshort_client_sends_browser_like_headers() -> None:
+    fake_http = FakeHttpClient()
+    client = ReelShortCpsClient(token="token")
+    client.client = fake_http
+
+    client.list_books(page=1, language="en", sort="time")
+
+    _, _, headers = fake_http.calls[0]
+    assert headers is not None
+    assert headers["User-Agent"].startswith("Mozilla/5.0")
+    assert headers["Origin"] == "https://cps.reelshort.com"
+    assert headers["Referer"] == "https://cps.reelshort.com/"
+    assert headers["Sec-Fetch-Site"] == "same-origin"
+    assert headers["Sec-Fetch-Mode"] == "cors"
 
 
 def test_reelshort_source_config_uses_frontend_language_codes() -> None:
@@ -304,10 +320,26 @@ def test_dramacps_client_uses_open_material_api() -> None:
 
     assert rows["items"][0]["base_id"] == "166653"
     assert detail["section"][0]["origin_video"] == "https://example.com/1.m3u8"
-    assert fake_http.calls == [
+    assert [(path, params) for path, params, _ in fake_http.calls] == [
         ("/api/open/dramas", {"page": 2, "limit": 12, "lang": "tc"}),
         ("/api/open/dramas", {"base_id": "166653"}),
     ]
+
+
+def test_dramacps_client_sends_browser_like_headers() -> None:
+    fake_http = FakeGetHttpClient()
+    client = DramaCpsMaterialsClient(base_url="https://files.example.com")
+    client.client = fake_http
+
+    client.list_materials(page=1, language=None)
+
+    _, _, headers = fake_http.calls[0]
+    assert headers is not None
+    assert headers["User-Agent"].startswith("Mozilla/5.0")
+    assert headers["Origin"] == "https://dramacps.com"
+    assert headers["Referer"] == "https://dramacps.com/dashboard"
+    assert headers["Sec-Fetch-Site"] == "cross-site"
+    assert headers["Sec-Fetch-Mode"] == "cors"
 
 
 def test_dramacps_source_config_defaults_to_all_languages_once() -> None:

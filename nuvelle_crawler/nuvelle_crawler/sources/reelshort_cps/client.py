@@ -1,5 +1,23 @@
 import httpx
 
+BROWSER_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/126.0.0.0 Safari/537.36"
+)
+
+REELSHORT_BROWSER_HEADERS = {
+    "User-Agent": BROWSER_USER_AGENT,
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Content-Type": "application/json",
+    "Origin": "https://cps.reelshort.com",
+    "Referer": "https://cps.reelshort.com/",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
+}
+
 
 class ReelShortCpsClient:
     def __init__(self, *, token: str, base_url: str = "https://cps.reelshort.com") -> None:
@@ -9,13 +27,14 @@ class ReelShortCpsClient:
             base_url=self.base_url,
             timeout=httpx.Timeout(15.0, connect=5.0),
             limits=httpx.Limits(max_connections=4, max_keepalive_connections=2),
-            headers={"Content-Type": "application/json", "Accept-Language": "en"},
+            headers=REELSHORT_BROWSER_HEADERS,
         )
 
     def post(self, path: str, payload: dict) -> dict:
         if not self.token:
             raise RuntimeError("REELSHORT_CPS_TOKEN is required for live ReelShort CPS requests")
-        response = self.client.post(path, json=payload, headers={"Authorization": f"Bearer {self.token}"})
+        headers = {**REELSHORT_BROWSER_HEADERS, "Authorization": f"Bearer {self.token}"}
+        response = self.client.post(path, json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
         if not isinstance(data, dict):
