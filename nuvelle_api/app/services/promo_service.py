@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.promo_job import PromoJob, PromoJobStatus
+from app.models.user_drama_event import UserDramaEvent
 from app.repositories.promo_job_repository import PromoJobRepository
 from app.schemas.promo import (
     PromoBatchCreate,
@@ -34,7 +35,12 @@ class PromoService:
         self.repository = PromoJobRepository(db)
         self.settings = get_settings()
 
-    def create_job(self, payload: PromoJobCreate, batch_id: str | None = None) -> PromoJobResponse:
+    def create_job(
+        self,
+        payload: PromoJobCreate,
+        batch_id: str | None = None,
+        user_id: int | None = None,
+    ) -> PromoJobResponse:
         video_source = payload.video_url or payload.url
         if not video_source:
             raise HTTPException(status_code=400, detail="video_url is required")
@@ -43,15 +49,21 @@ class PromoService:
             PromoJob(
                 id=self._new_job_id(),
                 batch_id=batch_id,
+                user_id=user_id,
+                drama_id=payload.drama_id,
+                episode_id=payload.episode_id,
                 status=PromoJobStatus.queued.value,
                 title=payload.title,
                 episode=payload.ep,
                 duration=payload.dur,
                 source_url=video_source,
+                prompt=payload.prompt or None,
                 cover_url=payload.cover_url or payload.cover_image or None,
                 log="queued",
             )
         )
+        if user_id is not None and payload.drama_id is not None:
+            self._record_generate_event(user_id, payload)
         queued_response = self.to_response(job)
         return queued_response
 
@@ -252,3 +264,16 @@ class PromoService:
         except json.JSONDecodeError:
             return {}
         return cast(dict[str, object], data) if isinstance(data, dict) else {}
+
+    def _record_generate_event(self, user_id: int, payload: PromoJobCreate) -> None:
+        if payload.drama_id is None:
+            return
+        event = UserDramaEvent(
+            user_id=user_id,
+            drama_id=payload.drama_id,
+            episode_id=payload.episode_id,
+            event_type="generate",
+            event_metadata={"prompt": payload.prompt, "duration": payload.dur},
+        )
+        self.repository.db.add(event)
+        self.repository.db.commit()

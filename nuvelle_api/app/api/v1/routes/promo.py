@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Query
 from fastapi.responses import FileResponse, Response
 
-from app.api.deps import DbSession
+from app.api.deps import DbSession, OptionalCurrentUser
 from app.schemas.promo import (
     PromoBatchCreate,
     PromoBatchCreateResponse,
@@ -15,9 +15,14 @@ router = APIRouter()
 
 
 @router.post("/promo/jobs", response_model=PromoJobResponse)
-def create_job(payload: PromoJobCreate, background_tasks: BackgroundTasks, db: DbSession) -> PromoJobResponse:
+def create_job(
+    payload: PromoJobCreate,
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+    user: OptionalCurrentUser,
+) -> PromoJobResponse:
     service = PromoService(db)
-    response = service.create_job(payload)
+    response = service.create_job(payload, user_id=user.id if user else None)
     background_tasks.add_task(service.run_job, response.job_id, payload)
     return response
 
@@ -77,9 +82,10 @@ def create_job_alias(
     payload: PromoJobCreate,
     background_tasks: BackgroundTasks,
     db: DbSession,
+    user: OptionalCurrentUser,
 ) -> PromoJobResponse:
     service = PromoService(db)
-    response = service.create_job(payload)
+    response = service.create_job(payload, user_id=user.id if user else None)
     background_tasks.add_task(service.run_job, response.job_id, payload)
     return response
 

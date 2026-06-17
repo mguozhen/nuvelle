@@ -12,6 +12,8 @@ class PromoJobCreate(BaseModel):
     cover_url: str = ""
     cover_image: str = ""
     no_ai: bool = False
+    drama_id: int | None = None
+    episode_id: int | None = None
 
 
 class PromoJobFiles(BaseModel):
