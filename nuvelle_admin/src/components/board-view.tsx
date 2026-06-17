@@ -16,6 +16,7 @@ type BoardViewProps = {
   votes: Record<string, VoteVerdict>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  onLoadDramaDetail?: (drama: DramaRecord) => Promise<DramaRecord>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
@@ -68,7 +69,7 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
   label: `${value}s`
 }));
 
-export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }: BoardViewProps) {
+export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDramaDetail, onVote }: BoardViewProps) {
   const [filter, setFilter] = useState<BoardFilter>("video");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("");
@@ -76,6 +77,18 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
   const [tag, setTag] = useState("");
   const [selectedDrama, setSelectedDrama] = useState<DramaRecord | null>(null);
   const [duration, setDuration] = useState(30);
+  const openDrama = async (drama: DramaRecord) => {
+    setSelectedDrama(drama);
+    if (!onLoadDramaDetail) {
+      return;
+    }
+
+    try {
+      setSelectedDrama(await onLoadDramaDetail(drama));
+    } catch {
+      setSelectedDrama(drama);
+    }
+  };
   const options = useMemo(
     () => ({
       platforms: values(dramas.map((drama) => drama.platform)),
@@ -172,7 +185,7 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
 
           return (
             <article key={drama.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
-              <button className="relative block w-full text-left" type="button" onClick={() => setSelectedDrama(drama)}>
+              <button className="relative block w-full text-left" type="button" onClick={() => void openDrama(drama)}>
                 <span className="relative block aspect-[2/3] bg-[#171b28]">
                   {drama.cover_image_url ? (
                     <img
@@ -213,7 +226,7 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onVote }
                     <WandSparkles className="h-3.5 w-3.5" />
                     Generate promo
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setSelectedDrama(drama)}>
+                  <Button size="sm" variant="outline" onClick={() => void openDrama(drama)}>
                     <Film className="h-3.5 w-3.5" />
                     Details
                   </Button>

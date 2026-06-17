@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Flame, WandSparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Flame, Play, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +22,12 @@ type DramaModalProps = {
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
+type EpisodeOption = {
+  episode: number;
+  posterUrl: string;
+  url: string;
+};
+
 function formatCompact(value?: number | null): string {
   if (value === null || value === undefined) {
     return "-";
@@ -41,7 +47,8 @@ function formatDate(value?: string | null): string {
 export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpenChange, onVote }: DramaModalProps) {
   const [customUrl, setCustomUrl] = useState("");
   const [prompt, setPrompt] = useState("");
-  const episodes = useMemo(() => {
+  const [selectedEpisodeNo, setSelectedEpisodeNo] = useState<number | null>(null);
+  const episodes = useMemo<EpisodeOption[]>(() => {
     if (!drama) {
       return [];
     }
@@ -69,11 +76,25 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
     const combined = fromEpisodeList.length ? fromEpisodeList : fromEpisodes;
 
     if (!combined.length && drama.video_url) {
-      return [{ episode: 1, url: drama.video_url }];
+      return [{ episode: 1, posterUrl: "", url: drama.video_url }];
     }
 
     return combined.sort((a, b) => a.episode - b.episode);
   }, [drama]);
+  const selectedEpisode = episodes.find((episode) => episode.episode === selectedEpisodeNo) || episodes[0];
+  const tags = useMemo(() => {
+    if (!drama) {
+      return [];
+    }
+
+    return Array.from(new Set([...(drama.tags || []), ...(drama.show_tags || [])].filter(Boolean)));
+  }, [drama]);
+
+  useEffect(() => {
+    setSelectedEpisodeNo(null);
+    setPrompt("");
+    setCustomUrl("");
+  }, [drama?.id]);
 
   return (
     <Dialog open={Boolean(drama)} onOpenChange={onOpenChange}>
@@ -89,7 +110,11 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
-              <VideoPreview poster={drama.cover_image_url} title={drama.title} url={drama.video_url || episodes[0]?.url} />
+              <VideoPreview
+                poster={selectedEpisode?.posterUrl || drama.cover_image_url}
+                title={drama.title}
+                url={selectedEpisode?.url || drama.video_url}
+              />
               <div>
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[linear-gradient(135deg,#b25cff,#ff5fbf)] px-3 py-1 text-sm font-bold">
@@ -131,6 +156,18 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                     </span>
                   ) : null}
                 </div>
+                {tags.length ? (
+                  <div className="mt-4 rounded-xl border border-white/10 bg-[#0e1119] p-3">
+                    <h3 className="mb-2 text-xs font-bold uppercase text-[#6b7290]">Source tags</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag) => (
+                        <span key={tag} className="rounded-full border border-[#a14bff44] bg-[#a14bff18] px-3 py-1.5 text-xs text-white">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <Input
                   className="mt-4"
                   placeholder="Prompt for this promo"
@@ -138,7 +175,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                   onChange={(event) => setPrompt(event.target.value)}
                 />
                 <div className="mt-4 grid gap-2">
-                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, episodes[0]?.episode)}>
+                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
                     <WandSparkles className="h-4 w-4" />
                     Generate current episode
                   </Button>
@@ -150,9 +187,26 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                   <h3 className="mb-2 text-sm font-semibold">Episodes</h3>
                   <div className="grid gap-2">
                     {episodes.map((episode) => (
-                      <div key={episode.episode} className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0e1119] p-3">
+                      <div
+                        key={episode.episode}
+                        className={[
+                          "flex items-center gap-3 rounded-xl border p-3 transition-colors",
+                          selectedEpisode?.episode === episode.episode
+                            ? "border-[#ff5fbf66] bg-[#ff5fbf12]"
+                            : "border-white/10 bg-[#0e1119]"
+                        ].join(" ")}
+                      >
                         <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
                         <span className="min-w-0 flex-1 truncate text-xs text-[#9aa2c0]">{episode.url}</span>
+                        <Button
+                          aria-label={`Play EP ${episode.episode}`}
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedEpisodeNo(episode.episode)}
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                          Play
+                        </Button>
                         <Button size="sm" variant="outline" onClick={() => onGenerate(drama, duration, prompt, episode.episode)}>
                           Generate
                         </Button>

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Flame, ThumbsDown, ThumbsUp, WandSparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronUp, Flame, ThumbsDown, ThumbsUp, WandSparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -10,6 +10,7 @@ import type { DramaRecord, VoteVerdict } from "@/types/drama";
 type SwipeViewProps = {
   current: DramaRecord | null;
   onGenerate: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  onSeen: (drama: DramaRecord) => void | Promise<void>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
@@ -18,8 +19,9 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
   label: `${value}s`
 }));
 
-export function SwipeView({ current, onGenerate, onVote }: SwipeViewProps) {
+export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProps) {
   const [duration, setDuration] = useState(30);
+  const touchStartY = useRef<number | null>(null);
 
   if (!current) {
     return (
@@ -32,67 +34,110 @@ export function SwipeView({ current, onGenerate, onVote }: SwipeViewProps) {
 
   const score = nuvelleScore(current);
   const taste = tasteScore(current);
+  const markSeen = () => {
+    void onSeen(current);
+  };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-      <div className="lg:sticky lg:top-[130px]">
-        <VideoPreview poster={current.cover_image_url} title={current.title} url={current.video_url} />
-      </div>
-      <section className="rounded-2xl border border-white/10 bg-[#0d0f17] p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge>{current.platform || "Unknown"}</Badge>
-          <Badge className="border-[#ff5fbf55] text-[#ff5fbf]">Nuvelle Score {score}</Badge>
-        </div>
-        <h1 className="mt-3 text-2xl font-semibold leading-tight">{current.title || "Untitled"}</h1>
-        <p className="mt-2 text-sm text-[#9aa2c0]">
-          {[current.genre, current.episode_count ? `${current.episode_count} episodes` : ""].filter(Boolean).join(" - ")}
-        </p>
-        {current.synopsis_or_hook ? (
-          <p className="mt-3 line-clamp-5 text-sm leading-6 text-[#9aa2c0]">{current.synopsis_or_hook}</p>
-        ) : null}
-        <div className="mt-5">
-          <div className="mb-2 text-xs font-bold uppercase text-[#6b7290]">Taste tags</div>
-          <div className="flex flex-wrap gap-2">
-            {taste.tags.length ? (
-              taste.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-[#a14bff66] bg-[#a14bff22] px-3 py-1.5 text-xs text-white">
-                  {tag}
-                </span>
-              ))
-            ) : (
-              <span className="text-sm text-[#6b7290]">No tags detected</span>
-            )}
+    <section
+      className="mx-auto flex h-[calc(100vh-132px)] min-h-[620px] max-w-[460px] snap-y snap-mandatory overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-2xl shadow-black/40"
+      data-testid="swipe-feed"
+      onTouchEnd={(event) => {
+        if (touchStartY.current === null) {
+          return;
+        }
+
+        const delta = touchStartY.current - event.changedTouches[0].clientY;
+        touchStartY.current = null;
+        if (delta > 80) {
+          markSeen();
+        }
+      }}
+      onTouchStart={(event) => {
+        touchStartY.current = event.touches[0].clientY;
+      }}
+      onWheel={(event) => {
+        if (event.deltaY > 120) {
+          markSeen();
+        }
+      }}
+    >
+      <article className="relative h-full w-full snap-start">
+        <VideoPreview
+          autoPlay
+          className="h-full rounded-none border-0"
+          controls={false}
+          poster={current.cover_image_url}
+          title={current.title}
+          url={current.video_url}
+        />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent p-5 pt-24">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge>{current.platform || "Unknown"}</Badge>
+            <Badge className="border-[#ff5fbf55] bg-black/35 text-[#ff5fbf]">Nuvelle Score {score}</Badge>
+          </div>
+          <h1 className="mt-3 text-2xl font-semibold leading-tight drop-shadow">{current.title || "Untitled"}</h1>
+          <p className="mt-2 text-sm text-white/72">
+            {[current.genre, current.episode_count ? `${current.episode_count} episodes` : ""].filter(Boolean).join(" - ")}
+          </p>
+          {current.synopsis_or_hook ? (
+            <p className="mt-3 line-clamp-3 text-sm leading-6 text-white/72">{current.synopsis_or_hook}</p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {taste.tags.map((tag) => (
+              <span key={tag} className="rounded-full border border-white/16 bg-white/10 px-3 py-1.5 text-xs text-white">
+                {tag}
+              </span>
+            ))}
           </div>
         </div>
-        <div className="mt-5 grid grid-cols-3 gap-2">
-          <Button className="h-12 rounded-[13px] text-[#ff7a7a]" variant="outline" onClick={() => onVote(current, "pass")}>
-            <ThumbsDown className="h-4 w-4" />
-            Pass
+        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3">
+          <Button aria-label="Next video" className="h-11 w-11 rounded-full bg-black/45" size="icon" variant="ghost" onClick={markSeen}>
+            <ChevronUp className="h-5 w-5" />
           </Button>
-          <Button className="h-12 rounded-[13px] text-[#5fd39a]" variant="outline" onClick={() => onVote(current, "ok")}>
-            <ThumbsUp className="h-4 w-4" />
-            Solid
+          <Button
+            aria-label="Pass"
+            className="h-11 w-11 rounded-full bg-black/45 text-[#ff7a7a]"
+            size="icon"
+            variant="ghost"
+            onClick={() => onVote(current, "pass")}
+          >
+            <ThumbsDown className="h-5 w-5" />
           </Button>
-          <Button className="h-12 rounded-[13px] text-[#ff8f4d]" variant="outline" onClick={() => onVote(current, "fire")}>
-            <Flame className="h-4 w-4" />
-            Fire
+          <Button
+            aria-label="Solid"
+            className="h-11 w-11 rounded-full bg-black/45 text-[#5fd39a]"
+            size="icon"
+            variant="ghost"
+            onClick={() => onVote(current, "ok")}
+          >
+            <ThumbsUp className="h-5 w-5" />
+          </Button>
+          <Button
+            aria-label="Fire"
+            className="h-11 w-11 rounded-full bg-black/45 text-[#ff8f4d]"
+            size="icon"
+            variant="ghost"
+            onClick={() => onVote(current, "fire")}
+          >
+            <Flame className="h-5 w-5" />
           </Button>
         </div>
-        <div className="mt-4 flex items-center gap-3 rounded-xl border border-white/10 bg-[#0c0f1a] p-3">
-          <span className="text-xs text-[#9aa2c0]">Duration</span>
+        <div className="absolute left-4 right-4 top-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/45 p-3 backdrop-blur">
+          <span className="text-xs text-white/70">Duration</span>
           <Select
             aria-label="Duration"
-            className="w-28"
+            className="h-9 w-28 bg-black/45"
             options={durationOptions}
             value={String(duration)}
             onValueChange={(value) => setDuration(Number(value))}
           />
-          <Button className="ml-auto" variant="gradient" onClick={() => onGenerate(current, duration)}>
+          <Button className="ml-auto" size="sm" variant="gradient" onClick={() => onGenerate(current, duration)}>
             <WandSparkles className="h-4 w-4" />
-            One-click promo
+            Promo
           </Button>
         </div>
-      </section>
-    </div>
+      </article>
+    </section>
   );
 }

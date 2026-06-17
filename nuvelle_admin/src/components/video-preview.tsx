@@ -1,13 +1,19 @@
 import { useEffect, useRef } from "react";
 import Hls from "hls.js";
+import { cn } from "@/lib/utils";
 
 type VideoPreviewProps = {
+  ariaLabel?: string;
+  autoPlay?: boolean;
+  className?: string;
+  controls?: boolean;
+  muted?: boolean;
   poster?: string | null;
   title?: string;
   url?: string | null;
 };
 
-export function VideoPreview({ poster, title, url }: VideoPreviewProps) {
+export function VideoPreview({ ariaLabel, autoPlay = false, className, controls = true, muted = true, poster, title, url }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -38,15 +44,16 @@ export function VideoPreview({ poster, title, url }: VideoPreviewProps) {
   }, [url]);
 
   return (
-    <div className="relative aspect-[9/16] overflow-hidden rounded-[18px] border border-white/10 bg-black">
+    <div className={cn("relative aspect-[9/16] overflow-hidden rounded-[18px] border border-white/10 bg-black", className)}>
       {url ? (
         <video
           ref={videoRef}
-          aria-label={title}
+          aria-label={ariaLabel || (title ? `${title} video` : "Drama video")}
           className="h-full w-full object-cover"
-          controls
+          autoPlay={autoPlay}
+          controls={controls}
           loop
-          muted
+          muted={muted}
           playsInline
           poster={poster || undefined}
         />

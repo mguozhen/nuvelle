@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -7,9 +7,10 @@ const drama = {
   id: 1,
   title: "Demo Drama",
   platform: "ReelShort",
+  genre: "Hidden Identity",
   language: "English",
-  tags: ["Female"],
-  show_tags: ["Female"],
+  tags: ["Female", "Revenge"],
+  show_tags: ["Female", "Billionaire"],
   cover_image_url: "https://example.com/cover.jpg",
   synopsis_or_hook: "A secret billionaire revenge story",
   episode_count: 2,
@@ -24,9 +25,22 @@ const drama = {
       episode_no: 1,
       play_url: "https://cdn.example/ep1.mp4",
       poster_url: "https://example.com/poster.jpg"
+    },
+    {
+      id: 11,
+      episode_no: 2,
+      play_url: "https://cdn.example/ep2.mp4",
+      poster_url: "https://example.com/poster-2.jpg"
+    },
+    {
+      id: 12,
+      episode_no: 3,
+      play_url: "https://cdn.example/ep3.mp4",
+      poster_url: "https://example.com/poster-3.jpg"
     }
   ]
 };
+const dramaSummary = { ...drama, episodes: undefined, episode_list: undefined };
 
 function json(data: unknown, init?: ResponseInit) {
   return Promise.resolve(new Response(JSON.stringify(data), init));
@@ -42,13 +56,13 @@ function installFetchMock() {
       return json({ access_token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } });
     }
     if (url.includes("/admin/dramas?")) {
-      return json({ items: [drama], total: 1 });
+      return json({ items: [dramaSummary], total: 1 });
     }
     if (url.endsWith("/admin/dramas/1")) {
       return json(drama);
     }
     if (url.endsWith("/admin/swipe/next")) {
-      return json(drama);
+      return json(dramaSummary);
     }
     if (url.endsWith("/admin/drama-events")) {
       return json({ ok: true, event_id: 11 });
@@ -134,13 +148,49 @@ describe("admin app", () => {
     );
   });
 
-  it("creates promo jobs with selected episode, duration, and prompt", async () => {
+  it("plays the first episode in the swipe feed and marks swiped dramas as seen", async () => {
+    const fetchMock = installFetchMock();
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("button", { name: /swipe/i }));
+
+    const video = await screen.findByLabelText("Demo Drama video");
+    await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep1.mp4"));
+
+    fireEvent.wheel(screen.getByTestId("swipe-feed"), { deltaY: 180 });
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/drama-events",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("\"event_type\":\"seen\"")
+        })
+      )
+    );
+  });
+
+  it("shows all detail tags and generates from the selected episode", async () => {
     const fetchMock = installFetchMock();
     const user = userEvent.setup();
     render(<App />);
     await registerAndLoad(user);
 
     await user.click(screen.getByRole("button", { name: /details/i }));
+    expect(screen.getByText("Source tags")).toBeInTheDocument();
+    expect(screen.getByText("Female")).toBeInTheDocument();
+    expect(screen.getByText("Revenge")).toBeInTheDocument();
+    expect(screen.getByText("Billionaire")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /play ep 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /play ep 2/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /play ep 2/i }));
+    const video = screen.getByLabelText("Demo Drama video");
+    await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep2.mp4"));
+
     await user.type(screen.getByPlaceholderText(/prompt for this promo/i), "high tension opener");
     await user.click(screen.getByRole("button", { name: /generate current episode/i }));
 
@@ -149,7 +199,7 @@ describe("admin app", () => {
         "http://localhost:8000/api/v1/promo/jobs",
         expect.objectContaining({
           method: "POST",
-          body: expect.stringContaining("\"episode_id\":10")
+          body: expect.stringContaining("\"episode_id\":11")
         })
       )
     );
@@ -157,11 +207,11 @@ describe("admin app", () => {
     expect(JSON.parse(String(promoCall?.[1]?.body))).toEqual(
       expect.objectContaining({
         drama_id: 1,
-        episode_id: 10,
+        episode_id: 11,
         prompt: "high tension opener",
         dur: 30,
-        ep: 1,
-        video_url: "https://cdn.example/ep1.mp4"
+        ep: 2,
+        video_url: "https://cdn.example/ep2.mp4"
       })
     );
   });

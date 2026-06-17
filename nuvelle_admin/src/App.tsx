@@ -159,7 +159,8 @@ export default function App() {
   const loadSwipeNext = useCallback(async () => {
     try {
       const next = await client.swipeNext();
-      setSwipeDrama(normalizeDrama(next));
+      const detail = await client.getAdminDrama(next.id);
+      setSwipeDrama(normalizeDrama(detail));
     } catch {
       setSwipeDrama(null);
     }
@@ -243,6 +244,31 @@ export default function App() {
         })
         .catch((error: unknown) => {
           console.error("Drama event sync failed", error);
+          showStatus("Drama event sync failed");
+        });
+    },
+    [activeTab, client, loadSwipeNext, showStatus]
+  );
+
+  const markSeen = useCallback(
+    (drama: DramaRecord) => {
+      if (activeTab === "swipe") {
+        setSwipeDrama(null);
+      }
+
+      void client
+        .postDramaEvent({
+          drama_id: drama.id,
+          event_type: "seen",
+          metadata: { source: "swipe" }
+        })
+        .then(() => {
+          if (activeTab === "swipe") {
+            void loadSwipeNext();
+          }
+        })
+        .catch((error: unknown) => {
+          console.error("Drama seen event sync failed", error);
           showStatus("Drama event sync failed");
         });
     },
@@ -383,10 +409,17 @@ export default function App() {
       onTabChange={setActiveTab}
     >
       {activeTab === "swipe" ? (
-        <SwipeView current={activeSwipeDrama} onGenerate={generateForDrama} onVote={vote} />
+        <SwipeView current={activeSwipeDrama} onGenerate={generateForDrama} onSeen={markSeen} onVote={vote} />
       ) : null}
       {activeTab === "board" ? (
-        <BoardView dramas={dramas} votes={votes} onGenerate={generateForDrama} onGenerateBatch={generateBatch} onVote={vote} />
+        <BoardView
+          dramas={dramas}
+          votes={votes}
+          onGenerate={generateForDrama}
+          onGenerateBatch={generateBatch}
+          onLoadDramaDetail={async (drama) => normalizeDrama(await client.getAdminDrama(drama.id))}
+          onVote={vote}
+        />
       ) : null}
       {activeTab === "generated" ? (
         <GeneratedLibrary
