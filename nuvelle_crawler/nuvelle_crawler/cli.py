@@ -11,6 +11,8 @@ from nuvelle_crawler.sources.config import get_source_config
 from nuvelle_crawler.sources.registry import get_adapter
 from nuvelle_crawler.tasks.enqueuer import InMemoryTaskEnqueuer
 
+DEFAULT_BACKFILL_DELAY_SECONDS = 0.2
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
@@ -30,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
     backfill.add_argument("--start-page", type=int, default=1)
     backfill.add_argument("--max-pages", type=int, default=1)
     backfill.add_argument("--no-page-limit", action="store_true")
-    backfill.add_argument("--delay-seconds", type=float, default=3.0)
+    backfill.add_argument("--delay-seconds", type=float, default=DEFAULT_BACKFILL_DELAY_SECONDS)
     backfill.add_argument("--with-details", action="store_true")
     backfill.add_argument("--list-retries", type=int, default=2)
     backfill.add_argument("--detail-retries", type=int, default=2)

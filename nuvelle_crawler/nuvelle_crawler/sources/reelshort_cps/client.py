@@ -5,6 +5,7 @@ BROWSER_USER_AGENT = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/126.0.0.0 Safari/537.36"
 )
+REQUEST_TIMEOUT = httpx.Timeout(60.0, connect=10.0)
 
 REELSHORT_BROWSER_HEADERS = {
     "User-Agent": BROWSER_USER_AGENT,
@@ -25,7 +26,7 @@ class ReelShortCpsClient:
         self.base_url = base_url.rstrip("/")
         self.client = httpx.Client(
             base_url=self.base_url,
-            timeout=httpx.Timeout(15.0, connect=5.0),
+            timeout=REQUEST_TIMEOUT,
             limits=httpx.Limits(max_connections=4, max_keepalive_connections=2),
             headers=REELSHORT_BROWSER_HEADERS,
         )

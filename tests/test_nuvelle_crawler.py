@@ -35,6 +35,14 @@ def test_crawler_default_database_url_matches_api_postgres(monkeypatch) -> None:
     assert settings.database_url == "postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle"
 
 
+def test_default_backfill_delay_is_200ms() -> None:
+    from nuvelle_crawler import cli
+    from nuvelle_crawler.services import backfill
+
+    assert cli.DEFAULT_BACKFILL_DELAY_SECONDS == 0.2
+    assert backfill.DEFAULT_REQUEST_DELAY_SECONDS == 0.2
+
+
 class FakeDramaAdapter:
     def __init__(
         self,
@@ -302,6 +310,14 @@ def test_reelshort_client_sends_browser_like_headers() -> None:
     assert headers["Sec-Fetch-Mode"] == "cors"
 
 
+def test_reelshort_client_uses_longer_timeout() -> None:
+    client = ReelShortCpsClient(token="token")
+
+    assert client.client.timeout.connect == 10.0
+    assert client.client.timeout.read == 60.0
+    assert client.client.timeout.write == 60.0
+
+
 def test_reelshort_source_config_uses_frontend_language_codes() -> None:
     languages = get_source_config("reelshort_cps")["languages"]
 
@@ -340,6 +356,14 @@ def test_dramacps_client_sends_browser_like_headers() -> None:
     assert headers["Referer"] == "https://dramacps.com/dashboard"
     assert headers["Sec-Fetch-Site"] == "cross-site"
     assert headers["Sec-Fetch-Mode"] == "cors"
+
+
+def test_dramacps_client_uses_longer_timeout() -> None:
+    client = DramaCpsMaterialsClient()
+
+    assert client.client.timeout.connect == 10.0
+    assert client.client.timeout.read == 60.0
+    assert client.client.timeout.write == 60.0
 
 
 def test_dramacps_source_config_defaults_to_all_languages_once() -> None:

@@ -13,6 +13,7 @@ from nuvelle_crawler.db.repositories import (
 from nuvelle_crawler.sources.base import DramaSourceAdapter
 
 SOURCE_PROTECTION_STATUS_CODES = {401, 403, 429, 503}
+DEFAULT_REQUEST_DELAY_SECONDS = 0.2
 
 
 class SourceProtectionDetectedError(RuntimeError):
@@ -55,7 +56,7 @@ class LocalDramaBackfillService:
         sorts: list[str],
         max_pages: int | None,
         start_page: int = 1,
-        delay_seconds: float = 3.0,
+        delay_seconds: float = DEFAULT_REQUEST_DELAY_SECONDS,
         with_details: bool = False,
         continue_on_detail_error: bool = True,
         list_retry_attempts: int = 2,
