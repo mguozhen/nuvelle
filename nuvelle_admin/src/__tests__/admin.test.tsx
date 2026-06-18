@@ -130,9 +130,23 @@ async function registerAndLoad(user = userEvent.setup()) {
 describe("admin app", () => {
   beforeEach(() => {
     expect(typeof window.localStorage.clear).toBe("function");
-    window.history.replaceState(null, "", "/");
+    window.history.replaceState(null, "", "/board");
     localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it("defaults root visits to the swipe route", async () => {
+    localStorage.setItem(
+      "nuvelle_admin_auth",
+      JSON.stringify({ token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } })
+    );
+    window.history.replaceState(null, "", "/");
+    installFetchMock();
+    render(<App />);
+
+    await waitFor(() => expect(window.location.pathname).toBe("/swipe"));
+    expect(await screen.findByLabelText("Demo Drama video")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /swipe/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("registers with invite code and loads board from admin API", async () => {

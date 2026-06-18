@@ -108,6 +108,7 @@ const TAB_ROUTES: Record<AdminTab, string> = {
   board: "/board",
   generated: "/generated"
 };
+const DEFAULT_ADMIN_ROUTE = TAB_ROUTES.swipe;
 
 function tabFromPathname(pathname: string): AdminTab | null {
   const section = pathname.split("/").filter(Boolean)[0];
@@ -564,7 +565,7 @@ function AdminApp() {
   const fireCount = Object.values(votes).filter((verdict) => verdict === "fire").length;
 
   if (!activeTab) {
-    return <Navigate replace to={TAB_ROUTES.board} />;
+    return <Navigate replace to={DEFAULT_ADMIN_ROUTE} />;
   }
 
   if (!auth.token) {
@@ -654,7 +655,7 @@ function AdminApp() {
             />
           }
         />
-        <Route path="*" element={<Navigate replace to={TAB_ROUTES.board} />} />
+        <Route path="*" element={<Navigate replace to={DEFAULT_ADMIN_ROUTE} />} />
       </Routes>
       <BackendSettings
         backendUrl={backendUrl}
