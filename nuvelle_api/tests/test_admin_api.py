@@ -187,6 +187,7 @@ def test_generated_library_returns_current_user_jobs(client: TestClient, db: Ses
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["job_id"] == "mine"
+    assert payload["items"][0]["progress"] == 5
     assert payload["items"][0]["prompt"] == "high tension"
     assert payload["items"][0]["drama"]["title"] == "Generated Drama"
 
@@ -218,4 +219,37 @@ def test_generated_library_includes_existing_completed_job(client: TestClient, d
 
     assert response.status_code == 200
     assert response.json()["status"] == "done"
+    assert response.json()["progress"] == 100
     assert response.json()["files"]["teaser"].endswith("teaser.mp4")
+
+
+def test_admin_drama_marks_generated_episode_status(client: TestClient, db: Session) -> None:
+    drama, episode = seed_drama(db, "Generated Episode")
+    headers = auth_header(client, db, "promoter@example.com", "JOIN-8")
+    me = client.get("/api/v1/auth/me", headers=headers).json()
+    db.add(
+        PromoJob(
+            id="episode-job",
+            user_id=me["id"],
+            drama_id=drama.id,
+            episode_id=episode.id,
+            status="rendering",
+            title=drama.title,
+            episode=1,
+            duration=30,
+            source_url=episode.play_url,
+        )
+    )
+    db.commit()
+
+    listing = client.get("/api/v1/admin/dramas?has_video=true", headers=headers)
+    detail = client.get(f"/api/v1/admin/dramas/{drama.id}", headers=headers)
+
+    assert listing.status_code == 200
+    item = next(item for item in listing.json()["items"] if item["id"] == drama.id)
+    assert item["generated_count"] == 1
+    assert item["generation_status"] == "rendering"
+    assert item["generation_progress"] == 70
+    assert detail.status_code == 200
+    assert detail.json()["episodes"][0]["generation_status"] == "rendering"
+    assert detail.json()["episodes"][0]["generation_progress"] == 70

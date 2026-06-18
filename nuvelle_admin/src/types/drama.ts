@@ -25,6 +25,8 @@ export type DramaRecord = {
   has_video?: boolean;
   seen?: boolean;
   generated_count?: number;
+  generation_status?: string | null;
+  generation_progress?: number;
   episodes?: Record<string, string> | DramaEpisodeRecord[];
   episode_list?: DramaEpisodeRecord[];
 };
@@ -37,6 +39,8 @@ export type DramaEpisodeRecord = {
   play_url?: string | null;
   poster_url?: string | null;
   iframe_src?: string | null;
+  generation_status?: string | null;
+  generation_progress?: number;
 };
 
 export type AdminDramaListResponse = {
@@ -99,6 +103,7 @@ export type GeneratedJob = {
   id: string;
   job_id: string;
   status: string;
+  progress?: number;
   title?: string;
   episode?: number;
   duration?: number;
@@ -115,4 +120,17 @@ export type GeneratedJob = {
 export type GeneratedListResponse = {
   items: GeneratedJob[];
   total: number;
+};
+
+export type GenerationState = {
+  disabled: boolean;
+  status?: string | null;
+  progress?: number;
+};
+
+export type GenerationEpisodeRef = {
+  id?: number;
+  episode_no?: number;
+  generation_status?: string | null;
+  generation_progress?: number;
 };

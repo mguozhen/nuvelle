@@ -5,14 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VideoPreview } from "@/components/video-preview";
+import { generationLabel } from "@/lib/generation";
 import { useI18n } from "@/lib/i18n";
 import { nuvelleScore, tasteScore } from "@/lib/scoring";
-import type { DramaEpisodeRecord, DramaRecord, VoteVerdict } from "@/types/drama";
+import type { DramaEpisodeRecord, DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
 type SwipeViewProps = {
   current: DramaRecord | null;
   isLoading?: boolean;
   onGenerate: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
   onSeen: (drama: DramaRecord) => void | Promise<void>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
@@ -96,7 +98,7 @@ function SwipeSkeleton() {
   );
 }
 
-export function SwipeView({ current, isLoading = false, onGenerate, onSeen, onVote }: SwipeViewProps) {
+export function SwipeView({ current, isLoading = false, onGenerate, getGenerationState, onSeen, onVote }: SwipeViewProps) {
   const { t } = useI18n();
   const [duration, setDuration] = useState(30);
   const touchStartY = useRef<number | null>(null);
@@ -120,6 +122,7 @@ export function SwipeView({ current, isLoading = false, onGenerate, onSeen, onVo
   const videoUrl = firstEpisode?.play_url || current.video_url || null;
   const embedUrl = firstEpisode?.iframe_src || null;
   const posterUrl = firstEpisode?.poster_url || current.cover_image_url || null;
+  const generation = getGenerationState(current, firstEpisode || undefined);
   const markSeen = () => {
     void onSeen(current);
   };
@@ -220,9 +223,9 @@ export function SwipeView({ current, isLoading = false, onGenerate, onSeen, onVo
             value={String(duration)}
             onValueChange={(value) => setDuration(Number(value))}
           />
-          <Button className="ml-auto" size="sm" variant="gradient" onClick={() => onGenerate(current, duration)}>
+          <Button className="ml-auto" disabled={generation.disabled} size="sm" variant="gradient" onClick={() => onGenerate(current, duration)}>
             <WandSparkles className="h-4 w-4" />
-            {t("common.promo")}
+            {generationLabel(t, generation, t("common.promo"))}
           </Button>
         </div>
       </article>

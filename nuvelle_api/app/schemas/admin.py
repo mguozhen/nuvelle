@@ -25,6 +25,8 @@ class AdminEpisodeRead(BaseModel):
     play_url: str | None = None
     poster_url: str | None = None
     iframe_src: str | None = None
+    generation_status: str | None = None
+    generation_progress: int = 0
 
 
 class AdminDramaRead(BaseModel):
@@ -51,6 +53,8 @@ class AdminDramaRead(BaseModel):
     has_video: bool = False
     seen: bool = False
     generated_count: int = 0
+    generation_status: str | None = None
+    generation_progress: int = 0
 
 
 class AdminDramaListResponse(BaseModel):
@@ -95,6 +99,7 @@ class GeneratedJobRead(BaseModel):
     id: str
     job_id: str
     status: str
+    progress: int = 0
     title: str
     episode: int
     duration: int

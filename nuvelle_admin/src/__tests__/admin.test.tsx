@@ -57,7 +57,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function installFetchMock(options: { boardResponse?: () => Promise<Response>; detailResponse?: () => Promise<Response> } = {}) {
+function installFetchMock(options: { boardResponse?: () => Promise<Response>; detailResponse?: () => Promise<Response>; generatedResponse?: () => Promise<Response> } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/register")) {
@@ -79,12 +79,13 @@ function installFetchMock(options: { boardResponse?: () => Promise<Response>; de
       return json({ ok: true, event_id: 11 });
     }
     if (url.includes("/admin/generated")) {
-      return json({
+      return options.generatedResponse?.() ?? json({
         items: [
           {
             id: "job-1",
             job_id: "job-1",
             status: "queued",
+            progress: 5,
             title: "Demo Drama",
             episode: 1,
             duration: 20,
@@ -345,8 +346,43 @@ describe("admin app", () => {
 
     await user.click(screen.getByRole("button", { name: /generated/i }));
 
-    expect(await screen.findByText(/queued/i)).toBeInTheDocument();
+    expect(await screen.findByText(/queued 5%/i)).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: /queued 5%/i })).toHaveAttribute("aria-valuenow", "5");
     expect(screen.getByDisplayValue("high tension")).toBeInTheDocument();
+  });
+
+  it("disables generate buttons for resources that already have generation jobs", async () => {
+    const user = userEvent.setup();
+    installFetchMock({
+      boardResponse: () =>
+        json({
+          items: [{ ...dramaSummary, generated_count: 1, generation_status: "done", generation_progress: 100 }],
+          total: 1
+        }),
+      detailResponse: () =>
+        json({
+          ...drama,
+          generated_count: 1,
+          generation_status: "done",
+          generation_progress: 100,
+          episode_list: drama.episodes.map((episode, index) => ({
+            ...episode,
+            generation_status: index === 0 ? "done" : null,
+            generation_progress: index === 0 ? 100 : 0
+          }))
+        })
+    });
+    render(<App />);
+    await registerAndLoad(user);
+
+    const disabledBoardButton = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).find((button) => button.hasAttribute("disabled"));
+    expect(disabledBoardButton).toBeDefined();
+
+    await user.click(screen.getByRole("button", { name: /details/i }));
+
+    await waitFor(() => expect(screen.getByText("Source tags")).toBeInTheDocument());
+    const disabledGeneratedButtons = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).filter((button) => button.hasAttribute("disabled"));
+    expect(disabledGeneratedButtons.length).toBeGreaterThanOrEqual(2);
   });
 
   it("opens backend URL settings after authentication", async () => {

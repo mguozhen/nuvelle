@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.db.session import SessionLocal
 from app.models.promo_job import PromoJob, PromoJobStatus
 from app.models.user_drama_event import UserDramaEvent
 from app.repositories.promo_job_repository import PromoJobRepository
@@ -30,6 +31,13 @@ from app.schemas.promo import (
 from app.services.reelshort_video_service import ReelShortVideoService
 
 ASSET_NAMES = {"teaser.mp4", "cover.jpg", "caption.txt", "plan.json"}
+PROGRESS_BY_STATUS = {
+    PromoJobStatus.queued.value: 5,
+    PromoJobStatus.downloading.value: 25,
+    PromoJobStatus.rendering.value: 70,
+    PromoJobStatus.done.value: 100,
+    PromoJobStatus.error.value: 100,
+}
 
 
 class PromoService:
@@ -173,12 +181,15 @@ class PromoService:
             raise HTTPException(status_code=404, detail="job not found")
 
         try:
-            job.status = PromoJobStatus.rendering.value
-            job.log = "rendering"
+            job.status = PromoJobStatus.downloading.value
+            job.log = "refreshing source video"
             self.repository.update(job)
 
             beats = self._clean_beats(payload.beats)
             video_source = self._video_source_for(job, payload)
+            job.status = PromoJobStatus.rendering.value
+            job.log = "rendering"
+            self.repository.update(job)
             result = generate_promo(
                 PromoGenerationRequest(
                     mp4=cast(Path, video_source),
@@ -211,11 +222,20 @@ class PromoService:
             self.repository.update(job)
         return self.to_response(job)
 
+    @staticmethod
+    def run_job_detached(job_id: str, payload: PromoJobCreate) -> None:
+        db = SessionLocal()
+        try:
+            PromoService(db).run_job(job_id, payload)
+        finally:
+            db.close()
+
     def to_response(self, job: PromoJob) -> PromoJobResponse:
         return PromoJobResponse(
             id=job.id,
             job_id=job.id,
             status=job.status,
+            progress=self.progress_for_status(job.status),
             files=self.files_for(job),
             caption=job.caption,
             title=job.title,
@@ -252,6 +272,10 @@ class PromoService:
     @staticmethod
     def _new_job_id() -> str:
         return uuid.uuid4().hex[:10]
+
+    @staticmethod
+    def progress_for_status(status: str | None) -> int:
+        return PROGRESS_BY_STATUS.get(status or "", 0)
 
     @staticmethod
     def _clean_beats(beats: list[float] | None) -> list[float] | None:

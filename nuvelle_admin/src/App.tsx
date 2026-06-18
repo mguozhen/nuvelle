@@ -7,6 +7,7 @@ import { LoginGate } from "@/components/login-gate";
 import { SwipeView } from "@/components/swipe-view";
 import { clearAuthState, loadAuthState, saveAuthState, type AuthState } from "@/lib/auth";
 import { DEFAULT_BACKEND_URL, PromoBackendClient } from "@/lib/backend";
+import { generationLabel, generationState, isActiveGeneration, preferredGenerationStatus } from "@/lib/generation";
 import { I18nProvider, useI18n } from "@/lib/i18n";
 import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
 import { nuvelleScore } from "@/lib/scoring";
@@ -15,6 +16,8 @@ import type {
   DramaEpisodeRecord,
   DramaRecord,
   GeneratedJob,
+  GenerationEpisodeRef,
+  GenerationState,
   LoginRequest,
   PromoRequest,
   RegisterRequest,
@@ -27,6 +30,8 @@ type EpisodeCandidate = {
   iframe_src?: string | null;
   play_url?: string | null;
   poster_url?: string | null;
+  generation_status?: string | null;
+  generation_progress?: number;
 };
 
 function toEpisodeRecords(drama: DramaRecord): EpisodeCandidate[] {
@@ -69,7 +74,9 @@ function normalizeDrama(raw: DramaRecord): DramaRecord {
       episode_no: episode.episode_no,
       iframe_src: episode.iframe_src ?? null,
       play_url: episode.play_url ?? null,
-      poster_url: episode.poster_url ?? null
+      poster_url: episode.poster_url ?? null,
+      generation_status: episode.generation_status ?? null,
+      generation_progress: episode.generation_progress ?? 0
     }))
     .sort((a, b) => a.episode_no - b.episode_no) as DramaEpisodeRecord[];
   const firstPlayUrl = episodeList.find((episode) => episode.play_url)?.play_url || raw.video_url || null;
@@ -221,6 +228,18 @@ function AdminApp() {
   }, [auth.token, loadGenerated]);
 
   useEffect(() => {
+    if (!auth.token || !generated.some((item) => isActiveGeneration(item.status))) {
+      return undefined;
+    }
+
+    const interval = window.setInterval(() => {
+      void loadGenerated();
+    }, 3000);
+
+    return () => window.clearInterval(interval);
+  }, [auth.token, generated, loadGenerated]);
+
+  useEffect(() => {
     if (!auth.token) {
       return undefined;
     }
@@ -360,10 +379,52 @@ function AdminApp() {
         files?: { teaser?: string | null; cover?: string | null } | null;
         caption?: string | null;
         status?: string;
+        progress?: number;
         title?: string | null;
       }>(request);
     },
     [client]
+  );
+
+  const getGenerationState = useCallback(
+    (
+      drama: DramaRecord,
+      episode?: GenerationEpisodeRef
+    ): GenerationState => {
+      const dramaId = Number(drama.id);
+      const episodeId = episode?.id ? Number(episode.id) : undefined;
+      const episodeNo = episode?.episode_no;
+      let status = episode?.generation_status || (!episode ? drama.generation_status : null) || null;
+      let progress = episode?.generation_progress ?? (!episode ? drama.generation_progress : undefined);
+
+      generated.forEach((item) => {
+        if (item.status === "error" || item.drama?.id !== dramaId) {
+          return;
+        }
+
+        if (episode) {
+          const itemEpisodeId = item.episode_ref?.id;
+          const itemEpisodeNo = item.episode_ref?.episode_no || item.episode;
+          const sameEpisode = episodeId ? itemEpisodeId === episodeId : itemEpisodeNo === episodeNo;
+          if (!sameEpisode) {
+            return;
+          }
+        }
+
+        const nextStatus = preferredGenerationStatus(status, item.status);
+        if (nextStatus !== status) {
+          status = nextStatus;
+          progress = item.progress;
+        }
+      });
+
+      const state = generationState(status, progress);
+      if (!episode && !state.disabled && Number(drama.generated_count || 0) > 0) {
+        return generationState("done", 100);
+      }
+      return state;
+    },
+    [generated]
   );
 
   const generateForDrama = useCallback(
@@ -378,6 +439,17 @@ function AdminApp() {
         }
 
         const episodeNo = selectedEpisode.episode_no || episode || 1;
+        const currentGeneration = getGenerationState(detail, {
+          id: selectedEpisode.id ?? episodeNo,
+          episode_no: episodeNo,
+          generation_status: selectedEpisode.generation_status ?? null,
+          generation_progress: selectedEpisode.generation_progress ?? 0
+        });
+        if (currentGeneration.disabled) {
+          showStatus(generationLabel(t, currentGeneration, t("app.promoJobSubmitted")));
+          return;
+        }
+
         const result = await generatePromo({
           url: selectedEpisode.play_url,
           title: detail.title || t("common.promo"),
@@ -396,6 +468,7 @@ function AdminApp() {
             id: jobId || `${detail.id}-${Date.now()}`,
             job_id: jobId || `${detail.id}-${Date.now()}`,
             status: result.status || "queued",
+            progress: result.progress || 5,
             title: result.title || detail.title || t("common.promo"),
             episode: episodeNo,
             duration,
@@ -414,7 +487,7 @@ function AdminApp() {
         showStatus(t("app.cantReachGenerator"));
       }
     },
-    [generatePromo, loadGenerated, resolveDramaForGeneration, showStatus, t]
+    [generatePromo, getGenerationState, loadGenerated, resolveDramaForGeneration, showStatus, t]
   );
 
   const generateBatch = useCallback(
@@ -423,6 +496,7 @@ function AdminApp() {
         const detail = await resolveDramaForGeneration(drama);
         const items = toEpisodeRecords(detail)
           .filter((episode) => Boolean(episode.play_url))
+          .filter((episode) => !getGenerationState(detail, episode).disabled)
           .map((episode) => ({
             url: episode.play_url || "",
             title: detail.title || t("common.promo"),
@@ -444,7 +518,7 @@ function AdminApp() {
         showStatus(t("app.cantReachGenerator"));
       }
     },
-    [client, resolveDramaForGeneration, showStatus, t]
+    [client, getGenerationState, resolveDramaForGeneration, showStatus, t]
   );
 
   const activeSwipeDrama = swipeDrama;
@@ -477,6 +551,7 @@ function AdminApp() {
           current={activeSwipeDrama}
           isLoading={swipeLoading && !activeSwipeDrama}
           onGenerate={generateForDrama}
+          getGenerationState={getGenerationState}
           onSeen={markSeen}
           onVote={vote}
         />
@@ -489,6 +564,7 @@ function AdminApp() {
           votes={votes}
           onGenerate={generateForDrama}
           onGenerateBatch={generateBatch}
+          getGenerationState={getGenerationState}
           onFiltersChange={updateBoardFilters}
           onLoadDramaDetail={async (drama) => normalizeDrama(await client.getAdminDrama(drama.id))}
           onVote={vote}

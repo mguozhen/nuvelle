@@ -105,9 +105,11 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(
 
     assert response.status_code == 200
     assert payload["job_id"]
-    assert payload["status"] == "done"
+    assert payload["status"] == "queued"
+    assert payload["progress"] == 5
     assert job.status_code == 200
     assert job.json()["status"] == "done"
+    assert job.json()["progress"] == 100
     assert job.json()["caption"] == "caption"
     assert job.json()["files"]["teaser"].endswith("/teaser.mp4")
 
@@ -312,10 +314,11 @@ def test_promo_job_uses_refreshed_reelshort_play_url(
     )
 
     assert response.status_code == 200
-    assert response.json()["status"] == "done"
+    assert response.json()["status"] == "queued"
     assert seen_sources == [refreshed_url]
     job = db.get(PromoJob, response.json()["job_id"])
     assert job is not None
+    assert job.status == "done"
     assert job.source_url == refreshed_url
 
 
@@ -380,5 +383,7 @@ def test_authenticated_promo_job_allows_regenerating_same_drama(
 
     assert first.status_code == 200
     assert second.status_code == 200
-    assert first.json()["status"] == "done"
-    assert second.json()["status"] == "done"
+    assert first.json()["status"] == "queued"
+    assert second.json()["status"] == "queued"
+    assert client.get(f"/api/v1/promo/jobs/{first.json()['job_id']}").json()["status"] == "done"
+    assert client.get(f"/api/v1/promo/jobs/{second.json()['job_id']}").json()["status"] == "done"

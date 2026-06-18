@@ -12,6 +12,7 @@ from app.schemas.admin import (
     GeneratedJobRead,
     GeneratedListResponse,
 )
+from app.services.promo_service import PromoService
 
 
 class GeneratedService:
@@ -75,6 +76,7 @@ class GeneratedService:
             id=job.id,
             job_id=job.id,
             status=job.status,
+            progress=PromoService.progress_for_status(job.status),
             title=job.title,
             episode=job.episode,
             duration=job.duration,

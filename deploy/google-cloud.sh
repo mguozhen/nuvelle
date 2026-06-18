@@ -469,13 +469,15 @@ deploy_api() {
     --image="$image" \
     --allow-unauthenticated \
     --port=8000 \
-    --cpu=2 \
-    --memory=2Gi \
+    --cpu=4 \
+    --memory=4Gi \
     --timeout=900 \
+    --concurrency=10 \
     --min-instances=1 \
     --max-instances=1 \
+    --no-cpu-throttling \
     --add-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
-    --set-env-vars='ENVIRONMENT=production,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=["*"]' \
+    --set-env-vars='ENVIRONMENT=production,WEB_CONCURRENCY=2,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=["*"]' \
     "${secret_args[@]}"
 
   API_URL="$(service_url "$API_SERVICE")"

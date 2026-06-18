@@ -10,27 +10,32 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { VideoPreview } from "@/components/video-preview";
+import { generationLabel } from "@/lib/generation";
 import { useI18n } from "@/lib/i18n";
 import { nuvelleScore } from "@/lib/scoring";
-import type { DramaRecord, VoteVerdict } from "@/types/drama";
+import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
 type DramaModalProps = {
   drama: DramaRecord | null;
   duration: number;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
   onOpenChange: (open: boolean) => void;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
 type EpisodeOption = {
+  id?: number;
   episode: number;
   iframeSrc: string;
   posterUrl: string;
   url: string;
+  generationStatus?: string | null;
+  generationProgress?: number;
 };
 
-export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpenChange, onVote }: DramaModalProps) {
+export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [customUrl, setCustomUrl] = useState("");
   const [playRequestKey, setPlayRequestKey] = useState(0);
@@ -43,19 +48,25 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
 
     const fromEpisodeList = Array.isArray(drama.episode_list)
       ? drama.episode_list.map((episode) => ({
+          id: episode.id,
           episode: episode.episode_no,
           iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
-          posterUrl: episode.poster_url || ""
+          posterUrl: episode.poster_url || "",
+          generationStatus: episode.generation_status || null,
+          generationProgress: episode.generation_progress || 0
         }))
       : [];
 
     const fromEpisodes = Array.isArray(drama.episodes)
       ? drama.episodes.map((episode) => ({
+          id: episode.id,
           episode: episode.episode_no,
           iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
-          posterUrl: episode.poster_url || ""
+          posterUrl: episode.poster_url || "",
+          generationStatus: episode.generation_status || null,
+          generationProgress: episode.generation_progress || 0
         }))
       : Object.entries(drama.episodes || {}).map(([episode, url]) => ({
           episode: Number(episode),
@@ -73,6 +84,25 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
     return combined.sort((a, b) => a.episode - b.episode);
   }, [drama]);
   const selectedEpisode = episodes.find((episode) => episode.episode === selectedEpisodeNo) || episodes[0];
+  const selectedGeneration = drama && selectedEpisode
+    ? getGenerationState(drama, {
+        id: selectedEpisode.id || selectedEpisode.episode,
+        episode_no: selectedEpisode.episode,
+        generation_status: selectedEpisode.generationStatus,
+        generation_progress: selectedEpisode.generationProgress
+      })
+    : { disabled: false };
+  const playableEpisodes = episodes.filter((episode) => episode.url || episode.iframeSrc);
+  const allPlayableEpisodesGenerated = drama
+    ? Boolean(playableEpisodes.length) && playableEpisodes.every((episode) =>
+      getGenerationState(drama, {
+        id: episode.id || episode.episode,
+        episode_no: episode.episode,
+        generation_status: episode.generationStatus,
+        generation_progress: episode.generationProgress
+      }).disabled
+    )
+    : false;
   const tags = useMemo(() => {
     if (!drama) {
       return [];
@@ -174,7 +204,14 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                 <div className="mt-4 min-h-0 lg:flex lg:flex-1 lg:flex-col">
                   <h3 className="mb-2 shrink-0 text-sm font-semibold">{t("detail.episodes")}</h3>
                   <div className="grid gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-                    {episodes.map((episode) => (
+                    {episodes.map((episode) => {
+                      const generation = getGenerationState(drama, {
+                        id: episode.id || episode.episode,
+                        episode_no: episode.episode,
+                        generation_status: episode.generationStatus,
+                        generation_progress: episode.generationProgress
+                      });
+                      return (
                       <div
                         key={episode.episode}
                         className={[
@@ -202,15 +239,17 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                           </Button>
                           <Button
                             className="whitespace-nowrap"
+                            disabled={generation.disabled}
                             size="sm"
                             variant="outline"
                             onClick={() => onGenerate(drama, duration, prompt, episode.episode)}
                           >
-                            {t("detail.generate")}
+                            {generationLabel(t, generation, t("detail.generate"))}
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                     {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}
                     <div className="flex gap-2 pt-2">
                       <Input
@@ -238,11 +277,11 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                   onChange={(event) => setPrompt(event.target.value)}
                 />
                 <div className="mt-4 grid gap-2 lg:grid-cols-2 lg:shrink-0">
-                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
+                  <Button disabled={selectedGeneration.disabled} variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
                     <WandSparkles className="h-4 w-4" />
-                    {t("detail.generateCurrent")}
+                    {generationLabel(t, selectedGeneration, t("detail.generateCurrent"))}
                   </Button>
-                  <Button variant="outline" onClick={() => onGenerateBatch(drama, duration)}>
+                  <Button disabled={allPlayableEpisodesGenerated} variant="outline" onClick={() => onGenerateBatch(drama, duration)}>
                     {t("detail.generateAll")}
                   </Button>
                 </div>

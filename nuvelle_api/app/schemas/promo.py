@@ -25,6 +25,7 @@ class PromoJobResponse(BaseModel):
     id: str
     job_id: str
     status: str
+    progress: int = 0
     files: PromoJobFiles | None = None
     caption: str | None = None
     title: str | None = None

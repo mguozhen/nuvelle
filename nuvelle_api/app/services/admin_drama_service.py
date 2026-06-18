@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.admin_user import AdminUser
 from app.models.drama import Drama, DramaEpisode
-from app.models.promo_job import PromoJob
+from app.models.promo_job import PromoJob, PromoJobStatus
 from app.models.user_drama_event import UserDramaEvent
 from app.schemas.admin import (
     AdminDramaDetail,
@@ -34,6 +34,23 @@ class DramaReadStats:
     has_video_ids: set[int]
     seen_ids: set[int]
     generated_counts: dict[int, int]
+    generation_statuses: dict[int, str]
+    generation_progresses: dict[int, int]
+
+
+GENERATION_PROGRESS = {
+    PromoJobStatus.queued.value: 5,
+    PromoJobStatus.downloading.value: 25,
+    PromoJobStatus.rendering.value: 70,
+    PromoJobStatus.done.value: 100,
+}
+GENERATION_STATUS_RANK = {
+    PromoJobStatus.rendering.value: 4,
+    PromoJobStatus.downloading.value: 3,
+    PromoJobStatus.queued.value: 2,
+    PromoJobStatus.done.value: 1,
+}
+VISIBLE_GENERATION_STATUSES = tuple(GENERATION_STATUS_RANK)
 
 
 class AdminDramaService:
@@ -95,9 +112,13 @@ class AdminDramaService:
             return None
         episodes = self.episodes_for(drama.id)
         stats = self.read_stats_for([drama.id], user.id)
+        episode_generation = self.episode_generation_statuses([episode.id for episode in episodes], user.id)
         return AdminDramaDetail(
             **self.to_read(drama, user, stats=stats).model_dump(),
-            episodes=[self.to_episode(item) for item in episodes],
+            episodes=[
+                self.to_episode(item, generation_status=episode_generation.get(item.id))
+                for item in episodes
+            ],
         )
 
     def swipe_next(self, user: AdminUser) -> AdminDramaRead | None:
@@ -151,6 +172,8 @@ class AdminDramaService:
             generated_count=(
                 stats.generated_counts.get(drama.id, 0) if stats else self.generated_count(drama.id, user.id)
             ),
+            generation_status=(stats.generation_statuses.get(drama.id) if stats else None),
+            generation_progress=(stats.generation_progresses.get(drama.id, 0) if stats else 0),
         )
 
     def episodes_for(self, drama_id: int) -> list[DramaEpisode]:
@@ -178,12 +201,22 @@ class AdminDramaService:
         return self.db.scalars(stmt).first() is not None
 
     def generated_count(self, drama_id: int, user_id: int) -> int:
-        stmt = select(PromoJob.id).where(PromoJob.user_id == user_id, PromoJob.drama_id == drama_id)
+        stmt = select(PromoJob.id).where(
+            PromoJob.user_id == user_id,
+            PromoJob.drama_id == drama_id,
+            PromoJob.status.in_(VISIBLE_GENERATION_STATUSES),
+        )
         return len(list(self.db.scalars(stmt).all()))
 
     def read_stats_for(self, drama_ids: list[int], user_id: int) -> DramaReadStats:
         if not drama_ids:
-            return DramaReadStats(has_video_ids=set(), seen_ids=set(), generated_counts={})
+            return DramaReadStats(
+                has_video_ids=set(),
+                seen_ids=set(),
+                generated_counts={},
+                generation_statuses={},
+                generation_progresses={},
+            )
 
         has_video_ids = set(
             self.db.scalars(
@@ -199,20 +232,52 @@ class AdminDramaService:
                 .group_by(UserDramaEvent.drama_id)
             ).all()
         )
-        generated_counts = {
-            int(drama_id): int(count)
-            for drama_id, count in self.db.execute(
-                select(PromoJob.drama_id, func.count())
-                .where(PromoJob.user_id == user_id, PromoJob.drama_id.in_(drama_ids))
-                .group_by(PromoJob.drama_id)
+        generated_counts: dict[int, int] = {}
+        generation_statuses: dict[int, str] = {}
+        for drama_id, status in self.db.execute(
+            select(PromoJob.drama_id, PromoJob.status).where(
+                PromoJob.user_id == user_id,
+                PromoJob.drama_id.in_(drama_ids),
+                PromoJob.status.in_(VISIBLE_GENERATION_STATUSES),
             )
-            if drama_id is not None
+        ):
+            if drama_id is None:
+                continue
+            generated_counts[int(drama_id)] = generated_counts.get(int(drama_id), 0) + 1
+            generation_statuses[int(drama_id)] = self.preferred_generation_status(
+                generation_statuses.get(int(drama_id)),
+                status,
+            )
+        generation_progresses = {
+            drama_id: self.generation_progress(status)
+            for drama_id, status in generation_statuses.items()
         }
         return DramaReadStats(
             has_video_ids=has_video_ids,
             seen_ids=seen_ids,
             generated_counts=generated_counts,
+            generation_statuses=generation_statuses,
+            generation_progresses=generation_progresses,
         )
+
+    def episode_generation_statuses(self, episode_ids: list[int], user_id: int) -> dict[int, str]:
+        if not episode_ids:
+            return {}
+        statuses: dict[int, str] = {}
+        for episode_id, status in self.db.execute(
+            select(PromoJob.episode_id, PromoJob.status).where(
+                PromoJob.user_id == user_id,
+                PromoJob.episode_id.in_(episode_ids),
+                PromoJob.status.in_(VISIBLE_GENERATION_STATUSES),
+            )
+        ):
+            if episode_id is None:
+                continue
+            statuses[int(episode_id)] = self.preferred_generation_status(
+                statuses.get(int(episode_id)),
+                status,
+            )
+        return statuses
 
     @staticmethod
     def _has_video_exists():
@@ -239,8 +304,8 @@ class AdminDramaService:
             return False
         return True
 
-    @staticmethod
-    def to_episode(episode: DramaEpisode) -> AdminEpisodeRead:
+    @classmethod
+    def to_episode(cls, episode: DramaEpisode, generation_status: str | None = None) -> AdminEpisodeRead:
         return AdminEpisodeRead(
             id=episode.id,
             episode_no=episode.episode_no,
@@ -249,7 +314,23 @@ class AdminDramaService:
             play_url=episode.play_url,
             poster_url=episode.poster_url,
             iframe_src=episode.iframe_src,
+            generation_status=generation_status,
+            generation_progress=cls.generation_progress(generation_status),
         )
+
+    @staticmethod
+    def preferred_generation_status(current: str | None, candidate: str) -> str:
+        if current is None:
+            return candidate
+        return (
+            candidate
+            if GENERATION_STATUS_RANK.get(candidate, 0) > GENERATION_STATUS_RANK.get(current, 0)
+            else current
+        )
+
+    @staticmethod
+    def generation_progress(status: str | None) -> int:
+        return GENERATION_PROGRESS.get(status or "", 0)
 
     @classmethod
     def nuvelle_score(cls, drama: Drama) -> int:

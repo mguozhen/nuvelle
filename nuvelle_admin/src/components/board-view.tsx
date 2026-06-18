@@ -6,10 +6,11 @@ import { DramaModal } from "@/components/drama-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { generationLabel } from "@/lib/generation";
 import { useI18n } from "@/lib/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
-import type { DramaRecord, VoteVerdict } from "@/types/drama";
+import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
 export type BoardFilter = "top" | "video" | "all";
 
@@ -28,6 +29,7 @@ type BoardViewProps = {
   votes: Record<string, VoteVerdict>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
   onFiltersChange: (filters: Partial<BoardFilters>) => void;
   onLoadDramaDetail?: (drama: DramaRecord) => Promise<DramaRecord>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
@@ -93,7 +95,7 @@ function BoardSkeletonGrid() {
   );
 }
 
-export function BoardView({ dramas, filters, isLoading = false, votes, onGenerate, onGenerateBatch, onFiltersChange, onLoadDramaDetail, onVote }: BoardViewProps) {
+export function BoardView({ dramas, filters, isLoading = false, votes, onGenerate, onGenerateBatch, getGenerationState, onFiltersChange, onLoadDramaDetail, onVote }: BoardViewProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [selectedDrama, setSelectedDrama] = useState<DramaRecord | null>(null);
   const [duration, setDuration] = useState(30);
@@ -192,6 +194,7 @@ export function BoardView({ dramas, filters, isLoading = false, votes, onGenerat
         {!isLoading && ranked.map(({ drama, score }) => {
           const verdict = votes[String(drama.id)];
           const count = episodeCount(drama);
+          const generation = getGenerationState(drama);
 
           return (
             <article key={drama.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
@@ -232,9 +235,9 @@ export function BoardView({ dramas, filters, isLoading = false, votes, onGenerat
                   {drama.generated_count ? <span className="col-span-2">{t("board.generated", { count: drama.generated_count })}</span> : null}
                 </div>
                 <div className="mt-3 grid gap-2">
-                  <Button size="sm" variant="gradient" onClick={() => onGenerate(drama, duration)}>
+                  <Button disabled={generation.disabled} size="sm" variant="gradient" onClick={() => onGenerate(drama, duration)}>
                     <WandSparkles className="h-3.5 w-3.5" />
-                    {t("board.generatePromo")}
+                    {generationLabel(t, generation, t("board.generatePromo"))}
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => void openDrama(drama)}>
                     <Film className="h-3.5 w-3.5" />
@@ -252,6 +255,7 @@ export function BoardView({ dramas, filters, isLoading = false, votes, onGenerat
         duration={duration}
         onGenerate={onGenerate}
         onGenerateBatch={onGenerateBatch}
+        getGenerationState={getGenerationState}
         onOpenChange={(open) => {
           if (!open) {
             setSelectedDrama(null);
