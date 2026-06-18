@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     promo_storage_dir: str = "../nuvelle_kit/out"
     promo_upload_dir: str = "../nuvelle_kit/_uploads"
     promo_cache_dir: str = "../nuvelle_kit/_vidcache"
+    reelshort_cps_token: str = ""
+    reelshort_cps_base_url: str = "https://cps.reelshort.com"
     jwt_secret: str = "nuvelle-local-dev-secret-change-me-32-bytes"
     jwt_algorithm: str = "HS256"
     jwt_access_token_minutes: int = 60 * 24 * 7

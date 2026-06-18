@@ -39,6 +39,7 @@ SQL_TIER="${SQL_TIER:-db-f1-micro}"
 DB_PASSWORD_SECRET="${DB_PASSWORD_SECRET:-nuvelle-db-password}"
 DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-nuvelle-database-url}"
 FLATKEY_SECRET="${FLATKEY_SECRET:-nuvelle-flatkey-api-key}"
+REELSHORT_CPS_SECRET="${REELSHORT_CPS_SECRET:-nuvelle-reelshort-cps-token}"
 
 DOMAIN_ROOT="${DOMAIN_ROOT:-nuvelle.ai}"
 GOOGLE_SITE_VERIFICATION_TXT="${GOOGLE_SITE_VERIFICATION_TXT:-google-site-verification=5VahbGzMPJdrTqND3LmWmOpXWhEuuC4ZkYMD4cGfpm8}"
@@ -317,7 +318,7 @@ ensure_database() {
     --condition=None \
     --quiet >/dev/null
 
-  DATABASE_URL="${DATABASE_URL:-postgresql+psycopg://${SQL_USER}:${db_password}@/${SQL_DATABASE}?host=/cloudsql/${connection_name}}"
+  DATABASE_URL="${CLOUD_SQL_DATABASE_URL:-postgresql+psycopg://${SQL_USER}:${db_password}@/${SQL_DATABASE}?host=/cloudsql/${connection_name}}"
   upsert_secret_version "$DATABASE_URL_SECRET" "$DATABASE_URL"
 }
 
@@ -453,6 +454,15 @@ deploy_api() {
     submit_cloud_build "$context" "$context/cloudbuild-api.yaml" "_IMAGE=$image"
   fi
 
+  if secret_exists "$REELSHORT_CPS_SECRET"; then
+    secret_args+=(--set-secrets=REELSHORT_CPS_TOKEN="$REELSHORT_CPS_SECRET":latest)
+  elif [[ -n "${REELSHORT_CPS_TOKEN:-}" ]]; then
+    upsert_secret_version "$REELSHORT_CPS_SECRET" "$REELSHORT_CPS_TOKEN"
+    secret_args+=(--set-secrets=REELSHORT_CPS_TOKEN="$REELSHORT_CPS_SECRET":latest)
+  else
+    warn "$REELSHORT_CPS_SECRET is missing and REELSHORT_CPS_TOKEN is not set; ReelShort promo generation cannot refresh expired video URLs."
+  fi
+
   gcloud run deploy "$API_SERVICE" \
     --project="$PROJECT_ID" \
     --region="$REGION" \
@@ -462,8 +472,8 @@ deploy_api() {
     --cpu=2 \
     --memory=2Gi \
     --timeout=900 \
-    --min-instances=0 \
-    --max-instances=2 \
+    --min-instances=1 \
+    --max-instances=1 \
     --add-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
     --set-env-vars='ENVIRONMENT=production,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=["*"]' \
     "${secret_args[@]}"

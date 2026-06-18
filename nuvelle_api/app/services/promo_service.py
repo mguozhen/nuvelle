@@ -11,6 +11,7 @@ from typing import cast
 from fastapi import HTTPException
 from nuvelle_kit import PromoGenerationRequest, generate_promo
 from nuvelle_kit.storage import slugify
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -26,6 +27,7 @@ from app.schemas.promo import (
     PromoJobFiles,
     PromoJobResponse,
 )
+from app.services.reelshort_video_service import ReelShortVideoService
 
 ASSET_NAMES = {"teaser.mp4", "cover.jpg", "caption.txt", "plan.json"}
 
@@ -165,7 +167,7 @@ class PromoService:
             raise HTTPException(status_code=404, detail="asset not found")
         return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
 
-    def run_job(self, job_id: str, payload: PromoJobCreate) -> None:
+    def run_job(self, job_id: str, payload: PromoJobCreate) -> PromoJobResponse:
         job = self.repository.get(job_id)
         if job is None:
             raise HTTPException(status_code=404, detail="job not found")
@@ -176,9 +178,10 @@ class PromoService:
             self.repository.update(job)
 
             beats = self._clean_beats(payload.beats)
+            video_source = self._video_source_for(job, payload)
             result = generate_promo(
                 PromoGenerationRequest(
-                    mp4=cast(Path, payload.video_url or payload.url or ""),
+                    mp4=cast(Path, video_source),
                     title=payload.title,
                     episode=str(payload.ep),
                     duration=int(payload.dur),
@@ -187,6 +190,7 @@ class PromoService:
                     no_ai=payload.no_ai,
                     prompt=payload.prompt,
                     cover_image_url=payload.cover_url or payload.cover_image,
+                    output_dir=Path(self.settings.promo_storage_dir).resolve() / job.id,
                 )
             )
             plan = self._read_plan(result.plan_path)
@@ -205,6 +209,7 @@ class PromoService:
             job.error = str(exc)
             job.log = str(exc)
             self.repository.update(job)
+        return self.to_response(job)
 
     def to_response(self, job: PromoJob) -> PromoJobResponse:
         return PromoJobResponse(
@@ -268,12 +273,31 @@ class PromoService:
     def _record_generate_event(self, user_id: int, payload: PromoJobCreate) -> None:
         if payload.drama_id is None:
             return
-        event = UserDramaEvent(
-            user_id=user_id,
-            drama_id=payload.drama_id,
-            episode_id=payload.episode_id,
-            event_type="generate",
-            event_metadata={"prompt": payload.prompt, "duration": payload.dur},
+        stmt = select(UserDramaEvent).where(
+            UserDramaEvent.user_id == user_id,
+            UserDramaEvent.drama_id == payload.drama_id,
+            UserDramaEvent.event_type == "generate",
         )
+        event = self.repository.db.scalars(stmt).first()
+        if event is None:
+            event = UserDramaEvent(
+                user_id=user_id,
+                drama_id=payload.drama_id,
+                event_type="generate",
+            )
+        event.episode_id = payload.episode_id
+        event.event_metadata = {"prompt": payload.prompt, "duration": payload.dur}
         self.repository.db.add(event)
         self.repository.db.commit()
+
+    def _video_source_for(self, job: PromoJob, payload: PromoJobCreate) -> str:
+        refreshed = ReelShortVideoService(self.repository.db).refresh_episode_play_url(
+            drama_id=payload.drama_id,
+            episode_id=payload.episode_id,
+        )
+        video_source = refreshed or payload.video_url or payload.url
+        if not video_source:
+            raise HTTPException(status_code=400, detail="video_url is required")
+        job.source_url = video_source
+        self.repository.update(job)
+        return video_source

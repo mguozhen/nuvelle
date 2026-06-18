@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse, Response
 
 from app.api.deps import DbSession, OptionalCurrentUser
@@ -17,14 +17,12 @@ router = APIRouter()
 @router.post("/promo/jobs", response_model=PromoJobResponse)
 def create_job(
     payload: PromoJobCreate,
-    background_tasks: BackgroundTasks,
     db: DbSession,
     user: OptionalCurrentUser,
 ) -> PromoJobResponse:
     service = PromoService(db)
     response = service.create_job(payload, user_id=user.id if user else None)
-    background_tasks.add_task(service.run_job, response.job_id, payload)
-    return response
+    return service.run_job(response.job_id, payload)
 
 
 @router.get("/promo/jobs/{job_id}", response_model=PromoJobResponse)
@@ -41,15 +39,13 @@ def get_job_file(job_id: str, filename: str, db: DbSession) -> FileResponse:
 @router.post("/promo/batches", response_model=PromoBatchCreateResponse)
 def create_batch(
     payload: PromoBatchCreate,
-    background_tasks: BackgroundTasks,
     db: DbSession,
 ) -> PromoBatchCreateResponse:
     service = PromoService(db)
     response = service.create_batch(payload)
     for item in response.jobs:
         video_url = payload.episodes[str(item.ep)]
-        background_tasks.add_task(
-            service.run_job,
+        service.run_job(
             item.job_id,
             PromoJobCreate(
                 video_url=video_url,
@@ -80,14 +76,12 @@ def download_batch(batch_id: str, db: DbSession) -> Response:
 @router.post("/gen", response_model=PromoJobResponse)
 def create_job_alias(
     payload: PromoJobCreate,
-    background_tasks: BackgroundTasks,
     db: DbSession,
     user: OptionalCurrentUser,
 ) -> PromoJobResponse:
     service = PromoService(db)
     response = service.create_job(payload, user_id=user.id if user else None)
-    background_tasks.add_task(service.run_job, response.job_id, payload)
-    return response
+    return service.run_job(response.job_id, payload)
 
 
 @router.get("/job", response_model=PromoJobResponse)
@@ -98,15 +92,13 @@ def get_job_alias(db: DbSession, job_id: str = Query(alias="id")) -> PromoJobRes
 @router.post("/gen-batch", response_model=PromoBatchCreateResponse)
 def create_batch_alias(
     payload: PromoBatchCreate,
-    background_tasks: BackgroundTasks,
     db: DbSession,
 ) -> PromoBatchCreateResponse:
     service = PromoService(db)
     response = service.create_batch(payload)
     for item in response.jobs:
         video_url = payload.episodes[str(item.ep)]
-        background_tasks.add_task(
-            service.run_job,
+        service.run_job(
             item.job_id,
             PromoJobCreate(
                 video_url=video_url,

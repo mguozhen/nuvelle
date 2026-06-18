@@ -30,7 +30,11 @@ def probe(mp4):
     r = run(["ffprobe", "-v", "error", "-select_streams", "v:0",
              "-show_entries", "stream=width,height,r_frame_rate",
              "-show_entries", "format=duration", "-of", "json", mp4])
+    if r.returncode != 0:
+        raise RuntimeError("ffprobe failed:\n" + (r.stderr or r.stdout)[-800:])
     j = json.loads(r.stdout)
+    if not j.get("streams"):
+        raise RuntimeError("ffprobe found no video streams")
     st = j["streams"][0]
     num, den = st["r_frame_rate"].split("/")
     return {"w": int(st["width"]), "h": int(st["height"]),

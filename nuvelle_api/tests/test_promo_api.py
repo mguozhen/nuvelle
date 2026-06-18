@@ -105,7 +105,7 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(
 
     assert response.status_code == 200
     assert payload["job_id"]
-    assert payload["status"] == "queued"
+    assert payload["status"] == "done"
     assert job.status_code == 200
     assert job.json()["status"] == "done"
     assert job.json()["caption"] == "caption"
@@ -256,3 +256,129 @@ def test_authenticated_promo_job_stores_user_drama_episode_and_prompt(
     assert job.drama_id == drama.id
     assert job.episode_id == episode.id
     assert job.prompt == "make it tense"
+
+
+def test_promo_job_uses_refreshed_reelshort_play_url(
+    client: TestClient, db: Session, monkeypatch, tmp_path
+) -> None:
+    from nuvelle_kit.schemas import PromoGenerationResult
+
+    from app.services import promo_service
+    from app.services.reelshort_video_service import ReelShortVideoService
+
+    drama, episode = seed_drama(db)
+    refreshed_url = "https://example.com/fresh-signed-url.mp4"
+    seen_sources: list[str] = []
+
+    def fake_refresh(self, *, drama_id, episode_id):
+        assert drama_id == drama.id
+        assert episode_id == episode.id
+        return refreshed_url
+
+    def fake_generate_promo(request):
+        seen_sources.append(str(request.mp4))
+        output_dir = tmp_path / request.slug
+        output_dir.mkdir()
+        cover_path = output_dir / "cover.jpg"
+        teaser_path = output_dir / "teaser.mp4"
+        caption_path = output_dir / "caption.txt"
+        plan_path = output_dir / "plan.json"
+        cover_path.write_bytes(b"cover")
+        teaser_path.write_bytes(b"teaser")
+        caption_path.write_text("caption")
+        plan_path.write_text("{}")
+        return PromoGenerationResult(
+            output_dir=output_dir,
+            cover_path=cover_path,
+            teaser_path=teaser_path,
+            caption_path=caption_path,
+            plan_path=plan_path,
+            caption_text="caption",
+        )
+
+    monkeypatch.setattr(ReelShortVideoService, "refresh_episode_play_url", fake_refresh)
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+
+    response = client.post(
+        "/api/v1/promo/jobs",
+        json={
+            "video_url": "https://example.com/expired.mp4",
+            "title": drama.title,
+            "ep": 1,
+            "dur": 13,
+            "drama_id": drama.id,
+            "episode_id": episode.id,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "done"
+    assert seen_sources == [refreshed_url]
+    job = db.get(PromoJob, response.json()["job_id"])
+    assert job is not None
+    assert job.source_url == refreshed_url
+
+
+def test_authenticated_promo_job_allows_regenerating_same_drama(
+    client: TestClient, db: Session, monkeypatch, tmp_path
+) -> None:
+    from nuvelle_kit.schemas import PromoGenerationResult
+
+    from app.services import promo_service
+
+    drama, episode = seed_drama(db)
+
+    def fake_generate_promo(request):
+        output_dir = tmp_path / request.slug / request.prompt.replace(" ", "_")
+        output_dir.mkdir(parents=True)
+        cover_path = output_dir / "cover.jpg"
+        teaser_path = output_dir / "teaser.mp4"
+        caption_path = output_dir / "caption.txt"
+        plan_path = output_dir / "plan.json"
+        cover_path.write_bytes(b"cover")
+        teaser_path.write_bytes(b"teaser")
+        caption_path.write_text("caption")
+        plan_path.write_text("{}")
+        return PromoGenerationResult(
+            output_dir=output_dir,
+            cover_path=cover_path,
+            teaser_path=teaser_path,
+            caption_path=caption_path,
+            plan_path=plan_path,
+            caption_text="caption",
+        )
+
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    headers = auth_header(client, db)
+
+    first = client.post(
+        "/api/v1/promo/jobs",
+        headers=headers,
+        json={
+            "video_url": episode.play_url,
+            "title": drama.title,
+            "ep": 1,
+            "dur": 13,
+            "prompt": "first",
+            "drama_id": drama.id,
+            "episode_id": episode.id,
+        },
+    )
+    second = client.post(
+        "/api/v1/promo/jobs",
+        headers=headers,
+        json={
+            "video_url": episode.play_url,
+            "title": drama.title,
+            "ep": 1,
+            "dur": 13,
+            "prompt": "second",
+            "drama_id": drama.id,
+            "episode_id": episode.id,
+        },
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["status"] == "done"
+    assert second.json()["status"] == "done"
