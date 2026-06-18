@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -24,19 +24,22 @@ const drama = {
       id: 10,
       episode_no: 1,
       play_url: "https://cdn.example/ep1.mp4",
-      poster_url: "https://example.com/poster.jpg"
+      poster_url: "https://example.com/poster.jpg",
+      iframe_src: "https://www.reelshort.com/en/embed/demo-ep1"
     },
     {
       id: 11,
       episode_no: 2,
       play_url: "https://cdn.example/ep2.mp4",
-      poster_url: "https://example.com/poster-2.jpg"
+      poster_url: "https://example.com/poster-2.jpg",
+      iframe_src: "https://www.reelshort.com/en/embed/demo-ep2"
     },
     {
       id: 12,
       episode_no: 3,
       play_url: "https://cdn.example/ep3.mp4",
-      poster_url: "https://example.com/poster-3.jpg"
+      poster_url: "https://example.com/poster-3.jpg",
+      iframe_src: "https://www.reelshort.com/en/embed/demo-ep3"
     }
   ]
 };
@@ -198,6 +201,7 @@ describe("admin app", () => {
 
   it("shows all detail tags and generates from the selected episode", async () => {
     const fetchMock = installFetchMock();
+    const playMock = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<App />);
     await registerAndLoad(user);
@@ -216,6 +220,15 @@ describe("admin app", () => {
     await user.click(screen.getByRole("button", { name: /play ep 2/i }));
     const video = screen.getByLabelText("Demo Drama video");
     await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep2.mp4"));
+    await waitFor(() => expect(playMock).toHaveBeenCalled());
+    await act(async () => {
+      video.dispatchEvent(new Event("error", { bubbles: true }));
+    });
+    expect(await screen.findByTitle("Demo Drama embedded player")).toHaveAttribute(
+      "src",
+      "https://www.reelshort.com/en/embed/demo-ep2"
+    );
+    expect(screen.getByText("Direct video failed. Switched to the ReelShort player.")).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText(/prompt for this promo/i), "high tension opener");
     await user.click(screen.getByRole("button", { name: /generate current episode/i }));

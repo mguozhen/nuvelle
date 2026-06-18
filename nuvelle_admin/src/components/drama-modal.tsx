@@ -25,6 +25,7 @@ type DramaModalProps = {
 
 type EpisodeOption = {
   episode: number;
+  iframeSrc: string;
   posterUrl: string;
   url: string;
 };
@@ -32,6 +33,7 @@ type EpisodeOption = {
 export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [customUrl, setCustomUrl] = useState("");
+  const [playRequestKey, setPlayRequestKey] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [selectedEpisodeNo, setSelectedEpisodeNo] = useState<number | null>(null);
   const episodes = useMemo<EpisodeOption[]>(() => {
@@ -42,6 +44,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
     const fromEpisodeList = Array.isArray(drama.episode_list)
       ? drama.episode_list.map((episode) => ({
           episode: episode.episode_no,
+          iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
           posterUrl: episode.poster_url || ""
         }))
@@ -50,11 +53,13 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
     const fromEpisodes = Array.isArray(drama.episodes)
       ? drama.episodes.map((episode) => ({
           episode: episode.episode_no,
+          iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
           posterUrl: episode.poster_url || ""
         }))
       : Object.entries(drama.episodes || {}).map(([episode, url]) => ({
           episode: Number(episode),
+          iframeSrc: "",
           url,
           posterUrl: ""
         }));
@@ -62,7 +67,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
     const combined = fromEpisodeList.length ? fromEpisodeList : fromEpisodes;
 
     if (!combined.length && drama.video_url) {
-      return [{ episode: 1, posterUrl: "", url: drama.video_url }];
+      return [{ episode: 1, iframeSrc: "", posterUrl: "", url: drama.video_url }];
     }
 
     return combined.sort((a, b) => a.episode - b.episode);
@@ -78,9 +83,15 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
 
   useEffect(() => {
     setSelectedEpisodeNo(null);
+    setPlayRequestKey(0);
     setPrompt("");
     setCustomUrl("");
   }, [drama?.id]);
+
+  const playEpisode = (episodeNo: number) => {
+    setSelectedEpisodeNo(episodeNo);
+    setPlayRequestKey((current) => current + 1);
+  };
 
   return (
     <Dialog open={Boolean(drama)} onOpenChange={onOpenChange}>
@@ -97,7 +108,10 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
             </DialogHeader>
             <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
               <VideoPreview
+                autoPlay={playRequestKey > 0}
+                embedUrl={selectedEpisode?.iframeSrc}
                 poster={selectedEpisode?.posterUrl || drama.cover_image_url}
+                playRequestKey={playRequestKey}
                 title={drama.title}
                 url={selectedEpisode?.url || drama.video_url}
               />
@@ -184,16 +198,16 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                       >
                         <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
                         <span className="min-w-0 text-xs text-[#9aa2c0]">
-                          {episode.url ? t("detail.playable") : t("detail.noEpisodeVideo")}
+                          {episode.url || episode.iframeSrc ? t("detail.playable") : t("detail.noEpisodeVideo")}
                         </span>
                         <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
                           <Button
                             aria-label={t("detail.playEpisode", { episode: episode.episode })}
                             className="whitespace-nowrap"
-                            disabled={!episode.url}
+                            disabled={!episode.url && !episode.iframeSrc}
                             size="sm"
                             variant="outline"
-                            onClick={() => setSelectedEpisodeNo(episode.episode)}
+                            onClick={() => playEpisode(episode.episode)}
                           >
                             <Play className="h-3.5 w-3.5" />
                             {t("detail.play")}

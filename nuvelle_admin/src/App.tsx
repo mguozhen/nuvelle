@@ -24,6 +24,7 @@ import type {
 type EpisodeCandidate = {
   id?: number;
   episode_no: number;
+  iframe_src?: string | null;
   play_url?: string | null;
   poster_url?: string | null;
 };
@@ -66,6 +67,7 @@ function normalizeDrama(raw: DramaRecord): DramaRecord {
     .map((episode) => ({
       id: episode.id ?? episode.episode_no,
       episode_no: episode.episode_no,
+      iframe_src: episode.iframe_src ?? null,
       play_url: episode.play_url ?? null,
       poster_url: episode.poster_url ?? null
     }))
