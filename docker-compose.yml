@@ -13,6 +13,7 @@ services:
       PROMO_CACHE_DIR: /workspace/nuvelle_kit/_vidcache
       FLATKEY_API_KEY: ${FLATKEY_API_KEY:-}
       FLATKEY_BASE: ${FLATKEY_BASE:-https://router.flatkey.ai}
+      REELSHORT_CPS_TOKEN: ${REELSHORT_CPS_TOKEN:-}
       PYTHONPATH: /app:/workspace
     ports:
       - "${API_PORT:-8000}:8000"
