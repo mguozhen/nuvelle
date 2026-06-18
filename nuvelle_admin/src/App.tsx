@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AdminShell, type AdminTab } from "@/components/admin-shell";
 import { BackendSettings } from "@/components/backend-settings";
 import { BoardView, type BoardFilters } from "@/components/board-view";
@@ -101,14 +102,34 @@ const initialBoardFilters: BoardFilters = {
   tag: ""
 };
 
-function toBoardQuery(filters: BoardFilters) {
+const BOARD_PAGE_SIZE = 50;
+const TAB_ROUTES: Record<AdminTab, string> = {
+  swipe: "/swipe",
+  board: "/board",
+  generated: "/generated"
+};
+
+function tabFromPathname(pathname: string): AdminTab | null {
+  const section = pathname.split("/").filter(Boolean)[0];
+  if (section === "swipe" || section === "board" || section === "generated") {
+    return section;
+  }
+
+  return null;
+}
+
+function toBoardQuery(filters: BoardFilters, page: number) {
+  const safePage = Math.max(1, page);
+
   return {
     q: filters.q.trim() || undefined,
     platform: filters.platform || undefined,
     language: filters.language || undefined,
     tag: filters.tag || undefined,
     has_video: filters.filter === "video" ? true : undefined,
-    min_score: filters.filter === "top" ? 70 : undefined
+    min_score: filters.filter === "top" ? 70 : undefined,
+    limit: BOARD_PAGE_SIZE,
+    offset: (safePage - 1) * BOARD_PAGE_SIZE
   };
 }
 
@@ -134,18 +155,23 @@ function authFromResponse(response: AuthResponse): AuthState {
 export default function App() {
   return (
     <I18nProvider>
-      <AdminApp />
+      <BrowserRouter>
+        <AdminApp />
+      </BrowserRouter>
     </I18nProvider>
   );
 }
 
 function AdminApp() {
   const { t } = useI18n();
+  const location = useLocation();
+  const activeTab = tabFromPathname(location.pathname);
   const [auth, setAuth] = useState<AuthState>(() => loadAuthState());
   const [backendUrl, setBackendUrl] = useState(() => loadBackendUrl());
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<AdminTab>("board");
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(initialBoardFilters);
+  const [boardPage, setBoardPage] = useState(1);
+  const [boardTotal, setBoardTotal] = useState(0);
   const [dramas, setDramas] = useState<DramaRecord[]>([]);
   const [swipeDrama, setSwipeDrama] = useState<DramaRecord | null>(null);
   const [votes, setVotes] = useState<Record<string, VoteVerdict>>({});
@@ -176,14 +202,24 @@ function AdminApp() {
   }, []);
 
   const updateBoardFilters = useCallback((nextFilters: Partial<BoardFilters>) => {
+    setBoardPage(1);
     setBoardFilters((current) => ({ ...current, ...nextFilters }));
   }, []);
 
-  const loadBoard = useCallback(async (filters: BoardFilters) => {
+  const loadBoard = useCallback(async (filters: BoardFilters, page: number) => {
     setBoardLoading(true);
 
     try {
-      const response = await client.listAdminDramas(toBoardQuery(filters));
+      const response = await client.listAdminDramas(toBoardQuery(filters, page));
+      const total = response.total ?? response.items.length;
+      const maxPage = Math.max(1, Math.ceil(total / BOARD_PAGE_SIZE));
+      if (page > maxPage) {
+        setBoardTotal(total);
+        setBoardPage(maxPage);
+        return;
+      }
+
+      setBoardTotal(total);
       setDramas(sortDramas(response.items.map(normalizeDrama)));
     } catch {
       showStatus(t("app.libraryLoadFailed"));
@@ -245,11 +281,11 @@ function AdminApp() {
     }
 
     const timeout = window.setTimeout(() => {
-      void loadBoard(boardFilters);
+      void loadBoard(boardFilters, boardPage);
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [auth.token, boardFilters, loadBoard]);
+  }, [auth.token, boardFilters, boardPage, loadBoard]);
 
   useEffect(() => {
     if (!auth.token) {
@@ -283,6 +319,8 @@ function AdminApp() {
     clearAuthState();
     setAuth({ token: "", user: null });
     setBoardFilters(initialBoardFilters);
+    setBoardPage(1);
+    setBoardTotal(0);
     setDramas([]);
     setSwipeDrama(null);
     setVotes({});
@@ -525,6 +563,10 @@ function AdminApp() {
   const ratedCount = new Set([...Object.keys(votes), ...dramas.filter((drama) => drama.seen).map((drama) => String(drama.id))]).size;
   const fireCount = Object.values(votes).filter((verdict) => verdict === "fire").length;
 
+  if (!activeTab) {
+    return <Navigate replace to={TAB_ROUTES.board} />;
+  }
+
   if (!auth.token) {
     return (
       <>
@@ -538,67 +580,82 @@ function AdminApp() {
     <AdminShell
       activeTab={activeTab}
       generatedCount={generated.length}
-      libraryCount={dramas.length}
+      libraryCount={boardTotal || dramas.length}
       loading={boardLoading}
       picksCount={fireCount}
       ratedCount={ratedCount}
       onBackendSettings={() => setBackendSettingsOpen(true)}
       onSignOut={signOut}
-      onTabChange={setActiveTab}
     >
-      {activeTab === "swipe" ? (
-        <SwipeView
-          current={activeSwipeDrama}
-          isLoading={swipeLoading && !activeSwipeDrama}
-          onGenerate={generateForDrama}
-          getGenerationState={getGenerationState}
-          onSeen={markSeen}
-          onVote={vote}
+      <Routes>
+        <Route
+          path="/swipe"
+          element={
+            <SwipeView
+              current={activeSwipeDrama}
+              isLoading={swipeLoading && !activeSwipeDrama}
+              onGenerate={generateForDrama}
+              getGenerationState={getGenerationState}
+              onSeen={markSeen}
+              onVote={vote}
+            />
+          }
         />
-      ) : null}
-      {activeTab === "board" ? (
-        <BoardView
-          dramas={dramas}
-          filters={boardFilters}
-          isLoading={boardLoading}
-          votes={votes}
-          onGenerate={generateForDrama}
-          onGenerateBatch={generateBatch}
-          getGenerationState={getGenerationState}
-          onFiltersChange={updateBoardFilters}
-          onLoadDramaDetail={async (drama) => normalizeDrama(await client.getAdminDrama(drama.id))}
-          onVote={vote}
+        <Route
+          path="/board"
+          element={
+            <BoardView
+              dramas={dramas}
+              filters={boardFilters}
+              isLoading={boardLoading}
+              page={boardPage}
+              pageSize={BOARD_PAGE_SIZE}
+              total={boardTotal}
+              votes={votes}
+              onGenerate={generateForDrama}
+              onGenerateBatch={generateBatch}
+              getGenerationState={getGenerationState}
+              onFiltersChange={updateBoardFilters}
+              onPageChange={setBoardPage}
+              onLoadDramaDetail={async (drama) => normalizeDrama(await client.getAdminDrama(drama.id))}
+              onVote={vote}
+            />
+          }
         />
-      ) : null}
-      {activeTab === "generated" ? (
-        <GeneratedLibrary
-          assetBaseUrl={backendUrl}
-          generated={generated}
-          isLoading={generatedLoading}
-          onRegenerate={(item, prompt) => {
-            if (!item.source_url) {
-              showStatus(t("app.missingSourceVideo"));
-              return;
-            }
+        <Route
+          path="/generated"
+          element={
+            <GeneratedLibrary
+              assetBaseUrl={backendUrl}
+              generated={generated}
+              isLoading={generatedLoading}
+              onRegenerate={(item, prompt) => {
+                if (!item.source_url) {
+                  showStatus(t("app.missingSourceVideo"));
+                  return;
+                }
 
-            void generatePromo({
-              url: item.source_url,
-              title: item.title || t("common.promo"),
-              ep: item.episode || 1,
-              dur: item.duration || 30,
-              prompt,
-              cover_image: toAssetUrl(backendUrl, item.files?.cover),
-              drama_id: item.drama?.id,
-              episode_id: item.episode_ref?.id
-            })
-              .then(() => {
-                void loadGenerated();
-                showStatus(t("app.promoJobSubmitted"));
-              })
-              .catch(() => showStatus(t("app.cantReachGenerator")));
-          }}
+                void generatePromo({
+                  url: item.source_url,
+                  title: item.title || t("common.promo"),
+                  ep: item.episode || 1,
+                  dur: item.duration || 30,
+                  prompt,
+                  cover_image: toAssetUrl(backendUrl, item.files?.cover),
+                  drama_id: item.drama?.id,
+                  episode_id: item.episode_ref?.id
+                })
+                  .then(() => {
+                    void loadGenerated();
+                    showStatus(t("app.promoJobSubmitted"));
+                  })
+                  .catch(() => showStatus(t("app.cantReachGenerator")));
+              }}
+            />
+          }
         />
-      ) : null}
+        <Route path="*" element={<Navigate replace to={TAB_ROUTES.board} />} />
+      </Routes>
       <BackendSettings
         backendUrl={backendUrl}
         open={backendSettingsOpen}

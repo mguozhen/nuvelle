@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
 import { Input } from "@/components/ui/input";
+import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { generationLabel } from "@/lib/generation";
@@ -26,12 +27,16 @@ type BoardViewProps = {
   dramas: DramaRecord[];
   filters: BoardFilters;
   isLoading?: boolean;
+  page: number;
+  pageSize: number;
+  total: number;
   votes: Record<string, VoteVerdict>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
   onFiltersChange: (filters: Partial<BoardFilters>) => void;
   onLoadDramaDetail?: (drama: DramaRecord) => Promise<DramaRecord>;
+  onPageChange: (page: number) => void;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
@@ -95,7 +100,22 @@ function BoardSkeletonGrid() {
   );
 }
 
-export function BoardView({ dramas, filters, isLoading = false, votes, onGenerate, onGenerateBatch, getGenerationState, onFiltersChange, onLoadDramaDetail, onVote }: BoardViewProps) {
+export function BoardView({
+  dramas,
+  filters,
+  isLoading = false,
+  page,
+  pageSize,
+  total,
+  votes,
+  onGenerate,
+  onGenerateBatch,
+  getGenerationState,
+  onFiltersChange,
+  onLoadDramaDetail,
+  onPageChange,
+  onVote
+}: BoardViewProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [selectedDrama, setSelectedDrama] = useState<DramaRecord | null>(null);
   const [duration, setDuration] = useState(30);
@@ -126,6 +146,9 @@ export function BoardView({ dramas, filters, isLoading = false, votes, onGenerat
         .sort((a, b) => b.score - a.score),
     [dramas]
   );
+  const pageStart = total > 0 && ranked.length > 0 ? (page - 1) * pageSize + 1 : 0;
+  const pageEnd = total > 0 && ranked.length > 0 ? Math.min(total, pageStart + ranked.length - 1) : 0;
+  const totalPages = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
 
   return (
     <section aria-busy={isLoading}>
@@ -250,6 +273,21 @@ export function BoardView({ dramas, filters, isLoading = false, votes, onGenerat
         })}
         {!isLoading && !ranked.length ? <div className="col-span-full py-12 text-center text-sm text-[#9aa2c0]">{t("board.noMatch")}</div> : null}
       </div>
+      {!isLoading ? (
+        <Pagination
+          className="mt-5"
+          firstLabel={t("board.pageFirst")}
+          lastLabel={t("board.pageLast")}
+          nextLabel={t("board.pageNext")}
+          page={page}
+          pageLabel={t("board.page", { page, totalPages })}
+          pageSize={pageSize}
+          previousLabel={t("board.pagePrevious")}
+          summaryLabel={t("board.paginationSummary", { start: pageStart, end: pageEnd, total })}
+          total={total}
+          onPageChange={onPageChange}
+        />
+      ) : null}
       <DramaModal
         drama={selectedDrama}
         duration={duration}

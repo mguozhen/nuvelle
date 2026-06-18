@@ -57,7 +57,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function installFetchMock(options: { boardResponse?: () => Promise<Response>; detailResponse?: () => Promise<Response>; generatedResponse?: () => Promise<Response> } = {}) {
+function pagedDramas(offset: number, length: number) {
+  return Array.from({ length }).map((_, index) => ({
+    ...dramaSummary,
+    id: offset + index + 1,
+    title: offset === 0 && index === 0 ? "Demo Drama" : `Demo Drama ${offset + index + 1}`
+  }));
+}
+
+function installFetchMock(options: { boardResponse?: (url: string) => Promise<Response>; detailResponse?: () => Promise<Response>; generatedResponse?: () => Promise<Response> } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/register")) {
@@ -67,7 +75,7 @@ function installFetchMock(options: { boardResponse?: () => Promise<Response>; de
       return json({ access_token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } });
     }
     if (url.includes("/admin/dramas?")) {
-      return options.boardResponse?.() ?? json({ items: [dramaSummary], total: 1 });
+      return options.boardResponse?.(url) ?? json({ items: [dramaSummary], total: 1 });
     }
     if (url.endsWith("/admin/dramas/1")) {
       return options.detailResponse?.() ?? json(drama);
@@ -122,6 +130,7 @@ async function registerAndLoad(user = userEvent.setup()) {
 describe("admin app", () => {
   beforeEach(() => {
     expect(typeof window.localStorage.clear).toBe("function");
+    window.history.replaceState(null, "", "/");
     localStorage.clear();
     vi.restoreAllMocks();
   });
@@ -165,6 +174,48 @@ describe("admin app", () => {
     );
   });
 
+  it("paginates board queries through the admin API and resets page on filters", async () => {
+    const fetchMock = installFetchMock({
+      boardResponse: (url) => {
+        if (url.includes("q=rose")) {
+          return json({ items: [{ ...dramaSummary, title: "Rose Drama" }], total: 1 });
+        }
+
+        if (url.includes("offset=50")) {
+          return json({ items: [{ ...dramaSummary, id: 51, title: "Second Page Drama" }, ...pagedDramas(51, 24)], total: 75 });
+        }
+
+        return json({ items: pagedDramas(0, 50), total: 75 });
+      }
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    expect(await screen.findByText("1-50 of 75 dramas")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /next page/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas?has_video=true&limit=50&offset=50",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    expect(await screen.findByText("Second Page Drama")).toBeInTheDocument();
+    expect(screen.getByText("51-75 of 75 dramas")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText(/search title or hook/i), "rose");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas?q=rose&has_video=true&limit=50&offset=0",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    expect(await screen.findByText("Rose Drama")).toBeInTheDocument();
+  });
+
   it("shows board skeletons while admin dramas are loading", async () => {
     const boardResponse = deferred<Response>();
     const user = userEvent.setup();
@@ -202,13 +253,35 @@ describe("admin app", () => {
     await user.click(screen.getByRole("button", { name: "注册" }));
 
     await waitFor(() => expect(screen.getByText("Demo Drama")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /素材库/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /素材库/ })).toBeInTheDocument();
     expect(screen.getByText("全部视频")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("搜索标题或钩子")).toBeInTheDocument();
     expect(screen.getByLabelText("时长")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /生成资源/ }));
+    await user.click(screen.getByRole("link", { name: /生成资源/ }));
     expect(await screen.findByText("生成资源库")).toBeInTheDocument();
+  });
+
+  it("keeps each admin tab on its own route across refreshes", async () => {
+    localStorage.setItem(
+      "nuvelle_admin_auth",
+      JSON.stringify({ token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } })
+    );
+    window.history.replaceState(null, "", "/generated");
+    installFetchMock();
+    render(<App />);
+
+    expect(await screen.findByText("Generated library")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /generated/i })).toHaveAttribute("aria-current", "page");
+
+    await userEvent.click(screen.getByRole("link", { name: /swipe/i }));
+
+    expect(window.location.pathname).toBe("/swipe");
+    expect(await screen.findByLabelText("Demo Drama video")).toBeInTheDocument();
+
+    window.history.back();
+    await waitFor(() => expect(window.location.pathname).toBe("/generated"));
+    expect(screen.getByRole("link", { name: /generated/i })).toHaveAttribute("aria-current", "page");
   });
 
   it("records swipe verdict through the admin event API", async () => {
@@ -217,7 +290,7 @@ describe("admin app", () => {
     render(<App />);
     await registerAndLoad(user);
 
-    await user.click(screen.getByRole("button", { name: /swipe/i }));
+    await user.click(screen.getByRole("link", { name: /swipe/i }));
     const actionButtons = within(screen.getByTestId("swipe-actions")).getAllByRole("button");
     expect(actionButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
       "Featured",
@@ -244,7 +317,7 @@ describe("admin app", () => {
     render(<App />);
     await registerAndLoad(user);
 
-    await user.click(screen.getByRole("button", { name: /swipe/i }));
+    await user.click(screen.getByRole("link", { name: /swipe/i }));
 
     const video = await screen.findByLabelText("Demo Drama video");
     await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep1.mp4"));
@@ -269,7 +342,7 @@ describe("admin app", () => {
     render(<App />);
     await registerAndLoad(user);
 
-    await user.click(screen.getByRole("button", { name: /swipe/i }));
+    await user.click(screen.getByRole("link", { name: /swipe/i }));
 
     await waitFor(() => expect(screen.getByTestId("swipe-skeleton")).toBeInTheDocument());
     expect(screen.queryByAltText("Demo Drama")).not.toBeInTheDocument();
@@ -344,7 +417,7 @@ describe("admin app", () => {
     render(<App />);
     await registerAndLoad(user);
 
-    await user.click(screen.getByRole("button", { name: /generated/i }));
+    await user.click(screen.getByRole("link", { name: /generated/i }));
 
     expect(await screen.findByText(/queued 5%/i)).toBeInTheDocument();
     expect(screen.getByRole("progressbar", { name: /queued 5%/i })).toHaveAttribute("aria-valuenow", "5");

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Gauge, Library, LogOut, PanelTop, Settings, Sparkles } from "lucide-react";
+import { NavLink } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -18,13 +19,12 @@ type AdminShellProps = {
   ratedCount: number;
   onBackendSettings: () => void;
   onSignOut: () => void;
-  onTabChange: (tab: AdminTab) => void;
 };
 
 const tabs = [
-  { id: "swipe" as const, labelKey: "shell.swipe" as TranslationKey, icon: Sparkles },
-  { id: "board" as const, labelKey: "shell.board" as TranslationKey, icon: PanelTop },
-  { id: "generated" as const, labelKey: "shell.generated" as TranslationKey, icon: Library }
+  { id: "swipe" as const, labelKey: "shell.swipe" as TranslationKey, icon: Sparkles, path: "/swipe" },
+  { id: "board" as const, labelKey: "shell.board" as TranslationKey, icon: PanelTop, path: "/board" },
+  { id: "generated" as const, labelKey: "shell.generated" as TranslationKey, icon: Library, path: "/generated" }
 ];
 
 export function AdminShell({
@@ -36,8 +36,7 @@ export function AdminShell({
   picksCount,
   ratedCount,
   onBackendSettings,
-  onSignOut,
-  onTabChange
+  onSignOut
 }: AdminShellProps) {
   const { t } = useI18n();
 
@@ -84,18 +83,20 @@ export function AdminShell({
             const selected = tab.id === activeTab;
 
             return (
-              <button
+              <NavLink
                 key={tab.id}
-                className={cn(
-                  "flex h-[50px] items-center gap-2 border-b-2 px-4 text-sm font-semibold transition-colors",
-                  selected ? "border-[#ff5fbf] text-white" : "border-transparent text-[#9aa2c0] hover:text-white"
-                )}
-                type="button"
-                onClick={() => onTabChange(tab.id)}
+                className={() =>
+                  cn(
+                    "flex h-[50px] items-center gap-2 border-b-2 px-4 text-sm font-semibold transition-colors",
+                    selected ? "border-[#ff5fbf] text-white" : "border-transparent text-[#9aa2c0] hover:text-white"
+                  )
+                }
+                end
+                to={tab.path}
               >
                 <Icon className="h-4 w-4" />
                 {t(tab.labelKey)}
-              </button>
+              </NavLink>
             );
           })}
           {loading ? (
