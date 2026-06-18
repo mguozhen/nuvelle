@@ -176,26 +176,37 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                       <div
                         key={episode.episode}
                         className={[
-                          "flex items-center gap-3 rounded-xl border p-3 transition-colors",
+                          "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-xl border p-3 transition-colors sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center",
                           selectedEpisode?.episode === episode.episode
                             ? "border-[#ff5fbf66] bg-[#ff5fbf12]"
                             : "border-white/10 bg-[#0e1119]"
                         ].join(" ")}
                       >
                         <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
-                        <span className="min-w-0 flex-1 truncate text-xs text-[#9aa2c0]">{episode.url}</span>
-                        <Button
-                          aria-label={t("detail.playEpisode", { episode: episode.episode })}
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedEpisodeNo(episode.episode)}
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                          {t("detail.play")}
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => onGenerate(drama, duration, prompt, episode.episode)}>
-                          {t("detail.generate")}
-                        </Button>
+                        <span className="min-w-0 text-xs text-[#9aa2c0]">
+                          {episode.url ? t("detail.playable") : t("detail.noEpisodeVideo")}
+                        </span>
+                        <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
+                          <Button
+                            aria-label={t("detail.playEpisode", { episode: episode.episode })}
+                            className="whitespace-nowrap"
+                            disabled={!episode.url}
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedEpisodeNo(episode.episode)}
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                            {t("detail.play")}
+                          </Button>
+                          <Button
+                            className="whitespace-nowrap"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onGenerate(drama, duration, prompt, episode.episode)}
+                          >
+                            {t("detail.generate")}
+                          </Button>
+                        </div>
                       </div>
                     ))}
                     {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}

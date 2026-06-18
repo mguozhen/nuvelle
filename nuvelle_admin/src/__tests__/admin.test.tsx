@@ -210,6 +210,8 @@ describe("admin app", () => {
     expect(screen.getByRole("button", { name: /play ep 1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 2/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
+    expect(screen.queryByText("https://cdn.example/ep1.mp4")).not.toBeInTheDocument();
+    expect(screen.queryByText("https://cdn.example/ep2.mp4")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /play ep 2/i }));
     const video = screen.getByLabelText("Demo Drama video");
