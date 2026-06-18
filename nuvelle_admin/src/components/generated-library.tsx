@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Download, RefreshCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useI18n } from "@/lib/i18n";
 import type { GeneratedJob } from "@/types/drama";
@@ -9,6 +10,7 @@ import type { GeneratedJob } from "@/types/drama";
 type GeneratedLibraryProps = {
   assetBaseUrl: string;
   generated: GeneratedJob[];
+  isLoading?: boolean;
   onRegenerate: (item: GeneratedJob, prompt: string) => void;
 };
 
@@ -24,9 +26,47 @@ function assetUrl(baseUrl: string, value?: string | null): string | undefined {
   return `${baseUrl}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
-export function GeneratedLibrary({ assetBaseUrl, generated, onRegenerate }: GeneratedLibraryProps) {
+function GeneratedSkeletonGrid() {
+  return (
+    <section aria-busy="true">
+      <h1 className="mb-4 text-xl font-semibold">
+        <Skeleton className="h-6 w-40" />
+      </h1>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <article
+            key={index}
+            className="rounded-2xl border border-white/10 bg-[#0d0f17] p-4"
+            data-testid="generated-skeleton-card"
+          >
+            <Skeleton className="aspect-video rounded-xl bg-white/[0.07]" />
+            <div className="mt-3 space-y-3">
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-3 w-1/2" />
+              <Skeleton className="h-20" />
+              <div className="flex gap-2">
+                <Skeleton className="h-8 w-20" />
+                <Skeleton className="h-8 w-20" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-20" />
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, onRegenerate }: GeneratedLibraryProps) {
   const { t } = useI18n();
   const [prompts, setPrompts] = useState<Record<string, string>>({});
+
+  if (isLoading && !generated.length) {
+    return <GeneratedSkeletonGrid />;
+  }
 
   if (!generated.length) {
     return (

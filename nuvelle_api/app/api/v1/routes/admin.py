@@ -38,6 +38,7 @@ def list_admin_dramas(
     language: str | None = None,
     tag: str | None = None,
     has_video: bool | None = None,
+    min_score: int | None = Query(default=None, ge=0, le=100),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> AdminDramaListResponse:
@@ -48,6 +49,7 @@ def list_admin_dramas(
         language=language,
         tag=tag,
         has_video=has_video,
+        min_score=min_score,
         limit=limit,
         offset=offset,
     )

@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
-import { ChevronUp, Flame, ThumbsDown, ThumbsUp, WandSparkles } from "lucide-react";
+import { Flame, ThumbsDown, ThumbsUp, Triangle, WandSparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { VideoPreview } from "@/components/video-preview";
 import { useI18n } from "@/lib/i18n";
 import { nuvelleScore, tasteScore } from "@/lib/scoring";
-import type { DramaRecord, VoteVerdict } from "@/types/drama";
+import type { DramaEpisodeRecord, DramaRecord, VoteVerdict } from "@/types/drama";
 
 type SwipeViewProps = {
   current: DramaRecord | null;
+  isLoading?: boolean;
   onGenerate: (drama: DramaRecord, duration: number) => void | Promise<void>;
   onSeen: (drama: DramaRecord) => void | Promise<void>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
@@ -20,10 +22,88 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
   label: `${value}s`
 }));
 
-export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProps) {
+function toEpisodeList(drama: DramaRecord): DramaEpisodeRecord[] {
+  if (Array.isArray(drama.episode_list)) {
+    return drama.episode_list;
+  }
+
+  if (Array.isArray(drama.episodes)) {
+    return drama.episodes;
+  }
+
+  if (drama.episodes && typeof drama.episodes === "object") {
+    return Object.entries(drama.episodes).map(([episode, url]) => ({
+      id: Number(episode),
+      episode_no: Number(episode),
+      play_url: url
+    }));
+  }
+
+  if (drama.video_url) {
+    return [{ id: Number(drama.id) || 1, episode_no: 1, play_url: drama.video_url }];
+  }
+
+  return [];
+}
+
+function firstPlayableEpisode(drama: DramaRecord): DramaEpisodeRecord | null {
+  const episodes = toEpisodeList(drama)
+    .filter((episode) => Boolean(episode.play_url || episode.iframe_src))
+    .sort((a, b) => a.episode_no - b.episode_no);
+
+  return episodes[0] || null;
+}
+
+function SwipeSkeleton() {
+  return (
+    <section
+      aria-busy="true"
+      className="mx-auto h-[calc(100vh-132px)] min-h-[620px] max-w-[460px] overflow-hidden rounded-[24px] border border-white/10 bg-black shadow-2xl shadow-black/40"
+      data-testid="swipe-skeleton"
+    >
+      <div className="relative h-full">
+        <Skeleton className="h-full rounded-none bg-white/[0.07]" />
+        <div className="absolute inset-x-0 bottom-0 space-y-4 bg-gradient-to-t from-black via-black/55 to-transparent p-5 pt-24">
+          <div className="flex gap-2">
+            <Skeleton className="h-6 w-20 rounded-full" />
+            <Skeleton className="h-6 w-28 rounded-full" />
+          </div>
+          <Skeleton className="h-7 w-4/5" />
+          <Skeleton className="h-4 w-1/2" />
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-7 w-20 rounded-full" />
+            <Skeleton className="h-7 w-24 rounded-full" />
+            <Skeleton className="h-7 w-16 rounded-full" />
+          </div>
+        </div>
+        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3" data-testid="swipe-actions">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-11 w-11 rounded-full bg-white/12" />
+          ))}
+        </div>
+        <div className="absolute left-4 right-4 top-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/45 p-3 backdrop-blur">
+          <Skeleton className="h-4 w-14" />
+          <Skeleton className="h-9 w-28" />
+          <Skeleton className="ml-auto h-8 w-24" />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function SwipeView({ current, isLoading = false, onGenerate, onSeen, onVote }: SwipeViewProps) {
   const { t } = useI18n();
   const [duration, setDuration] = useState(30);
   const touchStartY = useRef<number | null>(null);
+
+  if (isLoading) {
+    return <SwipeSkeleton />;
+  }
 
   if (!current) {
     return (
@@ -36,6 +116,10 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
 
   const score = nuvelleScore(current);
   const taste = tasteScore(current);
+  const firstEpisode = firstPlayableEpisode(current);
+  const videoUrl = firstEpisode?.play_url || current.video_url || null;
+  const embedUrl = firstEpisode?.iframe_src || null;
+  const posterUrl = firstEpisode?.poster_url || current.cover_image_url || null;
   const markSeen = () => {
     void onSeen(current);
   };
@@ -66,12 +150,14 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
     >
       <article className="relative h-full w-full snap-start">
         <VideoPreview
+          ariaLabel={current.title ? `${current.title} video` : t("common.dramaVideo")}
           autoPlay
           className="h-full rounded-none border-0"
           controls={false}
-          poster={current.cover_image_url}
+          embedUrl={embedUrl}
+          poster={posterUrl}
           title={current.title}
-          url={current.video_url}
+          url={videoUrl}
         />
         <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/55 to-transparent p-5 pt-24">
           <div className="flex flex-wrap items-center gap-2">
@@ -93,18 +179,15 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
             ))}
           </div>
         </div>
-        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3">
-          <Button aria-label={t("swipe.nextVideo")} className="h-11 w-11 rounded-full bg-black/45" size="icon" variant="ghost" onClick={markSeen}>
-            <ChevronUp className="h-5 w-5" />
-          </Button>
+        <div className="absolute right-4 top-1/2 flex -translate-y-1/2 flex-col gap-3" data-testid="swipe-actions">
           <Button
-            aria-label={t("swipe.pass")}
-            className="h-11 w-11 rounded-full bg-black/45 text-[#ff7a7a]"
+            aria-label={t("swipe.fire")}
+            className="h-11 w-11 rounded-full bg-black/45 text-[#ff8f4d]"
             size="icon"
             variant="ghost"
-            onClick={() => onVote(current, "pass")}
+            onClick={() => onVote(current, "fire")}
           >
-            <ThumbsDown className="h-5 w-5" />
+            <Flame className="h-5 w-5 fill-current stroke-[2.25]" />
           </Button>
           <Button
             aria-label={t("swipe.solid")}
@@ -113,16 +196,19 @@ export function SwipeView({ current, onGenerate, onSeen, onVote }: SwipeViewProp
             variant="ghost"
             onClick={() => onVote(current, "ok")}
           >
-            <ThumbsUp className="h-5 w-5" />
+            <ThumbsUp className="h-5 w-5 fill-current stroke-[2.25]" />
           </Button>
           <Button
-            aria-label={t("swipe.fire")}
-            className="h-11 w-11 rounded-full bg-black/45 text-[#ff8f4d]"
+            aria-label={t("swipe.pass")}
+            className="h-11 w-11 rounded-full bg-black/45 text-[#ff7a7a]"
             size="icon"
             variant="ghost"
-            onClick={() => onVote(current, "fire")}
+            onClick={() => onVote(current, "pass")}
           >
-            <Flame className="h-5 w-5" />
+            <ThumbsDown className="h-5 w-5 fill-current stroke-[2.25]" />
+          </Button>
+          <Button aria-label={t("swipe.nextVideo")} className="h-11 w-11 rounded-full bg-black/45" size="icon" variant="ghost" onClick={markSeen}>
+            <Triangle className="h-4 w-4 rotate-180 fill-current stroke-[2.25]" />
           </Button>
         </div>
         <div className="absolute left-4 right-4 top-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-black/45 p-3 backdrop-blur">

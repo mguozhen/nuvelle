@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.admin_user import AdminUser
@@ -30,21 +30,44 @@ class GeneratedService:
         stmt = select(PromoJob).where(PromoJob.user_id == user.id)
         if status:
             stmt = stmt.where(PromoJob.status == status)
-        stmt = stmt.order_by(PromoJob.created_at.desc(), PromoJob.id.desc())
-        jobs = list(self.db.scalars(stmt).all())
-        filtered = [job for job in jobs if self._matches(job, q)]
-        page = filtered[offset : offset + limit]
-        return GeneratedListResponse(items=[self.to_read(job) for job in page], total=len(filtered))
+        if q:
+            pattern = f"%{q.lower()}%"
+            stmt = stmt.outerjoin(Drama, PromoJob.drama_id == Drama.id).where(
+                or_(
+                    func.lower(PromoJob.title).like(pattern),
+                    func.lower(PromoJob.prompt).like(pattern),
+                    func.lower(Drama.title).like(pattern),
+                )
+            )
+
+        total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        page = list(
+            self.db.scalars(
+                stmt.order_by(PromoJob.created_at.desc(), PromoJob.id.desc()).limit(limit).offset(offset)
+            ).all()
+        )
+        dramas, episodes = self._refs_for(page)
+        return GeneratedListResponse(
+            items=[self.to_read(job, dramas=dramas, episodes=episodes) for job in page],
+            total=total,
+        )
 
     def get_job(self, user: AdminUser, job_id: str) -> GeneratedJobRead:
         job = self.db.get(PromoJob, job_id)
         if job is None or (job.user_id != user.id and user.role != "admin"):
             raise HTTPException(status_code=404, detail="generated job not found")
-        return self.to_read(job)
+        dramas, episodes = self._refs_for([job])
+        return self.to_read(job, dramas=dramas, episodes=episodes)
 
-    def to_read(self, job: PromoJob) -> GeneratedJobRead:
-        drama = self.db.get(Drama, job.drama_id) if job.drama_id else None
-        episode = self.db.get(DramaEpisode, job.episode_id) if job.episode_id else None
+    def to_read(
+        self,
+        job: PromoJob,
+        *,
+        dramas: dict[int, Drama] | None = None,
+        episodes: dict[int, DramaEpisode] | None = None,
+    ) -> GeneratedJobRead:
+        drama = dramas.get(job.drama_id) if dramas and job.drama_id else None
+        episode = episodes.get(job.episode_id) if episodes and job.episode_id else None
         files = None
         if job.status == PromoJobStatus.done.value:
             files = GeneratedFiles(teaser=job.teaser_url, cover=job.cover_url)
@@ -69,13 +92,15 @@ class GeneratedService:
             created_at=job.created_at,
         )
 
-    def _matches(self, job: PromoJob, q: str | None) -> bool:
-        if not q:
-            return True
-        needle = q.lower()
-        if needle in (job.title or "").lower() or needle in (job.prompt or "").lower():
-            return True
-        if job.drama_id:
-            drama = self.db.get(Drama, job.drama_id)
-            return bool(drama and needle in drama.title.lower())
-        return False
+    def _refs_for(self, jobs: list[PromoJob]) -> tuple[dict[int, Drama], dict[int, DramaEpisode]]:
+        drama_ids = {job.drama_id for job in jobs if job.drama_id is not None}
+        episode_ids = {job.episode_id for job in jobs if job.episode_id is not None}
+        dramas = {
+            drama.id: drama
+            for drama in self.db.scalars(select(Drama).where(Drama.id.in_(drama_ids))).all()
+        } if drama_ids else {}
+        episodes = {
+            episode.id: episode
+            for episode in self.db.scalars(select(DramaEpisode).where(DramaEpisode.id.in_(episode_ids))).all()
+        } if episode_ids else {}
+        return dramas, episodes

@@ -95,10 +95,10 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
 
   return (
     <Dialog open={Boolean(drama)} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto lg:flex lg:h-[calc(100vh-1rem)] lg:max-h-[calc(100vh-1rem)] lg:flex-col lg:gap-3 lg:overflow-hidden lg:p-4">
         {drama ? (
           <>
-            <DialogHeader>
+            <DialogHeader className="lg:shrink-0">
               <DialogTitle className="pr-8 text-2xl">{drama.title || t("common.untitled")}</DialogTitle>
               <DialogDescription>
                 {[drama.platform, drama.genre, drama.episode_count ? t("swipe.episodes", { count: drama.episode_count }) : ""]
@@ -106,16 +106,17 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                   .join(" - ")}
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+            <div className="grid gap-5 lg:min-h-0 lg:flex-1 lg:grid-cols-[240px_minmax(0,1fr)]">
               <VideoPreview
                 autoPlay={playRequestKey > 0}
+                className="lg:self-start"
                 embedUrl={selectedEpisode?.iframeSrc}
                 poster={selectedEpisode?.posterUrl || drama.cover_image_url}
                 playRequestKey={playRequestKey}
                 title={drama.title}
                 url={selectedEpisode?.url || drama.video_url}
               />
-              <div>
+              <div className="min-h-0 lg:flex lg:flex-col">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-[linear-gradient(135deg,#b25cff,#ff5fbf)] px-3 py-1 text-sm font-bold">
                     {t("swipe.nuvelleScore", { score: nuvelleScore(drama) })}
@@ -125,7 +126,9 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                     {t("detail.markFire")}
                   </Button>
                 </div>
-                {drama.synopsis_or_hook ? <p className="mt-3 text-sm leading-6 text-[#9aa2c0]">{drama.synopsis_or_hook}</p> : null}
+                {drama.synopsis_or_hook ? (
+                  <p className="mt-3 text-sm leading-6 text-[#9aa2c0] lg:line-clamp-2">{drama.synopsis_or_hook}</p>
+                ) : null}
                 <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-[#0e1119] p-3 text-xs text-[#9aa2c0] md:grid-cols-4">
                   <span>
                     <b className="block text-white">{formatCompact(drama.recent_revenue)}</b>
@@ -159,7 +162,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                 {tags.length ? (
                   <div className="mt-4 rounded-xl border border-white/10 bg-[#0e1119] p-3">
                     <h3 className="mb-2 text-xs font-bold uppercase text-[#6b7290]">{t("detail.sourceTags")}</h3>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex max-h-20 flex-wrap gap-2 overflow-y-auto overscroll-contain pr-1">
                       {tags.map((tag) => (
                         <span key={tag} className="rounded-full border border-[#a14bff44] bg-[#a14bff18] px-3 py-1.5 text-xs text-white">
                           {tag}
@@ -168,24 +171,9 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                     </div>
                   </div>
                 ) : null}
-                <Input
-                  className="mt-4"
-                  placeholder={t("detail.promptPlaceholder")}
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                />
-                <div className="mt-4 grid gap-2">
-                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
-                    <WandSparkles className="h-4 w-4" />
-                    {t("detail.generateCurrent")}
-                  </Button>
-                  <Button variant="outline" onClick={() => onGenerateBatch(drama, duration)}>
-                    {t("detail.generateAll")}
-                  </Button>
-                </div>
-                <div className="mt-5">
-                  <h3 className="mb-2 text-sm font-semibold">{t("detail.episodes")}</h3>
-                  <div className="grid gap-2">
+                <div className="mt-4 min-h-0 lg:flex lg:flex-1 lg:flex-col">
+                  <h3 className="mb-2 shrink-0 text-sm font-semibold">{t("detail.episodes")}</h3>
+                  <div className="grid gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
                     {episodes.map((episode) => (
                       <div
                         key={episode.episode}
@@ -224,23 +212,38 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, onOpe
                       </div>
                     ))}
                     {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}
+                    <div className="flex gap-2 pt-2">
+                      <Input
+                        placeholder={t("detail.urlPlaceholder")}
+                        value={customUrl}
+                        onChange={(event) => setCustomUrl(event.target.value)}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          if (customUrl.trim()) {
+                            onGenerate(drama, duration, prompt, 1, customUrl.trim());
+                          }
+                        }}
+                      >
+                        {t("detail.generate")}
+                      </Button>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4 flex gap-2">
-                  <Input
-                    placeholder={t("detail.urlPlaceholder")}
-                    value={customUrl}
-                    onChange={(event) => setCustomUrl(event.target.value)}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      if (customUrl.trim()) {
-                        onGenerate(drama, duration, prompt, 1, customUrl.trim());
-                      }
-                    }}
-                  >
-                    {t("detail.generate")}
+                <Input
+                  className="mt-4 lg:shrink-0"
+                  placeholder={t("detail.promptPlaceholder")}
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                />
+                <div className="mt-4 grid gap-2 lg:grid-cols-2 lg:shrink-0">
+                  <Button variant="gradient" onClick={() => onGenerate(drama, duration, prompt, selectedEpisode?.episode)}>
+                    <WandSparkles className="h-4 w-4" />
+                    {t("detail.generateCurrent")}
+                  </Button>
+                  <Button variant="outline" onClick={() => onGenerateBatch(drama, duration)}>
+                    {t("detail.generateAll")}
                   </Button>
                 </div>
               </div>

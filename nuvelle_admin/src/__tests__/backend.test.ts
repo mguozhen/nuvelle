@@ -26,9 +26,9 @@ describe("admin backend client", () => {
   it("loads admin dramas with query parameters", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [], total: 0 })));
     const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
-    await client.listAdminDramas({ q: "bride", language: "English", tag: "Female", has_video: true });
+    await client.listAdminDramas({ q: "bride", language: "English", tag: "Female", has_video: true, min_score: 70 });
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/admin/dramas?q=bride&language=English&tag=Female&has_video=true&limit=50&offset=0",
+      "http://localhost:8000/api/v1/admin/dramas?q=bride&language=English&tag=Female&has_video=true&min_score=70&limit=50&offset=0",
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
     );
   });

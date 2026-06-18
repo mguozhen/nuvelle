@@ -5,18 +5,30 @@ import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useI18n } from "@/lib/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import type { DramaRecord, VoteVerdict } from "@/types/drama";
 
-type BoardFilter = "top" | "video" | "all";
+export type BoardFilter = "top" | "video" | "all";
+
+export type BoardFilters = {
+  filter: BoardFilter;
+  language: string;
+  platform: string;
+  q: string;
+  tag: string;
+};
 
 type BoardViewProps = {
   dramas: DramaRecord[];
+  filters: BoardFilters;
+  isLoading?: boolean;
   votes: Record<string, VoteVerdict>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  onFiltersChange: (filters: Partial<BoardFilters>) => void;
   onLoadDramaDetail?: (drama: DramaRecord) => Promise<DramaRecord>;
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
@@ -54,13 +66,35 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
   label: `${value}s`
 }));
 
-export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDramaDetail, onVote }: BoardViewProps) {
+function BoardSkeletonGrid() {
+  return (
+    <>
+      {Array.from({ length: 10 }).map((_, index) => (
+        <article
+          key={index}
+          className="overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]"
+          data-testid="board-skeleton-card"
+        >
+          <Skeleton className="aspect-[2/3] rounded-none bg-white/[0.07]" />
+          <div className="space-y-3 p-3">
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-3 w-2/3" />
+            <div className="grid grid-cols-2 gap-2">
+              <Skeleton className="h-3" />
+              <Skeleton className="h-3" />
+              <Skeleton className="col-span-2 h-3" />
+            </div>
+            <Skeleton className="h-8" />
+            <Skeleton className="h-8" />
+          </div>
+        </article>
+      ))}
+    </>
+  );
+}
+
+export function BoardView({ dramas, filters, isLoading = false, votes, onGenerate, onGenerateBatch, onFiltersChange, onLoadDramaDetail, onVote }: BoardViewProps) {
   const { formatCompact, formatDate, t } = useI18n();
-  const [filter, setFilter] = useState<BoardFilter>("video");
-  const [query, setQuery] = useState("");
-  const [platform, setPlatform] = useState("");
-  const [language, setLanguage] = useState("");
-  const [tag, setTag] = useState("");
   const [selectedDrama, setSelectedDrama] = useState<DramaRecord | null>(null);
   const [duration, setDuration] = useState(30);
   const openDrama = async (drama: DramaRecord) => {
@@ -77,37 +111,22 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
   };
   const options = useMemo(
     () => ({
-      platforms: values(dramas.map((drama) => drama.platform)),
-      languages: values(dramas.map((drama) => drama.language)),
-      tags: values(dramas.flatMap((drama) => [...(drama.tags || []), ...(drama.show_tags || [])]))
+      platforms: values([...dramas.map((drama) => drama.platform), filters.platform]),
+      languages: values([...dramas.map((drama) => drama.language), filters.language]),
+      tags: values([...dramas.flatMap((drama) => [...(drama.tags || []), ...(drama.show_tags || [])]), filters.tag])
     }),
-    [dramas]
+    [dramas, filters.language, filters.platform, filters.tag]
   );
   const ranked = useMemo(
-    () => {
-      const needle = query.trim().toLowerCase();
-
-      return dramas
+    () =>
+      dramas
         .map((drama) => ({ drama, score: nuvelleScore(drama) }))
-        .filter((item) => (filter === "video" ? Boolean(item.drama.has_video || item.drama.video_url || episodeCount(item.drama)) : true))
-        .filter((item) => (filter === "top" ? item.score >= 70 : true))
-        .filter((item) => (platform ? item.drama.platform === platform : true))
-        .filter((item) => (language ? item.drama.language === language : true))
-        .filter((item) => (tag ? [...(item.drama.tags || []), ...(item.drama.show_tags || [])].includes(tag) : true))
-        .filter((item) =>
-          needle
-            ? [item.drama.title, item.drama.synopsis_or_hook, item.drama.platform]
-                .filter(Boolean)
-                .some((value) => String(value).toLowerCase().includes(needle))
-            : true
-        )
-        .sort((a, b) => b.score - a.score);
-    },
-    [dramas, filter, language, platform, query, tag]
+        .sort((a, b) => b.score - a.score),
+    [dramas]
   );
 
   return (
-    <section>
+    <section aria-busy={isLoading}>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-semibold">{t("board.title")}</h1>
         <div className="flex rounded-xl border border-white/10 bg-[#0e1119] p-1">
@@ -120,10 +139,10 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
               key={id}
               className={cn(
                 "rounded-lg px-3 py-1.5 text-sm font-semibold",
-                filter === id ? "bg-[#a14bff22] text-white" : "text-[#9aa2c0]"
+                filters.filter === id ? "bg-[#a14bff22] text-white" : "text-[#9aa2c0]"
               )}
               type="button"
-              onClick={() => setFilter(id as BoardFilter)}
+              onClick={() => onFiltersChange({ filter: id as BoardFilter })}
             >
               {label}
             </button>
@@ -144,28 +163,33 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
         </div>
       </div>
       <div className="mb-5 grid gap-2 md:grid-cols-[minmax(220px,1.5fr)_repeat(3,minmax(140px,1fr))]">
-        <Input placeholder={t("board.searchPlaceholder")} value={query} onChange={(event) => setQuery(event.target.value)} />
+        <Input
+          placeholder={t("board.searchPlaceholder")}
+          value={filters.q}
+          onChange={(event) => onFiltersChange({ q: event.target.value })}
+        />
         <Select
           aria-label={t("board.allPlatforms")}
           options={[{ value: "", label: t("board.allPlatforms") }, ...options.platforms.map((value) => ({ value, label: optionLabel(value) }))]}
-          value={platform}
-          onValueChange={setPlatform}
+          value={filters.platform}
+          onValueChange={(value) => onFiltersChange({ platform: value })}
         />
         <Select
           aria-label={t("board.allLanguages")}
           options={[{ value: "", label: t("board.allLanguages") }, ...options.languages.map((value) => ({ value, label: value }))]}
-          value={language}
-          onValueChange={setLanguage}
+          value={filters.language}
+          onValueChange={(value) => onFiltersChange({ language: value })}
         />
         <Select
           aria-label={t("board.allTags")}
           options={[{ value: "", label: t("board.allTags") }, ...options.tags.map((value) => ({ value, label: value }))]}
-          value={tag}
-          onValueChange={setTag}
+          value={filters.tag}
+          onValueChange={(value) => onFiltersChange({ tag: value })}
         />
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-        {ranked.map(({ drama, score }) => {
+        {isLoading ? <BoardSkeletonGrid /> : null}
+        {!isLoading && ranked.map(({ drama, score }) => {
           const verdict = votes[String(drama.id)];
           const count = episodeCount(drama);
 
@@ -221,7 +245,7 @@ export function BoardView({ dramas, votes, onGenerate, onGenerateBatch, onLoadDr
             </article>
           );
         })}
-        {ranked.length ? null : <div className="col-span-full py-12 text-center text-sm text-[#9aa2c0]">{t("board.noMatch")}</div>}
+        {!isLoading && !ranked.length ? <div className="col-span-full py-12 text-center text-sm text-[#9aa2c0]">{t("board.noMatch")}</div> : null}
       </div>
       <DramaModal
         drama={selectedDrama}

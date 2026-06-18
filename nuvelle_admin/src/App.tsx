@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminShell, type AdminTab } from "@/components/admin-shell";
 import { BackendSettings } from "@/components/backend-settings";
-import { BoardView } from "@/components/board-view";
+import { BoardView, type BoardFilters } from "@/components/board-view";
 import { GeneratedLibrary } from "@/components/generated-library";
 import { LoginGate } from "@/components/login-gate";
 import { SwipeView } from "@/components/swipe-view";
@@ -86,6 +86,25 @@ function sortDramas(dramas: DramaRecord[]): DramaRecord[] {
   return [...dramas].sort((a, b) => Number(Boolean(b.has_video || b.video_url)) - Number(Boolean(a.has_video || a.video_url)));
 }
 
+const initialBoardFilters: BoardFilters = {
+  filter: "video",
+  language: "",
+  platform: "",
+  q: "",
+  tag: ""
+};
+
+function toBoardQuery(filters: BoardFilters) {
+  return {
+    q: filters.q.trim() || undefined,
+    platform: filters.platform || undefined,
+    language: filters.language || undefined,
+    tag: filters.tag || undefined,
+    has_video: filters.filter === "video" ? true : undefined,
+    min_score: filters.filter === "top" ? 70 : undefined
+  };
+}
+
 function toAssetUrl(baseUrl: string, value?: string | null): string | undefined {
   if (!value) {
     return undefined;
@@ -119,11 +138,14 @@ function AdminApp() {
   const [backendUrl, setBackendUrl] = useState(() => loadBackendUrl());
   const [backendSettingsOpen, setBackendSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("board");
+  const [boardFilters, setBoardFilters] = useState<BoardFilters>(initialBoardFilters);
   const [dramas, setDramas] = useState<DramaRecord[]>([]);
   const [swipeDrama, setSwipeDrama] = useState<DramaRecord | null>(null);
   const [votes, setVotes] = useState<Record<string, VoteVerdict>>({});
   const [generated, setGenerated] = useState<GeneratedJob[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [generatedLoading, setGeneratedLoading] = useState(false);
+  const [swipeLoading, setSwipeLoading] = useState(false);
   const [status, setStatus] = useState("");
   const client = useMemo(() => new PromoBackendClient(backendUrl, undefined, auth.token || undefined), [auth.token, backendUrl]);
 
@@ -146,35 +168,47 @@ function AdminApp() {
     setAuth(next);
   }, []);
 
-  const loadBoard = useCallback(async () => {
-    setLoading(true);
+  const updateBoardFilters = useCallback((nextFilters: Partial<BoardFilters>) => {
+    setBoardFilters((current) => ({ ...current, ...nextFilters }));
+  }, []);
+
+  const loadBoard = useCallback(async (filters: BoardFilters) => {
+    setBoardLoading(true);
 
     try {
-      const response = await client.listAdminDramas();
+      const response = await client.listAdminDramas(toBoardQuery(filters));
       setDramas(sortDramas(response.items.map(normalizeDrama)));
     } catch {
       showStatus(t("app.libraryLoadFailed"));
     } finally {
-      setLoading(false);
+      setBoardLoading(false);
     }
   }, [client, showStatus, t]);
 
   const loadGenerated = useCallback(async () => {
+    setGeneratedLoading(true);
+
     try {
       const response = await client.listGenerated();
       setGenerated(response.items);
     } catch {
       setGenerated([]);
+    } finally {
+      setGeneratedLoading(false);
     }
   }, [client]);
 
   const loadSwipeNext = useCallback(async () => {
+    setSwipeLoading(true);
+
     try {
       const next = await client.swipeNext();
       const detail = await client.getAdminDrama(next.id);
       setSwipeDrama(normalizeDrama(detail));
     } catch {
       setSwipeDrama(null);
+    } finally {
+      setSwipeLoading(false);
     }
   }, [client]);
 
@@ -183,9 +217,20 @@ function AdminApp() {
       return;
     }
 
-    void loadBoard();
     void loadGenerated();
-  }, [auth.token, loadBoard, loadGenerated]);
+  }, [auth.token, loadGenerated]);
+
+  useEffect(() => {
+    if (!auth.token) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => {
+      void loadBoard(boardFilters);
+    }, 250);
+
+    return () => window.clearTimeout(timeout);
+  }, [auth.token, boardFilters, loadBoard]);
 
   useEffect(() => {
     if (!auth.token) {
@@ -218,10 +263,14 @@ function AdminApp() {
   const signOut = useCallback(() => {
     clearAuthState();
     setAuth({ token: "", user: null });
+    setBoardFilters(initialBoardFilters);
     setDramas([]);
     setSwipeDrama(null);
     setVotes({});
     setGenerated([]);
+    setBoardLoading(false);
+    setGeneratedLoading(false);
+    setSwipeLoading(false);
   }, []);
 
   const saveBackend = useCallback(
@@ -240,6 +289,7 @@ function AdminApp() {
       setVotes((current) => ({ ...current, [String(drama.id)]: verdict }));
       if (activeTab === "swipe") {
         setSwipeDrama(null);
+        setSwipeLoading(true);
       }
 
       void client
@@ -257,6 +307,7 @@ function AdminApp() {
         .catch((error: unknown) => {
           console.error("Drama event sync failed", error);
           showStatus(t("app.dramaEventFailed"));
+          setSwipeLoading(false);
         });
     },
     [activeTab, client, loadSwipeNext, showStatus, t]
@@ -266,6 +317,7 @@ function AdminApp() {
     (drama: DramaRecord) => {
       if (activeTab === "swipe") {
         setSwipeDrama(null);
+        setSwipeLoading(true);
       }
 
       void client
@@ -282,6 +334,7 @@ function AdminApp() {
         .catch((error: unknown) => {
           console.error("Drama seen event sync failed", error);
           showStatus(t("app.dramaEventFailed"));
+          setSwipeLoading(false);
         });
     },
     [activeTab, client, loadSwipeNext, showStatus, t]
@@ -394,8 +447,7 @@ function AdminApp() {
     [client, resolveDramaForGeneration, showStatus, t]
   );
 
-  const activeSwipeDrama =
-    swipeDrama || dramas.find((drama) => !votes[String(drama.id)] && Boolean(drama.has_video || drama.video_url)) || null;
+  const activeSwipeDrama = swipeDrama;
   const ratedCount = new Set([...Object.keys(votes), ...dramas.filter((drama) => drama.seen).map((drama) => String(drama.id))]).size;
   const fireCount = Object.values(votes).filter((verdict) => verdict === "fire").length;
 
@@ -413,7 +465,7 @@ function AdminApp() {
       activeTab={activeTab}
       generatedCount={generated.length}
       libraryCount={dramas.length}
-      loading={loading}
+      loading={boardLoading}
       picksCount={fireCount}
       ratedCount={ratedCount}
       onBackendSettings={() => setBackendSettingsOpen(true)}
@@ -421,14 +473,23 @@ function AdminApp() {
       onTabChange={setActiveTab}
     >
       {activeTab === "swipe" ? (
-        <SwipeView current={activeSwipeDrama} onGenerate={generateForDrama} onSeen={markSeen} onVote={vote} />
+        <SwipeView
+          current={activeSwipeDrama}
+          isLoading={swipeLoading && !activeSwipeDrama}
+          onGenerate={generateForDrama}
+          onSeen={markSeen}
+          onVote={vote}
+        />
       ) : null}
       {activeTab === "board" ? (
         <BoardView
           dramas={dramas}
+          filters={boardFilters}
+          isLoading={boardLoading}
           votes={votes}
           onGenerate={generateForDrama}
           onGenerateBatch={generateBatch}
+          onFiltersChange={updateBoardFilters}
           onLoadDramaDetail={async (drama) => normalizeDrama(await client.getAdminDrama(drama.id))}
           onVote={vote}
         />
@@ -437,6 +498,7 @@ function AdminApp() {
         <GeneratedLibrary
           assetBaseUrl={backendUrl}
           generated={generated}
+          isLoading={generatedLoading}
           onRegenerate={(item, prompt) => {
             if (!item.source_url) {
               showStatus(t("app.missingSourceVideo"));

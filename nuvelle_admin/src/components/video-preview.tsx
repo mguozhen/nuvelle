@@ -16,6 +16,17 @@ type VideoPreviewProps = {
   url?: string | null;
 };
 
+function playSilently(video: HTMLVideoElement) {
+  try {
+    const playResult = video.play();
+    if (playResult && typeof playResult.catch === "function") {
+      void playResult.catch(() => undefined);
+    }
+  } catch {
+    // Browser autoplay policies can reject playback; the user can still press play when controls are visible.
+  }
+}
+
 export function VideoPreview({
   ariaLabel,
   autoPlay = false,
@@ -65,6 +76,11 @@ export function VideoPreview({
       hls = new Hls({ maxBufferLength: 6, maxMaxBufferLength: 12 });
       hls.loadSource(url);
       hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (autoPlay) {
+          playSilently(video);
+        }
+      });
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           setVideoFailed(true);
@@ -72,6 +88,10 @@ export function VideoPreview({
       });
     } else {
       video.src = url;
+      video.load();
+      if (autoPlay) {
+        playSilently(video);
+      }
     }
 
     return () => {
@@ -82,7 +102,7 @@ export function VideoPreview({
       video.removeAttribute("src");
       video.load();
     };
-  }, [shouldUseEmbed, url]);
+  }, [autoPlay, shouldUseEmbed, url]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -91,17 +111,17 @@ export function VideoPreview({
       return;
     }
 
-    void video.play().catch(() => undefined);
+    playSilently(video);
   }, [playRequestKey, shouldUseEmbed, url]);
 
   return (
-    <div className={cn("relative aspect-[9/16] overflow-hidden rounded-[18px] border border-white/10 bg-black", className)}>
+    <div className={cn("relative aspect-[9/16] w-full min-w-0 max-w-full overflow-hidden rounded-[18px] border border-white/10 bg-black", className)}>
       {shouldUseEmbed ? (
         <>
           <iframe
             allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
             allowFullScreen
-            className="h-full w-full border-0"
+            className="absolute inset-0 block h-full w-full min-w-0 max-w-full border-0"
             loading="lazy"
             referrerPolicy="no-referrer"
             src={embedUrl || undefined}

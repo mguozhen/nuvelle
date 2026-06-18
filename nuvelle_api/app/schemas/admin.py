@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 class ReelShortSyncRequest(BaseModel):
     resource_id: int | None = None
-    limit: int = Field(default=50, ge=1, le=500)
+    limit: int = Field(default=50, ge=1, le=5000)
     dry_run: bool = False
 
 
@@ -31,11 +31,14 @@ class AdminDramaRead(BaseModel):
     id: int
     title: str
     platform: str | None = None
+    genre: str | None = None
     language: str | None = None
     tags: list[str] = Field(default_factory=list)
     show_tags: list[str] = Field(default_factory=list)
     cover_image_url: str | None = None
+    video_url: str | None = None
     synopsis_or_hook: str | None = None
+    signal: str | None = None
     episode_count: int | None = None
     rs_book_id: str | None = None
     recent_revenue: int | None = None

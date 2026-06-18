@@ -105,11 +105,11 @@ const en = {
   "swipe.currentQueueRated": "Every drama in the current queue is rated.",
   "swipe.duration": "Duration",
   "swipe.episodes": "{count} episodes",
-  "swipe.fire": "Fire",
-  "swipe.nextVideo": "Next video",
+  "swipe.fire": "Featured",
+  "swipe.nextVideo": "Next",
   "swipe.nuvelleScore": "Nuvelle Score {score}",
-  "swipe.pass": "Pass",
-  "swipe.solid": "Solid"
+  "swipe.pass": "Dislike",
+  "swipe.solid": "Like"
 };
 
 const zh: Record<keyof typeof en, string> = {
@@ -213,11 +213,11 @@ const zh: Record<keyof typeof en, string> = {
   "swipe.currentQueueRated": "当前队列里的短剧都已经评过。",
   "swipe.duration": "时长",
   "swipe.episodes": "{count} 集",
-  "swipe.fire": "爆款",
-  "swipe.nextVideo": "下一条视频",
+  "swipe.fire": "精选",
+  "swipe.nextVideo": "下一个",
   "swipe.nuvelleScore": "Nuvelle Score {score}",
-  "swipe.pass": "跳过",
-  "swipe.solid": "可用"
+  "swipe.pass": "点踩",
+  "swipe.solid": "点赞"
 };
 
 const messages = { en, zh };

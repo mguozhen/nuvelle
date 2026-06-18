@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
@@ -49,7 +49,15 @@ function json(data: unknown, init?: ResponseInit) {
   return Promise.resolve(new Response(JSON.stringify(data), init));
 }
 
-function installFetchMock() {
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function installFetchMock(options: { boardResponse?: () => Promise<Response>; detailResponse?: () => Promise<Response> } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/register")) {
@@ -59,10 +67,10 @@ function installFetchMock() {
       return json({ access_token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } });
     }
     if (url.includes("/admin/dramas?")) {
-      return json({ items: [dramaSummary], total: 1 });
+      return options.boardResponse?.() ?? json({ items: [dramaSummary], total: 1 });
     }
     if (url.endsWith("/admin/dramas/1")) {
-      return json(drama);
+      return options.detailResponse?.() ?? json(drama);
     }
     if (url.endsWith("/admin/swipe/next")) {
       return json(dramaSummary);
@@ -125,10 +133,57 @@ describe("admin app", () => {
 
     expect(screen.getByText(/ReelShort/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/admin/dramas?limit=50&offset=0",
+      "http://localhost:8000/api/v1/admin/dramas?has_video=true&limit=50&offset=0",
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
     );
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("seed_dramas"))).toBe(false);
+  });
+
+  it("loads board filters from the admin API", async () => {
+    const fetchMock = installFetchMock();
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.type(screen.getByPlaceholderText(/search title or hook/i), "revenge");
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas?q=revenge&has_video=true&limit=50&offset=0",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+
+    await user.click(screen.getByRole("button", { name: /top picks/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas?q=revenge&min_score=70&limit=50&offset=0",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+  });
+
+  it("shows board skeletons while admin dramas are loading", async () => {
+    const boardResponse = deferred<Response>();
+    const user = userEvent.setup();
+    installFetchMock({ boardResponse: () => boardResponse.promise });
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: /create account/i }));
+    await user.type(screen.getByPlaceholderText(/invite code/i), "JOIN");
+    await user.type(screen.getByPlaceholderText(/email/i), "promoter@example.com");
+    await user.type(screen.getByPlaceholderText(/password/i), "secret123");
+    await user.click(screen.getByRole("button", { name: /register/i }));
+
+    await waitFor(() => expect(screen.getAllByTestId("board-skeleton-card").length).toBeGreaterThan(0));
+    expect(screen.queryByText("No dramas match this filter.")).not.toBeInTheDocument();
+
+    await act(async () => {
+      boardResponse.resolve(new Response(JSON.stringify({ items: [dramaSummary], total: 1 })));
+    });
+
+    await waitFor(() => expect(screen.getByText("Demo Drama")).toBeInTheDocument());
   });
 
   it("switches the admin interface to Simplified Chinese", async () => {
@@ -162,7 +217,14 @@ describe("admin app", () => {
     await registerAndLoad(user);
 
     await user.click(screen.getByRole("button", { name: /swipe/i }));
-    await user.click(screen.getByRole("button", { name: /pass/i }));
+    const actionButtons = within(screen.getByTestId("swipe-actions")).getAllByRole("button");
+    expect(actionButtons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Featured",
+      "Like",
+      "Dislike",
+      "Next"
+    ]);
+    await user.click(screen.getByRole("button", { name: /dislike/i }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
@@ -197,6 +259,26 @@ describe("admin app", () => {
         })
       )
     );
+  });
+
+  it("does not fall back to the board cover while swipe detail is loading", async () => {
+    const detailResponse = deferred<Response>();
+    const user = userEvent.setup();
+    installFetchMock({ detailResponse: () => detailResponse.promise });
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("button", { name: /swipe/i }));
+
+    await waitFor(() => expect(screen.getByTestId("swipe-skeleton")).toBeInTheDocument());
+    expect(screen.queryByAltText("Demo Drama")).not.toBeInTheDocument();
+
+    await act(async () => {
+      detailResponse.resolve(new Response(JSON.stringify(drama)));
+    });
+
+    const video = await screen.findByLabelText("Demo Drama video");
+    await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep1.mp4"));
   });
 
   it("shows all detail tags and generates from the selected episode", async () => {

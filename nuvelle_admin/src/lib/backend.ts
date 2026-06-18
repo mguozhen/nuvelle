@@ -88,6 +88,7 @@ export class PromoBackendClient {
     language?: string;
     tag?: string;
     has_video?: boolean;
+    min_score?: number;
     limit?: number;
     offset?: number;
   } = {}): Promise<AdminDramaListResponse> {
@@ -97,6 +98,7 @@ export class PromoBackendClient {
     if (params.language) query.set("language", params.language);
     if (params.tag) query.set("tag", params.tag);
     if (params.has_video !== undefined) query.set("has_video", String(params.has_video));
+    if (params.min_score !== undefined) query.set("min_score", String(params.min_score));
     query.set("limit", String(params.limit ?? 50));
     query.set("offset", String(params.offset ?? 0));
     return this.request<AdminDramaListResponse>(`/admin/dramas?${query.toString()}`, {

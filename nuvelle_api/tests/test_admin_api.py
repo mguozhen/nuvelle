@@ -35,17 +35,23 @@ def seed_drama(
     db: Session,
     title: str,
     *,
+    genre: str | None = None,
     language: str = "English",
+    signal: str | None = None,
     tag: str = "Female",
+    video_url: str | None = None,
 ) -> tuple[Drama, DramaEpisode]:
     drama = Drama(
         title=title,
         platform="ReelShort",
+        genre=genre,
         language=language,
         tags=[tag],
         show_tags=[tag],
         cover_image_url="https://example.com/cover.jpg",
+        video_url=video_url,
         synopsis_or_hook=f"{title} hook",
+        signal=signal,
         episode_count=2,
         rs_book_id=f"rs-{title}",
         recent_revenue=2000,
@@ -58,7 +64,7 @@ def seed_drama(
         drama_id=drama.id,
         episode_no=1,
         chapter_id=f"{title}-c1",
-        play_url=f"https://example.com/{title}.mp4",
+        play_url=video_url or f"https://example.com/{title}.mp4",
         poster_url="https://example.com/poster.jpg",
     )
     db.add(episode)
@@ -85,6 +91,28 @@ def test_board_filters_by_query_language_tag_and_has_video(client: TestClient, d
     assert payload["items"][0]["has_video"] is True
     assert payload["items"][0]["recent_revenue"] == 2000
     assert payload["items"][0]["seen"] is False
+
+
+def test_board_filters_by_min_score(client: TestClient, db: Session) -> None:
+    seed_drama(
+        db,
+        "Billionaire Bride",
+        genre="Hidden Identity",
+        signal="revenue $1,000,000 | 12,000 promoters",
+        video_url="https://example.com/high.mp4",
+    )
+    seed_drama(db, "Quiet Drama", tag="Slice of Life")
+    headers = auth_header(client, db, "promoter@example.com", "JOIN-SCORE")
+
+    response = client.get("/api/v1/admin/dramas?min_score=70", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["title"] == "Billionaire Bride"
+    assert payload["items"][0]["genre"] == "Hidden Identity"
+    assert payload["items"][0]["signal"] == "revenue $1,000,000 | 12,000 promoters"
+    assert payload["items"][0]["video_url"] == "https://example.com/high.mp4"
 
 
 def test_swipe_next_excludes_handled_drama_for_same_user(client: TestClient, db: Session) -> None:
