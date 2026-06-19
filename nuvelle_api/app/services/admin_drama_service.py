@@ -51,6 +51,7 @@ GENERATION_STATUS_RANK = {
     PromoJobStatus.done.value: 1,
 }
 VISIBLE_GENERATION_STATUSES = tuple(GENERATION_STATUS_RANK)
+SWIPE_LANGUAGE = "English"
 
 
 class AdminDramaService:
@@ -129,6 +130,7 @@ class AdminDramaService:
         stmt = (
             select(Drama)
             .where(~Drama.id.in_(handled))
+            .where(Drama.language == SWIPE_LANGUAGE)
             .where(self._has_video_exists())
             .order_by(Drama.platform_publish_at.desc().nullslast(), Drama.id.desc())
             .limit(1)

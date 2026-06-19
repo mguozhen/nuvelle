@@ -132,6 +132,18 @@ def test_swipe_next_excludes_handled_drama_for_same_user(client: TestClient, db:
     assert response.json()["id"] == second.id
 
 
+def test_swipe_next_only_returns_english_dramas(client: TestClient, db: Session) -> None:
+    english, _ = seed_drama(db, "English Drama", language="English")
+    seed_drama(db, "Spanish Drama", language="Spanish")
+    headers = auth_header(client, db, "promoter@example.com", "JOIN-EN")
+
+    response = client.get("/api/v1/admin/swipe/next", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == english.id
+    assert response.json()["language"] == "English"
+
+
 def test_swipe_events_are_user_scoped(client: TestClient, db: Session) -> None:
     drama, _ = seed_drama(db, "Shared Drama")
     first_user = auth_header(client, db, "one@example.com", "JOIN-3")

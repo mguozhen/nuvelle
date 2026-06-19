@@ -96,7 +96,7 @@ function sortDramas(dramas: DramaRecord[]): DramaRecord[] {
 
 const initialBoardFilters: BoardFilters = {
   filter: "video",
-  language: "",
+  language: "English",
   platform: "",
   q: "",
   tag: ""

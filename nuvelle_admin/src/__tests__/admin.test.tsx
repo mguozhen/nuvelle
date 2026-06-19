@@ -157,7 +157,7 @@ describe("admin app", () => {
 
     expect(screen.getByText(/ReelShort/i)).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:8000/api/v1/admin/dramas?has_video=true&limit=50&offset=0",
+      "http://localhost:8000/api/v1/admin/dramas?language=English&has_video=true&limit=50&offset=0",
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
     );
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("seed_dramas"))).toBe(false);
@@ -173,7 +173,7 @@ describe("admin app", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "http://localhost:8000/api/v1/admin/dramas?q=revenge&has_video=true&limit=50&offset=0",
+        "http://localhost:8000/api/v1/admin/dramas?q=revenge&language=English&has_video=true&limit=50&offset=0",
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
       )
     );
@@ -182,7 +182,7 @@ describe("admin app", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "http://localhost:8000/api/v1/admin/dramas?q=revenge&min_score=70&limit=50&offset=0",
+        "http://localhost:8000/api/v1/admin/dramas?q=revenge&language=English&min_score=70&limit=50&offset=0",
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
       )
     );
@@ -212,7 +212,7 @@ describe("admin app", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "http://localhost:8000/api/v1/admin/dramas?has_video=true&limit=50&offset=50",
+        "http://localhost:8000/api/v1/admin/dramas?language=English&has_video=true&limit=50&offset=50",
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
       )
     );
@@ -223,7 +223,7 @@ describe("admin app", () => {
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        "http://localhost:8000/api/v1/admin/dramas?q=rose&has_video=true&limit=50&offset=0",
+        "http://localhost:8000/api/v1/admin/dramas?q=rose&language=English&has_video=true&limit=50&offset=0",
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
       )
     );
