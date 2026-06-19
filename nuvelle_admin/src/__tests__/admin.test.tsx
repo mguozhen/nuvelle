@@ -516,6 +516,14 @@ describe("admin app", () => {
     expect(frame.firstElementChild).toHaveClass("aspect-[9/16]");
     expect(video).toHaveClass("object-contain");
     expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
+    expect(screen.getByRole("link", { name: /teaser/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4?download=1"
+    );
+    expect(screen.getByRole("link", { name: /cover/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/cover.jpg?download=1"
+    );
   });
 
   it("keeps generation in the detail footer and disables generated episodes", async () => {

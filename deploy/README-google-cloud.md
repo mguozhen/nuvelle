@@ -33,7 +33,8 @@ deployment framework:
 | `pnpm deploy:import-reelshort` | Build the API image, deploy a Cloud Run Job, and run ReelShort resource import |
 | `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
-| `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS and Cloud Run domain mappings |
+| `CF_API_TOKEN=... pnpm deploy:cdn` | Create promo Cloud CDN and sync `cdn.nuvelle.ai` DNS |
+| `CF_API_TOKEN=... pnpm deploy:domain` | Sync Cloudflare DNS, Cloud Run domain mappings, and promo CDN DNS |
 | `pnpm deploy:help` | Show all supported script options |
 
 ## Configuration
@@ -189,6 +190,7 @@ The optional domain mode targets `nuvelle.ai`:
 Run:
 
 ```bash
+CF_API_TOKEN=... pnpm deploy:cdn
 CF_API_TOKEN=... pnpm deploy:domain
 ```
 
@@ -198,3 +200,10 @@ The Cloudflare token must be scoped to the `nuvelle.ai` zone with:
 - `Zone -> DNS -> Edit`
 
 Keep Cloudflare records as DNS-only until Google-managed certificates are ready.
+
+Promo generated assets use a separate Google Cloud external load balancer with a
+backend bucket and Cloud CDN:
+
+| Domain | Origin |
+|---|---|
+| `cdn.nuvelle.ai` | `vocai-gemini-prod-nuvelle-promo-assets` |

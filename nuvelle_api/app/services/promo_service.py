@@ -153,19 +153,21 @@ class PromoService:
         job_id: str,
         filename: str,
         range_header: str | None = None,
+        download: bool = False,
     ) -> Response:
         if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
         job = self.repository.get(job_id)
         if job is None or not job.output_dir:
             raise HTTPException(status_code=404, detail="job not found")
-        return self.asset_responder.response_for(job.output_dir, filename, range_header)
+        return self.asset_responder.response_for(job.output_dir, filename, range_header, download)
 
     def asset_response_by_slug(
         self,
         slug: str,
         filename: str,
         range_header: str | None = None,
+        download: bool = False,
     ) -> Response:
         if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
@@ -173,6 +175,7 @@ class PromoService:
             self.asset_store.location_for_slug(slug),
             filename,
             range_header,
+            download,
         )
 
     def run_job(self, job_id: str, payload: PromoJobCreate) -> PromoJobResponse:

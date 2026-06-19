@@ -45,8 +45,18 @@ FLATKEY_SECRET="${FLATKEY_SECRET:-nuvelle-flatkey-api-key}"
 REELSHORT_CPS_SECRET="${REELSHORT_CPS_SECRET:-nuvelle-reelshort-cps-token}"
 
 DOMAIN_ROOT="${DOMAIN_ROOT:-nuvelle.ai}"
+CDN_DOMAIN="${CDN_DOMAIN:-cdn.$DOMAIN_ROOT}"
 GOOGLE_SITE_VERIFICATION_TXT="${GOOGLE_SITE_VERIFICATION_TXT:-google-site-verification=5VahbGzMPJdrTqND3LmWmOpXWhEuuC4ZkYMD4cGfpm8}"
 USE_CUSTOM_API_DOMAIN="${USE_CUSTOM_API_DOMAIN:-false}"
+PROMO_CDN_PUBLIC_READ="${PROMO_CDN_PUBLIC_READ:-true}"
+PROMO_CDN_BACKEND_BUCKET="${PROMO_CDN_BACKEND_BUCKET:-nuvelle-promo-assets-backend}"
+PROMO_CDN_IP_NAME="${PROMO_CDN_IP_NAME:-nuvelle-promo-cdn-ip}"
+PROMO_CDN_CERT_NAME="${PROMO_CDN_CERT_NAME:-nuvelle-promo-cdn-cert}"
+PROMO_CDN_URL_MAP="${PROMO_CDN_URL_MAP:-nuvelle-promo-cdn-urlmap}"
+PROMO_CDN_HTTP_PROXY="${PROMO_CDN_HTTP_PROXY:-nuvelle-promo-cdn-http-proxy}"
+PROMO_CDN_HTTPS_PROXY="${PROMO_CDN_HTTPS_PROXY:-nuvelle-promo-cdn-https-proxy}"
+PROMO_CDN_HTTP_FORWARDING_RULE="${PROMO_CDN_HTTP_FORWARDING_RULE:-nuvelle-promo-cdn-http-fwd}"
+PROMO_CDN_HTTPS_FORWARDING_RULE="${PROMO_CDN_HTTPS_FORWARDING_RULE:-nuvelle-promo-cdn-https-fwd}"
 
 API_SERVICE="nuvelle-api"
 WEBSITE_SERVICE="nuvelle-website"
@@ -110,7 +120,7 @@ Usage:
   pnpm deploy
 
 Environment:
-  ONLY=all|api|frontend|static|website|mobile|web|admin|import-reelshort|verify|domain
+  ONLY=all|api|frontend|static|website|mobile|web|admin|import-reelshort|verify|domain|cdn
   PROJECT_ID=$PROJECT_ID
   REGION=$REGION
   REPOSITORY=$REPOSITORY
@@ -119,7 +129,8 @@ Environment:
   IMPORT_REELSHORT_LIMIT=$IMPORT_REELSHORT_LIMIT
   IMPORT_REELSHORT_RESOURCE_ID=<optional third_party_drama_resources.id>
   IMPORT_REELSHORT_DRY_RUN=true|false
-  CF_API_TOKEN=<Cloudflare token, only for ONLY=domain>
+  CF_API_TOKEN=<Cloudflare token, only for ONLY=domain|cdn>
+  CDN_DOMAIN=$CDN_DOMAIN
   USE_CUSTOM_API_DOMAIN=true|false
 
 Examples:
@@ -133,6 +144,7 @@ Examples:
   IMPORT_REELSHORT_DRY_RUN=true pnpm deploy:import-reelshort
   pnpm deploy:verify
   CF_API_TOKEN=... pnpm deploy:domain
+  CF_API_TOKEN=... pnpm deploy:cdn
 EOF
 }
 
@@ -154,7 +166,7 @@ run_mode_in() {
 
 validate_mode() {
   case "$ONLY" in
-    all | api | frontend | static | website | mobile | web | admin | import-reelshort | verify | domain)
+    all | api | frontend | static | website | mobile | web | admin | import-reelshort | verify | domain | cdn)
       ;;
     help | -h | --help)
       usage
@@ -184,7 +196,7 @@ preflight() {
     require_cmd pnpm
   fi
 
-  if run_mode_in all frontend static verify website mobile web admin; then
+  if run_mode_in all frontend static verify website mobile web admin domain; then
     require_cmd curl
   fi
 
@@ -213,6 +225,7 @@ enable_google_cloud_services() {
     iam.googleapis.com \
     sqladmin.googleapis.com \
     storage.googleapis.com \
+    compute.googleapis.com \
     secretmanager.googleapis.com \
     --project="$PROJECT_ID"
 }
@@ -370,6 +383,133 @@ ensure_promo_bucket() {
       --condition=None \
       --quiet >/dev/null
   fi
+}
+
+cdn_ip_address() {
+  gcloud compute addresses describe "$PROMO_CDN_IP_NAME" \
+    --global \
+    --project="$PROJECT_ID" \
+    --format='value(address)'
+}
+
+ensure_promo_cdn() {
+  log "Ensure promo Cloud CDN: $CDN_DOMAIN"
+  local bucket="gs://$PROMO_GCS_BUCKET"
+
+  if [[ "$PROMO_CDN_PUBLIC_READ" == "true" ]]; then
+    if ! gcloud storage buckets add-iam-policy-binding "$bucket" \
+      --member=allUsers \
+      --role=roles/storage.objectViewer \
+      --quiet >/dev/null; then
+      warn "Could not grant public read on $bucket. CDN provisioning will continue, but objects may return 403 until bucket IAM allows reads."
+    fi
+  else
+    warn "PROMO_CDN_PUBLIC_READ=false; Cloud CDN may return 403 for private GCS objects."
+  fi
+
+  if ! gcloud compute addresses describe "$PROMO_CDN_IP_NAME" \
+    --global \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute addresses create "$PROMO_CDN_IP_NAME" \
+      --global \
+      --ip-version=IPV4 \
+      --project="$PROJECT_ID"
+  fi
+
+  if gcloud compute backend-buckets describe "$PROMO_CDN_BACKEND_BUCKET" \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute backend-buckets update "$PROMO_CDN_BACKEND_BUCKET" \
+      --gcs-bucket-name="$PROMO_GCS_BUCKET" \
+      --enable-cdn \
+      --cache-mode=CACHE_ALL_STATIC \
+      --default-ttl=3600 \
+      --client-ttl=3600 \
+      --max-ttl=86400 \
+      --project="$PROJECT_ID"
+  else
+    gcloud compute backend-buckets create "$PROMO_CDN_BACKEND_BUCKET" \
+      --gcs-bucket-name="$PROMO_GCS_BUCKET" \
+      --enable-cdn \
+      --cache-mode=CACHE_ALL_STATIC \
+      --default-ttl=3600 \
+      --client-ttl=3600 \
+      --max-ttl=86400 \
+      --project="$PROJECT_ID"
+  fi
+
+  if ! gcloud compute ssl-certificates describe "$PROMO_CDN_CERT_NAME" \
+    --global \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute ssl-certificates create "$PROMO_CDN_CERT_NAME" \
+      --domains="$CDN_DOMAIN" \
+      --global \
+      --project="$PROJECT_ID"
+  fi
+
+  if gcloud compute url-maps describe "$PROMO_CDN_URL_MAP" \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute url-maps set-default-service "$PROMO_CDN_URL_MAP" \
+      --default-backend-bucket="$PROMO_CDN_BACKEND_BUCKET" \
+      --project="$PROJECT_ID"
+  else
+    gcloud compute url-maps create "$PROMO_CDN_URL_MAP" \
+      --default-backend-bucket="$PROMO_CDN_BACKEND_BUCKET" \
+      --project="$PROJECT_ID"
+  fi
+
+  if gcloud compute target-http-proxies describe "$PROMO_CDN_HTTP_PROXY" \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute target-http-proxies update "$PROMO_CDN_HTTP_PROXY" \
+      --url-map="$PROMO_CDN_URL_MAP" \
+      --project="$PROJECT_ID"
+  else
+    gcloud compute target-http-proxies create "$PROMO_CDN_HTTP_PROXY" \
+      --url-map="$PROMO_CDN_URL_MAP" \
+      --project="$PROJECT_ID"
+  fi
+
+  if gcloud compute target-https-proxies describe "$PROMO_CDN_HTTPS_PROXY" \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute target-https-proxies update "$PROMO_CDN_HTTPS_PROXY" \
+      --url-map="$PROMO_CDN_URL_MAP" \
+      --ssl-certificates="$PROMO_CDN_CERT_NAME" \
+      --global-ssl-certificates \
+      --project="$PROJECT_ID"
+  else
+    gcloud compute target-https-proxies create "$PROMO_CDN_HTTPS_PROXY" \
+      --url-map="$PROMO_CDN_URL_MAP" \
+      --ssl-certificates="$PROMO_CDN_CERT_NAME" \
+      --global-ssl-certificates \
+      --project="$PROJECT_ID"
+  fi
+
+  if ! gcloud compute forwarding-rules describe "$PROMO_CDN_HTTP_FORWARDING_RULE" \
+    --global \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute forwarding-rules create "$PROMO_CDN_HTTP_FORWARDING_RULE" \
+      --global \
+      --address="$PROMO_CDN_IP_NAME" \
+      --target-http-proxy="$PROMO_CDN_HTTP_PROXY" \
+      --ports=80 \
+      --project="$PROJECT_ID"
+  fi
+
+  if ! gcloud compute forwarding-rules describe "$PROMO_CDN_HTTPS_FORWARDING_RULE" \
+    --global \
+    --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud compute forwarding-rules create "$PROMO_CDN_HTTPS_FORWARDING_RULE" \
+      --global \
+      --address="$PROMO_CDN_IP_NAME" \
+      --target-https-proxy="$PROMO_CDN_HTTPS_PROXY" \
+      --ports=443 \
+      --project="$PROJECT_ID"
+  fi
+}
+
+ensure_cdn_infra() {
+  enable_google_cloud_services
+  ensure_promo_bucket
+  ensure_promo_cdn
 }
 
 prepare_api_context() {
@@ -795,83 +935,40 @@ verify_frontend_app() {
   verify_cloud_run_service "$service"
 }
 
-cloudflare_api() {
-  local method="$1"
-  local path="$2"
-  local body="${3:-}"
-
-  [[ -n "${CF_API_TOKEN:-}" ]] || die "CF_API_TOKEN is required for ONLY=domain."
-
-  if [[ -n "$body" ]]; then
-    curl -fsS -X "$method" "https://api.cloudflare.com/client/v4$path" \
-      -H "Authorization: Bearer $CF_API_TOKEN" \
-      -H "Content-Type: application/json" \
-      --data "$body"
-  else
-    curl -fsS -X "$method" "https://api.cloudflare.com/client/v4$path" \
-      -H "Authorization: Bearer $CF_API_TOKEN" \
-      -H "Content-Type: application/json"
+normalize_cloudflare_token() {
+  if [[ -z "${CF_API_TOKEN:-}" && -n "${CLOUDFLARE_API_TOKEN:-}" ]]; then
+    export CF_API_TOKEN="$CLOUDFLARE_API_TOKEN"
   fi
 }
 
-json_field() {
-  python3 - "$1" <<'PY'
-import json
-import sys
-
-path = sys.argv[1].split(".")
-data = json.load(sys.stdin)
-for part in path:
-    if part == "":
-        continue
-    if isinstance(data, list):
-        data = data[int(part)]
-    else:
-        data = data[part]
-print(data)
-PY
-}
-
-cloudflare_zone_id() {
-  cloudflare_api GET "/zones?name=$DOMAIN_ROOT" |
-    python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["result"][0]["id"] if data.get("result") else "")'
+require_cloudflare_dns_cli() {
+  require_cmd flarectl
+  normalize_cloudflare_token
+  [[ -n "${CF_API_TOKEN:-}" ]] || die "CF_API_TOKEN or CLOUDFLARE_API_TOKEN is required for Cloudflare DNS updates."
+  flarectl --json zone info --zone "$DOMAIN_ROOT" >/dev/null
 }
 
 cloudflare_upsert_dns() {
-  local zone_id="$1"
-  local type="$2"
-  local name="$3"
-  local content="$4"
-  local ttl="${5:-1}"
-  local proxied="${6:-false}"
-  local record_id
-  local payload
+  local type="$1"
+  local name="$2"
+  local content="$3"
+  local ttl="${4:-1}"
+  local proxied="${5:-false}"
+  local args
 
-  record_id="$(cloudflare_api GET "/zones/$zone_id/dns_records?type=$type&name=$name" |
-    python3 -c 'import json,sys; data=json.load(sys.stdin); print(data["result"][0]["id"] if data.get("result") else "")')"
-
-  payload="$(python3 - "$type" "$name" "$content" "$ttl" "$proxied" <<'PY'
-import json
-import sys
-
-type_, name, content, ttl, proxied = sys.argv[1:6]
-payload = {
-    "type": type_,
-    "name": name,
-    "content": content,
-    "ttl": int(ttl),
-}
-if type_ in {"A", "AAAA", "CNAME"}:
-    payload["proxied"] = proxied.lower() == "true"
-print(json.dumps(payload))
-PY
-)"
-
-  if [[ -n "$record_id" ]]; then
-    cloudflare_api PUT "/zones/$zone_id/dns_records/$record_id" "$payload" >/dev/null
-  else
-    cloudflare_api POST "/zones/$zone_id/dns_records" "$payload" >/dev/null
+  args=(
+    dns create-or-update
+    --zone "$DOMAIN_ROOT"
+    --type "$type"
+    --name "$name"
+    --content "$content"
+    --ttl "$ttl"
+  )
+  if [[ "$proxied" == "true" ]]; then
+    args+=(--proxy)
   fi
+
+  flarectl "${args[@]}" >/dev/null
 }
 
 google_site_verification_access_token() {
@@ -921,8 +1018,7 @@ create_domain_mapping() {
 }
 
 sync_domain_dns_record() {
-  local zone_id="$1"
-  local domain="$2"
+  local domain="$1"
   local records_json
 
   records_json="$(gcloud beta run domain-mappings describe \
@@ -939,35 +1035,49 @@ payload = json.loads(sys.argv[1])
 for record in payload.get("status", {}).get("resourceRecords", []):
     print(f"{record['type']}\t{record['name'].rstrip('.')}\t{record['rrdata'].rstrip('.')}")
 PY
-    cloudflare_upsert_dns "$zone_id" "$type" "$name" "$content" 1 false
+    cloudflare_upsert_dns "$type" "$name" "$content" 1 false
   done
+}
+
+sync_cdn_dns_record() {
+  local ip
+
+  ip="$(cdn_ip_address)"
+  [[ -n "$ip" ]] || die "Could not resolve CDN load balancer IP."
+  cloudflare_upsert_dns A "$CDN_DOMAIN" "$ip" 1 false
+  echo "Promo CDN DNS synced: $CDN_DOMAIN -> $ip"
+}
+
+setup_cdn() {
+  log "Setup promo CDN"
+  require_cloudflare_dns_cli
+  ensure_cdn_infra
+  sync_cdn_dns_record
 }
 
 setup_domain() {
   log "Setup custom domain"
   require_cmd curl
   require_cmd gcloud
-  [[ -n "${CF_API_TOKEN:-}" ]] || die "CF_API_TOKEN is required for ONLY=domain."
+  require_cloudflare_dns_cli
 
-  local zone_id
   local entry
   local domain
   local service
 
-  zone_id="$(cloudflare_zone_id)"
-  [[ -n "$zone_id" ]] || die "Cloudflare zone not found: $DOMAIN_ROOT"
-
   # Cloud Run 创建域名映射前，需要先完成 Google 站点所有权验证。
   # 验证 TXT 记录必须保持 DNS only，不能开启 Cloudflare 代理。
-  cloudflare_upsert_dns "$zone_id" TXT "$DOMAIN_ROOT" "$GOOGLE_SITE_VERIFICATION_TXT" 1 false
+  cloudflare_upsert_dns TXT "$DOMAIN_ROOT" "$GOOGLE_SITE_VERIFICATION_TXT" 1 false
   verify_google_domain
 
   for entry in "${DOMAIN_MAPPINGS[@]}"; do
     domain="${entry%%:*}"
     service="${entry#*:}"
     create_domain_mapping "$domain" "$service"
-    sync_domain_dns_record "$zone_id" "$domain"
+    sync_domain_dns_record "$domain"
   done
+  ensure_cdn_infra
+  sync_cdn_dns_record
 
   echo "Custom domain DNS records synced. Keep Cloudflare records DNS-only until Google-managed certificates are ready."
 }
@@ -995,6 +1105,12 @@ main() {
 
   if run_mode_is domain; then
     setup_domain
+    print_summary
+    return
+  fi
+
+  if run_mode_is cdn; then
+    setup_cdn
     print_summary
     return
   fi

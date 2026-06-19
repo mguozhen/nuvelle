@@ -20,6 +20,7 @@
     "deploy:import-reelshort": "ONLY=import-reelshort bash deploy/google-cloud.sh",
     "deploy:static": "ONLY=static bash deploy/google-cloud.sh",
     "deploy:verify": "ONLY=verify bash deploy/google-cloud.sh",
+    "deploy:cdn": "ONLY=cdn bash deploy/google-cloud.sh",
     "deploy:domain": "ONLY=domain bash deploy/google-cloud.sh",
     "deploy:help": "ONLY=help bash deploy/google-cloud.sh"
   },

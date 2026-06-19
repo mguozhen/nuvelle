@@ -38,8 +38,9 @@ def get_job_file(
     filename: str,
     db: DbSession,
     range_header: str | None = Header(default=None, alias="Range"),
+    download: bool = Query(default=False),
 ) -> Response:
-    return PromoService(db).asset_response(job_id, filename, range_header)
+    return PromoService(db).asset_response(job_id, filename, range_header, download)
 
 
 @router.post("/promo/batches", response_model=PromoBatchCreateResponse)
@@ -144,5 +145,6 @@ def get_file_alias(
     n: str,
     db: DbSession,
     range_header: str | None = Header(default=None, alias="Range"),
+    download: bool = Query(default=False),
 ) -> Response:
-    return PromoService(db).asset_response_by_slug(slug, n, range_header)
+    return PromoService(db).asset_response_by_slug(slug, n, range_header, download)

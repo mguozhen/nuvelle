@@ -27,6 +27,16 @@ function assetUrl(baseUrl: string, value?: string | null): string | undefined {
   return `${baseUrl}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
+function downloadUrl(value?: string): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const url = new URL(value, window.location.origin);
+  url.searchParams.set("download", "1");
+  return url.toString();
+}
+
 function GeneratedSkeletonGrid() {
   return (
     <section aria-busy="true">
@@ -129,6 +139,8 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
           const prompt = prompts[key] ?? item.prompt ?? "";
           const teaserUrl = assetUrl(assetBaseUrl, item.files?.teaser);
           const coverUrl = assetUrl(assetBaseUrl, item.files?.cover);
+          const teaserDownloadUrl = downloadUrl(teaserUrl);
+          const coverDownloadUrl = downloadUrl(coverUrl);
           const title = item.drama?.title || item.title || t("common.untitledPromo");
           const progress = generationProgress(item.status, item.progress);
           const active = isActiveGeneration(item.status);
@@ -168,17 +180,17 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
                 ) : null}
               </div>
               <div className="mt-3 flex h-8 flex-wrap gap-2 overflow-hidden">
-                {teaserUrl ? (
+                {teaserDownloadUrl ? (
                   <Button asChild size="sm" variant="outline">
-                    <a download href={teaserUrl}>
+                    <a download="teaser.mp4" href={teaserDownloadUrl}>
                       <Download className="h-3.5 w-3.5" />
                       {t("generated.teaser")}
                     </a>
                   </Button>
                 ) : null}
-                {coverUrl ? (
+                {coverDownloadUrl ? (
                   <Button asChild size="sm" variant="outline">
-                    <a download href={coverUrl}>
+                    <a download="cover.jpg" href={coverDownloadUrl}>
                       <Download className="h-3.5 w-3.5" />
                       {t("generated.cover")}
                     </a>

@@ -127,6 +127,29 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(
     assert job.json()["files"]["teaser"].endswith("/teaser.mp4")
 
 
+def test_promo_job_file_download_uses_attachment_header(
+    client: TestClient, monkeypatch, tmp_path
+) -> None:
+    from app.services import promo_service
+
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generator(tmp_path))
+
+    response = client.post(
+        "/api/v1/promo/jobs",
+        json={"video_url": "https://example.com/episode.mp4", "title": "Download", "ep": 1, "dur": 15},
+    )
+    job_id = response.json()["job_id"]
+
+    preview = client.get(f"/api/v1/promo/jobs/{job_id}/files/teaser.mp4")
+    download = client.get(f"/api/v1/promo/jobs/{job_id}/files/teaser.mp4?download=1")
+
+    assert preview.status_code == 200
+    assert "inline" in preview.headers["content-disposition"]
+    assert download.status_code == 200
+    assert "attachment" in download.headers["content-disposition"]
+    assert "teaser.mp4" in download.headers["content-disposition"]
+
+
 def test_batch_api_queues_jobs_and_reports_status(client: TestClient, monkeypatch, tmp_path) -> None:
     from app.services import promo_service
 
@@ -276,6 +299,46 @@ def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> 
     assert response.status_code == 206
     assert response.body == b"te"
     assert response.headers["content-range"] == "bytes 0-1/6"
+    assert response.headers["content-disposition"] == 'inline; filename="teaser.mp4"'
+
+
+def test_promo_job_file_response_can_download_non_local_asset(db: Session) -> None:
+    from app.services.promo_service import PromoService
+    from app.storage.object_store import StoredObject
+
+    job = PromoJob(
+        id="gcs-job",
+        status="done",
+        title="GCS",
+        episode=1,
+        duration=10,
+        source_url="https://example.com/input.mp4",
+        output_dir="gs://bucket/promo/gcs-job",
+    )
+    db.add(job)
+    db.commit()
+
+    class FakeAssetStore:
+        def local_asset_path(self, location, filename):
+            return None
+
+        def read_asset(self, location, filename, range_header):
+            assert location == "gs://bucket/promo/gcs-job"
+            assert filename == "teaser.mp4"
+            assert range_header is None
+            return StoredObject(
+                content=b"teaser",
+                media_type="video/mp4",
+                headers={"Accept-Ranges": "bytes", "Content-Length": "6"},
+            )
+
+    service = PromoService(db, asset_store=FakeAssetStore())
+
+    response = service.asset_response("gcs-job", "teaser.mp4", download=True)
+
+    assert response.status_code == 200
+    assert response.body == b"teaser"
+    assert response.headers["content-disposition"] == 'attachment; filename="teaser.mp4"'
 
 
 def test_authenticated_promo_job_stores_user_drama_episode_and_prompt(

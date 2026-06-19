@@ -11,7 +11,7 @@ class PromoAssetResponder:
     def __init__(self, asset_store: PromoAssetStore) -> None:
         self.asset_store = asset_store
 
-    def response_for(self, location: str, filename: str, range_header: str | None = None) -> Response:
+    def response_for(self, location: str, filename: str, range_header: str | None = None, download: bool = False) -> Response:
         if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
 
@@ -19,15 +19,20 @@ class PromoAssetResponder:
         if path is not None:
             if not path.exists():
                 raise HTTPException(status_code=404, detail="asset not found")
-            return FileResponse(path, filename=path.name)
+            return FileResponse(
+                path,
+                filename=path.name,
+                content_disposition_type="attachment" if download else "inline",
+            )
 
         asset = self.asset_store.read_asset(location, filename, range_header)
+        disposition_type = "attachment" if download else "inline"
         return Response(
             asset.content,
             status_code=asset.status_code,
             media_type=asset.media_type,
             headers={
                 **asset.headers,
-                "Content-Disposition": f'inline; filename="{filename}"',
+                "Content-Disposition": f'{disposition_type}; filename="{filename}"',
             },
         )

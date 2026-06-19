@@ -169,6 +169,7 @@ pnpm deploy:web
 pnpm deploy:admin
 pnpm deploy:static
 pnpm deploy:verify
+CF_API_TOKEN=... pnpm deploy:cdn
 CF_API_TOKEN=... pnpm deploy:domain
 SKIP_BACKEND_BUILD=true pnpm deploy
 ```
@@ -202,8 +203,9 @@ CF_API_TOKEN=... pnpm deploy:domain
 ```
 
 The Cloudflare token needs zone read and DNS edit permissions for `nuvelle.ai`.
-The script verifies Google ownership, creates Cloud Run domain mappings, and
-syncs DNS-only Cloudflare records.
+The script verifies Google ownership, creates Cloud Run domain mappings, creates
+the promo Cloud CDN entrypoint, and syncs DNS-only Cloudflare records with
+`flarectl`.
 
 Mapping:
 
@@ -215,3 +217,10 @@ Mapping:
 | `cps.nuvelle.ai` | `nuvelle-web` |
 | `admin.nuvelle.ai` | `nuvelle-admin` |
 | `api.nuvelle.ai` | `nuvelle-api` |
+
+Promo generated assets are stored in GCS and fronted by a Google Cloud external
+load balancer + backend bucket + Cloud CDN:
+
+| Domain | Origin |
+|---|---|
+| `cdn.nuvelle.ai` | `vocai-gemini-prod-nuvelle-promo-assets` |
