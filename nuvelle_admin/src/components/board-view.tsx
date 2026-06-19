@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Film, Flame, Layers, WandSparkles } from "lucide-react";
+import { Film, Flame, Layers } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { generationLabel } from "@/lib/generation";
 import { useI18n } from "@/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
@@ -224,10 +223,9 @@ export function BoardView({
         {!isLoading && ranked.map(({ drama, score }) => {
           const verdict = votes[String(drama.id)];
           const count = episodeCount(drama);
-          const generation = getGenerationState(drama);
 
           return (
-            <article key={drama.id} className="overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
+            <article key={drama.id} className="flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
               <button className="relative block w-full text-left" type="button" onClick={() => void openDrama(drama)}>
                 <span className="relative block aspect-[2/3] bg-[#171b28]">
                   {drama.cover_image_url ? (
@@ -242,34 +240,30 @@ export function BoardView({
                   <span className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px]">{drama.platform || ""}</span>
                 </span>
               </button>
-              <div className="p-3">
-                <h2 className="line-clamp-2 text-[13.5px] font-semibold leading-tight">{drama.title || t("common.untitled")}</h2>
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#9aa2c0]">
+              <div className="flex flex-1 flex-col p-3">
+                <h2 className="line-clamp-2 h-10 text-[13.5px] font-semibold leading-5">{drama.title || t("common.untitled")}</h2>
+                <div className="mt-2 flex h-4 min-w-0 items-center gap-2 overflow-hidden text-[11px] text-[#9aa2c0]">
                   {count ? (
-                    <span className="inline-flex items-center gap-1">
-                      <Layers className="h-3 w-3" />
-                      {t("board.eps", { count })}
+                    <span className="inline-flex min-w-0 items-center gap-1 truncate">
+                      <Layers className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{t("board.eps", { count })}</span>
                     </span>
                   ) : null}
                   {verdict ? (
-                    <span className="inline-flex items-center gap-1 text-[#ff5fbf]">
-                      <Flame className="h-3 w-3" />
-                      {verdict === "fire" ? t("swipe.fire") : verdict === "ok" ? t("swipe.solid") : t("swipe.pass")}
+                    <span className="inline-flex min-w-0 items-center gap-1 truncate text-[#ff5fbf]">
+                      <Flame className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{verdict === "fire" ? t("swipe.fire") : verdict === "ok" ? t("swipe.solid") : t("swipe.pass")}</span>
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 grid grid-cols-2 gap-1 text-[10.5px] text-[#7f88a6]">
-                  <span>{t("board.revenue", { value: formatCompact(drama.recent_revenue) })}</span>
-                  <span>{t("board.promoters", { value: formatCompact(drama.promoters_cnt) })}</span>
-                  <span className="col-span-2">{t("board.published", { value: formatDate(drama.platform_publish_at) })}</span>
-                  {drama.generated_count ? <span className="col-span-2">{t("board.generated", { count: drama.generated_count })}</span> : null}
+                <div className="mt-2 grid h-[3.75rem] grid-cols-2 grid-rows-3 gap-x-3 gap-y-1 text-[10.5px] leading-4 text-[#7f88a6]">
+                  <span className="min-w-0 truncate">{t("board.revenue", { value: formatCompact(drama.recent_revenue) })}</span>
+                  <span className="min-w-0 truncate">{t("board.promoters", { value: formatCompact(drama.promoters_cnt) })}</span>
+                  <span className="col-span-2 min-w-0 truncate">{t("board.published", { value: formatDate(drama.platform_publish_at) })}</span>
+                  <span className="col-span-2 min-w-0 truncate">{drama.generated_count ? t("board.generated", { count: drama.generated_count }) : ""}</span>
                 </div>
-                <div className="mt-3 grid gap-2">
-                  <Button disabled={generation.disabled} size="sm" variant="gradient" onClick={() => onGenerate(drama, duration)}>
-                    <WandSparkles className="h-3.5 w-3.5" />
-                    {generationLabel(t, generation, t("board.generatePromo"))}
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => void openDrama(drama)}>
+                <div className="mt-auto pt-3">
+                  <Button className="w-full" size="sm" variant="outline" onClick={() => void openDrama(drama)}>
                     <Film className="h-3.5 w-3.5" />
                     {t("board.details")}
                   </Button>

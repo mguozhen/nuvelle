@@ -505,7 +505,7 @@ describe("admin app", () => {
     expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
   });
 
-  it("disables generate buttons for resources that already have generation jobs", async () => {
+  it("keeps generation inside details and disables generated episodes", async () => {
     const user = userEvent.setup();
     installFetchMock({
       boardResponse: () =>
@@ -529,14 +529,15 @@ describe("admin app", () => {
     render(<App />);
     await registerAndLoad(user);
 
-    const disabledBoardButton = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).find((button) => button.hasAttribute("disabled"));
-    expect(disabledBoardButton).toBeDefined();
+    expect(screen.queryByRole("button", { name: /generate promo/i })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /details/i }));
 
     await waitFor(() => expect(screen.getByText("Source tags")).toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: /^Generate$/ }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByRole("button", { name: /generate all available episodes/i })).toBeInTheDocument();
     const disabledGeneratedButtons = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).filter((button) => button.hasAttribute("disabled"));
-    expect(disabledGeneratedButtons.length).toBeGreaterThanOrEqual(2);
+    expect(disabledGeneratedButtons.length).toBeGreaterThanOrEqual(1);
   });
 
   it("opens backend URL settings after authentication", async () => {
