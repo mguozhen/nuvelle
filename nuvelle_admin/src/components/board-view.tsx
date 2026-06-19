@@ -227,14 +227,14 @@ export function BoardView({
               </button>
               <div className="flex flex-1 flex-col p-3">
                 <h2 className="line-clamp-2 h-10 text-[13.5px] font-semibold leading-5">{drama.title || t("common.untitled")}</h2>
-                <div className="mt-2 flex h-4 min-w-0 items-center gap-2 overflow-hidden text-[11px] text-[#9aa2c0]">
-                  {verdict ? (
+                {verdict ? (
+                  <div className="mt-2 flex min-w-0 items-center gap-2 overflow-hidden text-[11px] text-[#9aa2c0]">
                     <span className="inline-flex min-w-0 items-center gap-1 truncate text-[#ff5fbf]">
                       <Flame className="h-3 w-3 shrink-0" />
                       <span className="truncate">{verdict === "fire" ? t("swipe.fire") : verdict === "ok" ? t("swipe.solid") : t("swipe.pass")}</span>
                     </span>
-                  ) : null}
-                </div>
+                  </div>
+                ) : null}
                 <div className="mt-2 grid h-9 grid-cols-2 grid-rows-2 gap-x-3 gap-y-1 text-[10.5px] leading-4 text-[#7f88a6]">
                   <span className="min-w-0 truncate">{t("board.revenue", { value: formatCompact(drama.recent_revenue) })}</span>
                   <span className="min-w-0 truncate">{t("board.promoters", { value: formatCompact(drama.promoters_cnt) })}</span>
