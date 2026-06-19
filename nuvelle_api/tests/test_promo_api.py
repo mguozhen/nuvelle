@@ -235,8 +235,8 @@ def test_promo_job_uploads_generated_assets_to_configured_store(
 
 
 def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> None:
-    from app.services.promo_asset_store import StoredAsset
     from app.services.promo_service import PromoService
+    from app.storage.object_store import StoredObject
 
     job = PromoJob(
         id="gcs-job",
@@ -258,7 +258,7 @@ def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> 
             assert location == "gs://bucket/promo/gcs-job"
             assert filename == "teaser.mp4"
             assert range_header == "bytes=0-1"
-            return StoredAsset(
+            return StoredObject(
                 content=b"te",
                 media_type="video/mp4",
                 status_code=206,
