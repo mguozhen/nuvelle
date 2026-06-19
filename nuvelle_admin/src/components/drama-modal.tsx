@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Flame, Play, WandSparkles } from "lucide-react";
+import { Download, Flame, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -120,6 +120,15 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
     setSelectedEpisodeNo(episodeNo);
     setPlayRequestKey((current) => current + 1);
   };
+  const generationStatusClass = (status?: string | null) => {
+    if (status === "done") {
+      return "border-emerald-300/30 bg-emerald-400/10 text-emerald-200";
+    }
+    if (status) {
+      return "border-[#ff5fbf44] bg-[#ff5fbf18] text-[#ffd5ef]";
+    }
+    return "border-white/10 bg-white/[0.04] text-[#9aa2c0]";
+  };
 
   return (
     <Dialog open={Boolean(drama)} onOpenChange={onOpenChange}>
@@ -202,60 +211,86 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
                 <div className="mt-4 min-h-0 lg:flex lg:flex-1 lg:flex-col">
                   <h3 className="mb-2 shrink-0 text-sm font-semibold">{t("detail.episodes")}</h3>
                   <div className="grid gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-                    {episodes.map((episode) => (
-                      <div
-                        key={episode.episode}
-                        className={[
-                          "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-xl border p-3 transition-colors sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center",
-                          selectedEpisode?.episode === episode.episode
-                            ? "border-[#ff5fbf66] bg-[#ff5fbf12]"
-                            : "border-white/10 bg-[#0e1119]"
-                        ].join(" ")}
-                      >
-                        <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
-                        <span className="min-w-0 text-xs text-[#9aa2c0]">
-                          {episode.url || episode.iframeSrc ? t("detail.playable") : t("detail.noEpisodeVideo")}
-                        </span>
-                        <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
-                          <Button
-                            aria-label={t("detail.playEpisode", { episode: episode.episode })}
-                            className="whitespace-nowrap"
-                            disabled={!episode.url && !episode.iframeSrc}
-                            size="sm"
-                            variant="outline"
-                            onClick={() => playEpisode(episode.episode)}
-                          >
-                            <Play className="h-3.5 w-3.5" />
-                            {t("detail.play")}
-                          </Button>
-                          {episode.url ? (
-                            <Button asChild className="whitespace-nowrap" size="sm" variant="outline">
-                              <a
+                    {episodes.map((episode) => {
+                      const generation = getGenerationState(drama, {
+                        id: episode.id || episode.episode,
+                        episode_no: episode.episode,
+                        generation_status: episode.generationStatus,
+                        generation_progress: episode.generationProgress
+                      });
+                      const isPlayable = Boolean(episode.url || episode.iframeSrc);
+
+                      return (
+                        <div
+                          key={episode.episode}
+                          aria-disabled={!isPlayable}
+                          aria-label={t("detail.playEpisode", { episode: episode.episode })}
+                          className={[
+                            "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-3 rounded-xl border p-3 transition-colors sm:grid-cols-[4.5rem_minmax(0,1fr)_auto] sm:items-center",
+                            isPlayable ? "cursor-pointer hover:border-[#ff5fbf66] hover:bg-[#ff5fbf0d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff5fbf66]" : "cursor-not-allowed opacity-60",
+                            selectedEpisode?.episode === episode.episode
+                              ? "border-[#ff5fbf66] bg-[#ff5fbf12]"
+                              : "border-white/10 bg-[#0e1119]"
+                          ].join(" ")}
+                          role="button"
+                          tabIndex={isPlayable ? 0 : -1}
+                          onClick={() => {
+                            if (isPlayable) {
+                              playEpisode(episode.episode);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (!isPlayable || (event.key !== "Enter" && event.key !== " ")) {
+                              return;
+                            }
+                            event.preventDefault();
+                            playEpisode(episode.episode);
+                          }}
+                        >
+                          <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
+                          <div className="min-w-0 space-y-1">
+                            <div className="truncate text-xs text-[#9aa2c0]">
+                              {isPlayable ? t("detail.playable") : t("detail.noEpisodeVideo")}
+                            </div>
+                            <span className={[
+                              "inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold",
+                              generationStatusClass(generation.status)
+                            ].join(" ")}>
+                              {generationLabel(t, generation, t("detail.notGenerated"))}
+                            </span>
+                          </div>
+                          <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
+                            {episode.url ? (
+                              <Button asChild className="whitespace-nowrap" size="sm" variant="outline">
+                                <a
+                                  aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
+                                  download
+                                  href={episode.url}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                  onClick={(event) => event.stopPropagation()}
+                                  onKeyDown={(event) => event.stopPropagation()}
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  {t("detail.download")}
+                                </a>
+                              </Button>
+                            ) : (
+                              <Button
                                 aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
-                                download
-                                href={episode.url}
-                                rel="noreferrer"
-                                target="_blank"
+                                className="whitespace-nowrap"
+                                disabled
+                                size="sm"
+                                variant="outline"
                               >
                                 <Download className="h-3.5 w-3.5" />
                                 {t("detail.download")}
-                              </a>
-                            </Button>
-                          ) : (
-                            <Button
-                              aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
-                              className="whitespace-nowrap"
-                              disabled
-                              size="sm"
-                              variant="outline"
-                            >
-                              <Download className="h-3.5 w-3.5" />
-                              {t("detail.download")}
-                            </Button>
-                          )}
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}
                   </div>
                 </div>

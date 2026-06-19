@@ -61,7 +61,7 @@ export const en = {
   "detail.markFire": "Mark fire",
   "detail.noEpisodeVideo": "No video",
   "detail.noEpisodeUrls": "No episode URLs found.",
-  "detail.play": "Play",
+  "detail.notGenerated": "Not generated",
   "detail.playEpisode": "Play EP {episode}",
   "detail.playable": "Playable",
   "detail.promptPlaceholder": "Prompt for this promo",

@@ -63,7 +63,7 @@ export const zh: Record<keyof typeof en, string> = {
   "detail.markFire": "标记爆款",
   "detail.noEpisodeVideo": "无视频",
   "detail.noEpisodeUrls": "没有找到剧集视频地址。",
-  "detail.play": "播放",
+  "detail.notGenerated": "未生成",
   "detail.playEpisode": "播放第 {episode} 集",
   "detail.playable": "可播放",
   "detail.promptPlaceholder": "这条推广视频的提示词",

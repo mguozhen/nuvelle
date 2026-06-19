@@ -412,6 +412,8 @@ describe("admin app", () => {
     expect(screen.getByRole("button", { name: /play ep 1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 2/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
     expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("download");
     expect(screen.getByRole("link", { name: /download ep 2/i })).toHaveAttribute("href", "https://cdn.example/ep2.mp4");
@@ -549,6 +551,8 @@ describe("admin app", () => {
     expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Generate$/ })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
+    expect(within(screen.getByRole("button", { name: /play ep 1/i })).getByText(/Generated|Queued 5%/)).toBeInTheDocument();
+    expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate all available episodes/i })).toBeInTheDocument();
     const disabledGeneratedButtons = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).filter((button) => button.hasAttribute("disabled"));
     expect(disabledGeneratedButtons.length).toBeGreaterThanOrEqual(1);
