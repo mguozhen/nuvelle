@@ -40,7 +40,9 @@ function GeneratedSkeletonGrid() {
             className="rounded-2xl border border-white/10 bg-[#0d0f17] p-4"
             data-testid="generated-skeleton-card"
           >
-            <Skeleton className="aspect-video rounded-xl bg-white/[0.07]" />
+            <div className="flex justify-center rounded-xl border border-white/10 bg-black/80 p-2">
+              <Skeleton className="aspect-[9/16] h-[360px] max-h-[56vh] w-auto max-w-full rounded-lg bg-white/[0.07]" />
+            </div>
             <div className="mt-3 space-y-3">
               <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-3 w-1/2" />
@@ -77,6 +79,30 @@ function statusText(t: ReturnType<typeof useI18n>["t"], status: string | undefin
   return status || "";
 }
 
+function GeneratedPreview({ coverUrl, teaserUrl, title }: { coverUrl?: string; teaserUrl?: string; title: string }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="flex justify-center rounded-xl border border-white/10 bg-black/80 p-2" data-testid="generated-preview-frame">
+      <div className="aspect-[9/16] h-[360px] max-h-[56vh] w-auto max-w-full overflow-hidden rounded-lg bg-black">
+        {teaserUrl ? (
+          <video
+            aria-label={t("generated.videoPreview", { title })}
+            className="h-full w-full object-contain"
+            controls
+            poster={coverUrl}
+            src={teaserUrl}
+          />
+        ) : coverUrl ? (
+          <img alt={title} className="h-full w-full object-contain" src={coverUrl} />
+        ) : (
+          <div className="flex h-full w-[202px] items-center justify-center text-sm text-[#9aa2c0]">{t("generated.noPreview")}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, onRegenerate }: GeneratedLibraryProps) {
   const { t } = useI18n();
   const [prompts, setPrompts] = useState<Record<string, string>>({});
@@ -109,15 +135,7 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
 
           return (
             <article key={key} className="rounded-2xl border border-white/10 bg-[#0d0f17] p-4">
-              <div className="aspect-video overflow-hidden rounded-xl bg-black">
-                {teaserUrl ? (
-                  <video className="h-full w-full object-cover" controls poster={coverUrl} src={teaserUrl} />
-                ) : coverUrl ? (
-                  <img alt={title} className="h-full w-full object-cover" src={coverUrl} />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-[#9aa2c0]">{t("generated.noPreview")}</div>
-                )}
-              </div>
+              <GeneratedPreview coverUrl={coverUrl} teaserUrl={teaserUrl} title={title} />
               <h2 className="mt-3 line-clamp-2 font-semibold">{title}</h2>
               <p className="mt-1 text-xs text-[#9aa2c0]">
                 EP{item.episode || item.episode_ref?.episode_no || 1} - {item.duration || 30}s {item.status ? `- ${statusText(t, item.status, progress)}` : ""}

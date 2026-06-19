@@ -438,6 +438,46 @@ describe("admin app", () => {
     expect(screen.getByDisplayValue("high tension")).toBeInTheDocument();
   });
 
+  it("uses a portrait contain preview for generated vertical videos", async () => {
+    const user = userEvent.setup();
+    installFetchMock({
+      generatedResponse: () =>
+        json({
+          items: [
+            {
+              id: "job-vertical",
+              job_id: "job-vertical",
+              status: "done",
+              progress: 100,
+              title: "Demo Drama",
+              episode: 1,
+              duration: 20,
+              source_url: "https://cdn.example/ep1.mp4",
+              prompt: "high tension",
+              files: {
+                teaser: "/promo/jobs/job-vertical/files/teaser.mp4",
+                cover: "/promo/jobs/job-vertical/files/cover.jpg"
+              },
+              drama: { id: 1, title: "Demo Drama" },
+              episode_ref: { id: 10, episode_no: 1 },
+              created_at: "2026-06-18T00:00:00Z"
+            }
+          ],
+          total: 1
+        })
+    });
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("link", { name: /generated/i }));
+
+    const frame = await screen.findByTestId("generated-preview-frame");
+    const video = screen.getByLabelText("Demo Drama generated video");
+    expect(frame.firstElementChild).toHaveClass("aspect-[9/16]");
+    expect(video).toHaveClass("object-contain");
+    expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
+  });
+
   it("disables generate buttons for resources that already have generation jobs", async () => {
     const user = userEvent.setup();
     installFetchMock({

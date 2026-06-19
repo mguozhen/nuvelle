@@ -13,6 +13,7 @@ votes.json
 node_modules/
 *.tsbuildinfo
 *.log
+logs/
 .env
 .DS_Store
 .idea/
