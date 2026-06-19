@@ -151,17 +151,21 @@ BLOG_PAGE_SIZE=12
 `nuvelle-blogger-access-key`. On the first deploy, set `BLOGGER_ACCESS_KEY` in
 your shell and the script will create the secret version.
 
-Optional locale language overrides can be provided when deploying. Use Blogger
-site language keys, not Nuvelle route prefixes:
+`BLOGGER_LANGUAGE` only controls the default English Blogger language. Other
+website locales default to the matching Nuvelle Blogger site language keys:
+`cn`, `jp`, `de`, `fr`, `es`, and `pt`.
+
+Optional locale language overrides can be provided when deploying if a Blogger
+site uses different language keys:
 
 ```bash
 BLOGGER_LANGUAGE_EN=en
-BLOGGER_LANGUAGE_CN=zh-Hans
-BLOGGER_LANGUAGE_JP=ja-JP
-BLOGGER_LANGUAGE_DE=de-DE
-BLOGGER_LANGUAGE_FR=fr-FR
-BLOGGER_LANGUAGE_ES=es-ES
-BLOGGER_LANGUAGE_PT=pt-PT
+BLOGGER_LANGUAGE_CN=cn
+BLOGGER_LANGUAGE_JP=jp
+BLOGGER_LANGUAGE_DE=de
+BLOGGER_LANGUAGE_FR=fr
+BLOGGER_LANGUAGE_ES=es
+BLOGGER_LANGUAGE_PT=pt
 ```
 
 ## Secrets

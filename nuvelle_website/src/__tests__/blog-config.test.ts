@@ -12,8 +12,15 @@ describe("blog config", () => {
     expect(defaultConfig.siteSlug).toBe("");
     expect(defaultConfig.pageSize).toBe(12);
     expect(defaultConfig.siteOrigin).toBe("https://nuvelle.ai");
-    expect(defaultConfig.languageByLocale.en).toBe("en");
-    expect(defaultConfig.languageByLocale.cn).toBe("en");
+    expect(defaultConfig.languageByLocale).toEqual({
+      en: "en",
+      cn: "cn",
+      jp: "jp",
+      de: "de",
+      fr: "fr",
+      es: "es",
+      pt: "pt"
+    });
 
     const config = createBlogConfig({
       BLOGGER_API_URL: "https://blogger.example.com/",
@@ -32,7 +39,7 @@ describe("blog config", () => {
     expect(config.siteOrigin).toBe("https://example.com");
     expect(config.languageByLocale.en).toBe("en");
     expect(config.languageByLocale.cn).toBe("zh-Hans");
-    expect(config.languageByLocale.jp).toBe("en");
+    expect(config.languageByLocale.jp).toBe("jp");
   });
 
   it("documents the Nuvelle Blogger site slug in runtime examples", () => {

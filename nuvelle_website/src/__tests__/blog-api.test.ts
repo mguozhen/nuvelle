@@ -12,12 +12,12 @@ const config: BlogConfig = {
   siteOrigin: "https://nuvelle.ai",
   languageByLocale: {
     en: "en",
-    cn: "en",
-    jp: "en",
-    de: "en",
-    fr: "en",
-    es: "en",
-    pt: "en"
+    cn: "cn",
+    jp: "jp",
+    de: "de",
+    fr: "fr",
+    es: "es",
+    pt: "pt"
   }
 };
 
@@ -102,7 +102,7 @@ describe("blog api adapter", () => {
     expect(url.searchParams.get("limit")).toBe("24");
     expect(url.searchParams.get("offset")).toBe("24");
     expect(url.searchParams.get("category_slug")).toBe("product");
-    expect(url.searchParams.get("language")).toBe("en");
+    expect(url.searchParams.get("language")).toBe("cn");
     expect(fetchMock.mock.calls[0][1]).toEqual({
       cache: "no-store",
       headers: { "X-Access-Key": "blog_sk_test" }
@@ -153,6 +153,30 @@ describe("blog api adapter", () => {
     expect(url.pathname).toBe("/api/integration/sites/nuvelle/posts/first-post");
     expect(url.searchParams.get("language")).toBe("en");
     expect(article?.contentHtml).toBe("<h1>First post</h1><p>Body</p>");
+  });
+
+  it("builds a Blogger detail request with the selected locale language", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...bloggerPost,
+        language: "jp",
+        slug: "jp-first-post",
+        title: "JP first post",
+        path: "/jp/blog/jp-first-post"
+      })
+    });
+
+    await fetchBlogDetail({
+      locale: "jp",
+      slug: "jp-first-post",
+      config,
+      fetcher: fetchMock as unknown as typeof fetch
+    });
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.pathname).toBe("/api/integration/sites/nuvelle/posts/jp-first-post");
+    expect(url.searchParams.get("language")).toBe("jp");
   });
 
   it("returns null when Blogger reports a missing post", async () => {

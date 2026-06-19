@@ -21,16 +21,14 @@ function trimTrailingSlash(value: string | undefined) {
 }
 
 function languageByLocale(env: Env): Record<LocaleKey, string> {
-  const fallback = env.BLOGGER_LANGUAGE || "en";
-
   return {
-    en: env.BLOGGER_LANGUAGE_EN || fallback,
-    cn: env.BLOGGER_LANGUAGE_CN || fallback,
-    jp: env.BLOGGER_LANGUAGE_JP || fallback,
-    de: env.BLOGGER_LANGUAGE_DE || fallback,
-    fr: env.BLOGGER_LANGUAGE_FR || fallback,
-    es: env.BLOGGER_LANGUAGE_ES || fallback,
-    pt: env.BLOGGER_LANGUAGE_PT || fallback
+    en: env.BLOGGER_LANGUAGE_EN || env.BLOGGER_LANGUAGE || "en",
+    cn: env.BLOGGER_LANGUAGE_CN || "cn",
+    jp: env.BLOGGER_LANGUAGE_JP || "jp",
+    de: env.BLOGGER_LANGUAGE_DE || "de",
+    fr: env.BLOGGER_LANGUAGE_FR || "fr",
+    es: env.BLOGGER_LANGUAGE_ES || "es",
+    pt: env.BLOGGER_LANGUAGE_PT || "pt"
   };
 }
 
