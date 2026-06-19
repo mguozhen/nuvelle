@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Flame, Play, WandSparkles } from "lucide-react";
+import { Download, Flame, Play, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,7 +37,6 @@ type EpisodeOption = {
 
 export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
-  const [customUrl, setCustomUrl] = useState("");
   const [playRequestKey, setPlayRequestKey] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [selectedEpisodeNo, setSelectedEpisodeNo] = useState<number | null>(null);
@@ -115,7 +114,6 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
     setSelectedEpisodeNo(null);
     setPlayRequestKey(0);
     setPrompt("");
-    setCustomUrl("");
   }, [drama?.id]);
 
   const playEpisode = (episodeNo: number) => {
@@ -204,14 +202,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
                 <div className="mt-4 min-h-0 lg:flex lg:flex-1 lg:flex-col">
                   <h3 className="mb-2 shrink-0 text-sm font-semibold">{t("detail.episodes")}</h3>
                   <div className="grid gap-2 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-                    {episodes.map((episode) => {
-                      const generation = getGenerationState(drama, {
-                        id: episode.id || episode.episode,
-                        episode_no: episode.episode,
-                        generation_status: episode.generationStatus,
-                        generation_progress: episode.generationProgress
-                      });
-                      return (
+                    {episodes.map((episode) => (
                       <div
                         key={episode.episode}
                         className={[
@@ -237,37 +228,35 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
                             <Play className="h-3.5 w-3.5" />
                             {t("detail.play")}
                           </Button>
-                          <Button
-                            className="whitespace-nowrap"
-                            disabled={generation.disabled}
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onGenerate(drama, duration, prompt, episode.episode)}
-                          >
-                            {generationLabel(t, generation, t("detail.generate"))}
-                          </Button>
+                          {episode.url ? (
+                            <Button asChild className="whitespace-nowrap" size="sm" variant="outline">
+                              <a
+                                aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
+                                download
+                                href={episode.url}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                {t("detail.download")}
+                              </a>
+                            </Button>
+                          ) : (
+                            <Button
+                              aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
+                              className="whitespace-nowrap"
+                              disabled
+                              size="sm"
+                              variant="outline"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              {t("detail.download")}
+                            </Button>
+                          )}
                         </div>
                       </div>
-                      );
-                    })}
+                    ))}
                     {!episodes.length ? <p className="text-sm text-[#9aa2c0]">{t("detail.noEpisodeUrls")}</p> : null}
-                    <div className="flex gap-2 pt-2">
-                      <Input
-                        placeholder={t("detail.urlPlaceholder")}
-                        value={customUrl}
-                        onChange={(event) => setCustomUrl(event.target.value)}
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          if (customUrl.trim()) {
-                            onGenerate(drama, duration, prompt, 1, customUrl.trim());
-                          }
-                        }}
-                      >
-                        {t("detail.generate")}
-                      </Button>
-                    </div>
                   </div>
                 </div>
                 <Input

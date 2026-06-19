@@ -411,8 +411,13 @@ describe("admin app", () => {
     expect(screen.getByRole("button", { name: /play ep 1/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 2/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
+    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("download");
+    expect(screen.getByRole("link", { name: /download ep 2/i })).toHaveAttribute("href", "https://cdn.example/ep2.mp4");
     expect(screen.queryByText("https://cdn.example/ep1.mp4")).not.toBeInTheDocument();
     expect(screen.queryByText("https://cdn.example/ep2.mp4")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Generate$/ })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /play ep 2/i }));
     const video = screen.getByLabelText("Demo Drama video");
@@ -505,7 +510,7 @@ describe("admin app", () => {
     expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
   });
 
-  it("keeps generation inside details and disables generated episodes", async () => {
+  it("keeps generation in the detail footer and disables generated episodes", async () => {
     const user = userEvent.setup();
     installFetchMock({
       boardResponse: () =>
@@ -534,7 +539,9 @@ describe("admin app", () => {
     await user.click(screen.getByRole("button", { name: /details/i }));
 
     await waitFor(() => expect(screen.getByText("Source tags")).toBeInTheDocument());
-    expect(screen.getAllByRole("button", { name: /^Generate$/ }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Generate$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
     expect(screen.getByRole("button", { name: /generate all available episodes/i })).toBeInTheDocument();
     const disabledGeneratedButtons = screen.getAllByRole("button", { name: /Generated|Queued 5%/ }).filter((button) => button.hasAttribute("disabled"));
     expect(disabledGeneratedButtons.length).toBeGreaterThanOrEqual(1);
