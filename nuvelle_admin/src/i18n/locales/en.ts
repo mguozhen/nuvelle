@@ -25,7 +25,6 @@ export const en = {
   "board.allVideos": "All videos",
   "board.details": "Details",
   "board.duration": "Duration",
-  "board.eps": "{count} eps",
   "board.generated": "Generated {count}",
   "board.generatePromo": "Generate promo",
   "board.noMatch": "No dramas match this filter.",

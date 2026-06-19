@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Film, Flame, Layers } from "lucide-react";
+import { CheckCircle2, Film, Flame } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DramaModal } from "@/components/drama-modal";
@@ -42,26 +42,6 @@ type BoardViewProps = {
 
 function values(items: Array<string | null | undefined>): string[] {
   return Array.from(new Set(items.filter((item): item is string => Boolean(item)))).sort((a, b) => a.localeCompare(b));
-}
-
-function episodeCount(drama: DramaRecord): number {
-  if (Array.isArray(drama.episode_list)) {
-    return drama.episode_list.length;
-  }
-
-  if (Array.isArray(drama.episodes)) {
-    return drama.episodes.length;
-  }
-
-  if (drama.episodes) {
-    return Object.keys(drama.episodes).length;
-  }
-
-  if (Number(drama.episode_count) > 0) {
-    return Number(drama.episode_count);
-  }
-
-  return drama.video_url ? 1 : 0;
 }
 
 function optionLabel(value: string): string {
@@ -222,7 +202,6 @@ export function BoardView({
         {isLoading ? <BoardSkeletonGrid /> : null}
         {!isLoading && ranked.map(({ drama, score }) => {
           const verdict = votes[String(drama.id)];
-          const count = episodeCount(drama);
 
           return (
             <article key={drama.id} className="flex h-full flex-col overflow-hidden rounded-[14px] border border-white/10 bg-[#11141f]">
@@ -238,17 +217,17 @@ export function BoardView({
                   ) : null}
                   <span className="absolute left-2 top-2 rounded-lg bg-black/70 px-2 py-1 text-sm font-bold">{score}</span>
                   <span className="absolute right-2 top-2 rounded-full bg-black/70 px-2 py-1 text-[10px]">{drama.platform || ""}</span>
+                  {drama.generated_count ? (
+                    <span className="absolute bottom-2 left-2 inline-flex max-w-[calc(100%-1rem)] items-center gap-1 rounded-full border border-emerald-300/30 bg-[#06291fcc] px-2 py-1 text-[10px] font-semibold text-emerald-200 backdrop-blur-sm">
+                      <CheckCircle2 className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{t("board.generated", { count: drama.generated_count })}</span>
+                    </span>
+                  ) : null}
                 </span>
               </button>
               <div className="flex flex-1 flex-col p-3">
                 <h2 className="line-clamp-2 h-10 text-[13.5px] font-semibold leading-5">{drama.title || t("common.untitled")}</h2>
                 <div className="mt-2 flex h-4 min-w-0 items-center gap-2 overflow-hidden text-[11px] text-[#9aa2c0]">
-                  {count ? (
-                    <span className="inline-flex min-w-0 items-center gap-1 truncate">
-                      <Layers className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{t("board.eps", { count })}</span>
-                    </span>
-                  ) : null}
                   {verdict ? (
                     <span className="inline-flex min-w-0 items-center gap-1 truncate text-[#ff5fbf]">
                       <Flame className="h-3 w-3 shrink-0" />
@@ -256,11 +235,10 @@ export function BoardView({
                     </span>
                   ) : null}
                 </div>
-                <div className="mt-2 grid h-[3.75rem] grid-cols-2 grid-rows-3 gap-x-3 gap-y-1 text-[10.5px] leading-4 text-[#7f88a6]">
+                <div className="mt-2 grid h-9 grid-cols-2 grid-rows-2 gap-x-3 gap-y-1 text-[10.5px] leading-4 text-[#7f88a6]">
                   <span className="min-w-0 truncate">{t("board.revenue", { value: formatCompact(drama.recent_revenue) })}</span>
                   <span className="min-w-0 truncate">{t("board.promoters", { value: formatCompact(drama.promoters_cnt) })}</span>
                   <span className="col-span-2 min-w-0 truncate">{t("board.published", { value: formatDate(drama.platform_publish_at) })}</span>
-                  <span className="col-span-2 min-w-0 truncate">{drama.generated_count ? t("board.generated", { count: drama.generated_count }) : ""}</span>
                 </div>
                 <div className="mt-auto pt-3">
                   <Button className="w-full" size="sm" variant="outline" onClick={() => void openDrama(drama)}>

@@ -27,7 +27,6 @@ export const zh: Record<keyof typeof en, string> = {
   "board.allVideos": "全部视频",
   "board.details": "详情",
   "board.duration": "时长",
-  "board.eps": "{count} 集",
   "board.generated": "已生成 {count}",
   "board.generatePromo": "生成推广视频",
   "board.noMatch": "没有匹配当前筛选条件的短剧。",

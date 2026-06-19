@@ -168,6 +168,7 @@ describe("admin app", () => {
       expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
     );
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes("seed_dramas"))).toBe(false);
+    expect(screen.queryByText(/\d+\s+eps/i)).not.toBeInTheDocument();
   });
 
   it("loads board filters from the admin API", async () => {
@@ -535,6 +536,7 @@ describe("admin app", () => {
     await registerAndLoad(user);
 
     expect(screen.queryByRole("button", { name: /generate promo/i })).not.toBeInTheDocument();
+    expect(screen.getByText("Generated 1")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /details/i }));
 
