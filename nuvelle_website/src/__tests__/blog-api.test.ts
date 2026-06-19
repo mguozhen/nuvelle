@@ -1,27 +1,28 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchBlogDetail, fetchBlogList, mapBlogDetail, mapBlogListItem } from "../lib/blog/api";
+import { fetchBlogDetail, fetchBlogList, mapBloggerPost } from "../lib/blog/api";
 import type { BlogConfig } from "../lib/blog/config";
 import { blogPostingJsonLd, metadataForBlogDetail } from "../lib/blog/seo";
 import type { BlogArticleDetail } from "../lib/blog/types";
 
 const config: BlogConfig = {
-  slxHost: "https://apps.voc.ai",
-  siteKey: "nuvelle.ai",
+  apiUrl: "https://blogger.example.com",
+  accessKey: "blog_sk_test",
+  siteSlug: "nuvelle",
   pageSize: 12,
   siteOrigin: "https://nuvelle.ai",
-  categoryIdsByLocale: {
-    en: [1, 2],
-    cn: [],
-    jp: [],
-    de: [],
-    fr: [],
-    es: [],
-    pt: []
+  languageByLocale: {
+    en: "en",
+    cn: "en",
+    jp: "en",
+    de: "en",
+    fr: "en",
+    es: "en",
+    pt: "en"
   }
 };
 
 const articleDetail: BlogArticleDetail = {
-  id: 10,
+  id: "10",
   slug: "clean-seo",
   title: "Plain title",
   excerpt: "Plain excerpt",
@@ -30,119 +31,141 @@ const articleDetail: BlogArticleDetail = {
   meta: {}
 };
 
+const bloggerPost = {
+  id: "post-1",
+  site_slug: "nuvelle",
+  title: "First post",
+  slug: "first-post",
+  language: "en",
+  path: "/blog/first-post",
+  html_content: "<h1>First post</h1><p>Body</p>",
+  excerpt: "Short summary",
+  cover_image_url: "https://cdn.example/cover.png",
+  meta_title: "SEO title",
+  meta_description: "SEO description",
+  canonical_url: "https://nuvelle.ai/blog/first-post",
+  published_at: "2026-06-19T12:00:00Z",
+  updated_at: "2026-06-20T12:00:00Z",
+  author: {
+    id: "author-1",
+    email: "writer@example.com",
+    nickname: "Writer",
+    avatar_url: "https://cdn.example/avatar.png"
+  },
+  category: {
+    id: "category-1",
+    site_id: "site-1",
+    name: "Product",
+    slug: "product",
+    description: "Product updates",
+    created_at: "2026-06-19T12:00:00Z",
+    updated_at: "2026-06-19T12:00:00Z"
+  }
+};
+
 describe("blog api adapter", () => {
-  it("maps backend list fields into a frontend article item", () => {
-    expect(
-      mapBlogListItem({
-        ID: 7,
-        slug: "hello",
-        post_title: "Hello",
-        post_excerpt: "Excerpt",
-        post_date: "2026-06-16T00:00:00.000Z",
-        twitter_image: "https://cdn.example/cover.jpg",
-        author_name: "Nuvelle",
-        category_slug: "news",
-        category_name: "News",
-        detailUrl: "/blog/hello"
-      })
-    ).toEqual({
-      id: 7,
-      slug: "hello",
-      title: "Hello",
-      excerpt: "Excerpt",
-      date: "2026-06-16T00:00:00.000Z",
-      image: "https://cdn.example/cover.jpg",
-      authorName: "Nuvelle",
-      category: { slug: "news", name: "News" }
+  it("maps Blogger fields into a frontend article detail", () => {
+    expect(mapBloggerPost(bloggerPost)).toEqual({
+      id: "post-1",
+      slug: "first-post",
+      title: "First post",
+      excerpt: "Short summary",
+      date: "2026-06-19T12:00:00Z",
+      image: "https://cdn.example/cover.png",
+      authorName: "Writer",
+      category: { slug: "product", name: "Product" },
+      contentHtml: "<h1>First post</h1><p>Body</p>",
+      meta: { title: "SEO title", desc: "SEO description" },
+      canonicalUrl: "https://nuvelle.ai/blog/first-post",
+      modifiedDate: "2026-06-20T12:00:00Z",
+      path: "/blog/first-post"
     });
   });
 
-  it("maps backend detail fields into a frontend article detail", () => {
-    expect(
-      mapBlogDetail({
-        ID: 8,
-        post_name: "story",
-        post_title: "Story",
-        post_excerpt: "Detail excerpt",
-        post_content: "<p>Body</p>",
-        post_date: "2026-06-15T00:00:00.000Z",
-        twitter_image: "https://cdn.example/story.jpg",
-        author_name: "Editor",
-        type: "blog",
-        meta: { title: "Meta title", desc: "Meta desc" },
-        category: { slug: "updates", name: "Updates" },
-        schemaJsonTrimmed: "{\"@context\":\"https://schema.org\"}",
-        sourceUrl: "https://canonical.example/story",
-        post_modified: "2026-06-16T00:00:00.000Z"
-      })
-    ).toEqual({
-      id: 8,
-      slug: "story",
-      title: "Story",
-      excerpt: "Detail excerpt",
-      date: "2026-06-15T00:00:00.000Z",
-      image: "https://cdn.example/story.jpg",
-      authorName: "Editor",
-      category: { slug: "updates", name: "Updates" },
-      contentHtml: "<p>Body</p>",
-      meta: { title: "Meta title", desc: "Meta desc" },
-      schemaJsonTrimmed: "{\"@context\":\"https://schema.org\"}",
-      canonicalUrl: "https://canonical.example/story",
-      modifiedDate: "2026-06-16T00:00:00.000Z",
-      type: "blog"
-    });
-  });
-
-  it("builds list request with site, hardcoded category ids, search, and pagination", async () => {
+  it("builds a Blogger list request with AccessKey auth, category, language, and pagination", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ code: 200, data: { total: 0, list: [] } })
-    });
-
-    await fetchBlogList({
-      locale: "en",
-      pageNum: 2,
-      pageSize: 24,
-      search: "ai shorts",
-      config,
-      fetcher: fetchMock as unknown as typeof fetch
-    });
-
-    const url = new URL(fetchMock.mock.calls[0][0] as string);
-    expect(url.pathname).toBe("/n/blog/listDataV2");
-    expect(url.searchParams.get("site")).toBe("nuvelle.ai");
-    expect(url.searchParams.get("categoryIds")).toBe("373");
-    expect(url.searchParams.get("search")).toBe("ai shorts");
-    expect(url.searchParams.get("pageNum")).toBe("1");
-    expect(url.searchParams.get("pageSize")).toBe("24");
-    expect(fetchMock.mock.calls[0][1]).toEqual({ cache: "no-store" });
-  });
-
-  it("uses hardcoded category ids when locale config is empty", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ code: 200, data: { total: 0, list: [] } })
+      json: async () => []
     });
 
     await fetchBlogList({
       locale: "cn",
+      pageNum: 2,
+      pageSize: 24,
+      type: "product",
       config,
       fetcher: fetchMock as unknown as typeof fetch
     });
 
     const url = new URL(fetchMock.mock.calls[0][0] as string);
-    expect(url.searchParams.get("categoryIds")).toBe("373");
+    expect(url.pathname).toBe("/api/integration/sites/nuvelle/posts");
+    expect(url.searchParams.get("limit")).toBe("24");
+    expect(url.searchParams.get("offset")).toBe("24");
+    expect(url.searchParams.get("category_slug")).toBe("product");
+    expect(url.searchParams.get("language")).toBe("en");
+    expect(fetchMock.mock.calls[0][1]).toEqual({
+      cache: "no-store",
+      headers: { "X-Access-Key": "blog_sk_test" }
+    });
   });
 
-  it("returns null for empty backend detail data", async () => {
+  it("filters Blogger list results locally for the existing search page", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ code: 200, data: [] })
+      json: async () => [
+        bloggerPost,
+        {
+          ...bloggerPost,
+          id: "post-2",
+          slug: "release-note",
+          title: "Release note",
+          excerpt: "Platform update",
+          category: { ...bloggerPost.category, name: "Engineering", slug: "engineering" }
+        }
+      ]
+    });
+
+    const result = await fetchBlogList({
+      locale: "en",
+      search: "first",
+      config,
+      fetcher: fetchMock as unknown as typeof fetch
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.articles.map((article) => article.slug)).toEqual(["first-post"]);
+  });
+
+  it("builds a Blogger detail request and maps the response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => bloggerPost
+    });
+
+    const article = await fetchBlogDetail({
+      locale: "en",
+      slug: "first-post",
+      config,
+      fetcher: fetchMock as unknown as typeof fetch
+    });
+
+    const url = new URL(fetchMock.mock.calls[0][0] as string);
+    expect(url.pathname).toBe("/api/integration/sites/nuvelle/posts/first-post");
+    expect(url.searchParams.get("language")).toBe("en");
+    expect(article?.contentHtml).toBe("<h1>First post</h1><p>Body</p>");
+  });
+
+  it("returns null when Blogger reports a missing post", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      text: async () => "not found"
     });
 
     await expect(
       fetchBlogDetail({
-        locale: "cn",
+        locale: "en",
         slug: "missing",
         config,
         fetcher: fetchMock as unknown as typeof fetch

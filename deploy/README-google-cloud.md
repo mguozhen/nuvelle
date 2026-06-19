@@ -140,22 +140,28 @@ The public website runs as a Next.js SSR service on Cloud Run. The deploy script
 sets these runtime defaults:
 
 ```bash
-BLOG_SITE_KEY=nuvelle.ai
+BLOGGER_API_URL=https://blogger-api-5qjldqffdq-uc.a.run.app
+BLOGGER_SITE_SLUG=nuvelle
+BLOGGER_LANGUAGE=en
 NEXT_PUBLIC_SITE_ORIGIN=https://nuvelle.ai
-BLOG_SLX_HOST=https://apps.voc.ai
 BLOG_PAGE_SIZE=12
 ```
 
-Optional category filters can be provided when deploying:
+`BLOGGER_ACCESS_KEY` is injected from Secret Manager as
+`nuvelle-blogger-access-key`. On the first deploy, set `BLOGGER_ACCESS_KEY` in
+your shell and the script will create the secret version.
+
+Optional locale language overrides can be provided when deploying. Use Blogger
+site language keys, not Nuvelle route prefixes:
 
 ```bash
-BLOG_CATEGORY_IDS_EN=...
-BLOG_CATEGORY_IDS_CN=...
-BLOG_CATEGORY_IDS_JP=...
-BLOG_CATEGORY_IDS_DE=...
-BLOG_CATEGORY_IDS_FR=...
-BLOG_CATEGORY_IDS_ES=...
-BLOG_CATEGORY_IDS_PT=...
+BLOGGER_LANGUAGE_EN=en
+BLOGGER_LANGUAGE_CN=zh-Hans
+BLOGGER_LANGUAGE_JP=ja-JP
+BLOGGER_LANGUAGE_DE=de-DE
+BLOGGER_LANGUAGE_FR=fr-FR
+BLOGGER_LANGUAGE_ES=es-ES
+BLOGGER_LANGUAGE_PT=pt-PT
 ```
 
 ## Secrets
@@ -165,6 +171,7 @@ The script creates or reuses:
 - `nuvelle-db-password`
 - `nuvelle-database-url`
 - `nuvelle-flatkey-api-key`
+- `nuvelle-blogger-access-key`
 
 Rotate Flatkey without writing the value to git:
 

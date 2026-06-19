@@ -1,10 +1,8 @@
 import { blogConfig, type BlogConfig } from "@/lib/blog/config";
 import type {
-  BackendBlogDetail,
-  BackendBlogListItem,
   BlogArticleDetail,
-  BlogArticleListItem,
-  BlogListResult
+  BlogListResult,
+  BloggerIntegrationPost
 } from "@/lib/blog/types";
 import type { LocaleKey } from "@/lib/i18n";
 
@@ -27,41 +25,17 @@ type FetchBlogDetailOptions = {
   fetcher?: Fetcher;
 };
 
-type BlogListPayload = {
-  total?: number | string;
-  list?: BackendBlogListItem[];
-};
-
-type BlogApiResponse<T> = {
-  data?: T;
-};
-
-const NUVELLE_BLOG_CATEGORY_IDS = "373";
-
 function stringValue(value: unknown) {
   return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-
-  return 0;
 }
 
 function lastPathSegment(value: string | undefined) {
   return value?.split("/").filter(Boolean).pop() ?? "";
 }
 
-function categoryFromBackend(item: BackendBlogListItem) {
-  const slug = item.category?.slug || item.category_slug || "";
-  const name = item.category?.name || item.category_name || "";
+function categoryFromBlogger(item: BloggerIntegrationPost) {
+  const slug = item.category?.slug || "";
+  const name = item.category?.name || "";
 
   return slug || name
     ? {
@@ -71,12 +45,36 @@ function categoryFromBackend(item: BackendBlogListItem) {
     : undefined;
 }
 
-function appendCategoryIds(params: URLSearchParams) {
-  params.set("categoryIds", NUVELLE_BLOG_CATEGORY_IDS);
+function languageForLocale(config: BlogConfig, locale: LocaleKey) {
+  return config.languageByLocale[locale] || config.languageByLocale.en || "";
+}
+
+function assertBloggerConfig(config: BlogConfig) {
+  const missing = [
+    ["BLOGGER_API_URL", config.apiUrl],
+    ["BLOGGER_ACCESS_KEY", config.accessKey],
+    ["BLOGGER_SITE_SLUG", config.siteSlug]
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missing.length) {
+    throw new Error(`Missing Blogger blog configuration: ${missing.join(", ")}`);
+  }
 }
 
 function endpointUrl(config: BlogConfig, path: string, params: URLSearchParams) {
-  return `${config.slxHost.replace(/\/+$/, "")}${path}?${params.toString()}`;
+  const query = params.toString();
+  return `${config.apiUrl}${path}${query ? `?${query}` : ""}`;
+}
+
+function requestOptions(config: BlogConfig) {
+  return {
+    cache: "no-store" as const,
+    headers: {
+      "X-Access-Key": config.accessKey
+    }
+  };
 }
 
 async function readJson<T>(response: Response, label: string): Promise<T> {
@@ -89,78 +87,80 @@ async function readJson<T>(response: Response, label: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export function mapBlogListItem(item: BackendBlogListItem): BlogArticleListItem {
+export function mapBloggerPost(item: BloggerIntegrationPost): BlogArticleDetail {
+  const slug = item.slug || lastPathSegment(item.path);
+
   return {
-    id: numberValue(item.ID ?? item.id),
-    slug: item.slug || item.post_name || lastPathSegment(item.detailUrl),
-    title: stringValue(item.post_title || item.title),
-    excerpt: stringValue(item.post_excerpt || item.description),
-    date: stringValue(item.post_date || item.update_time),
-    image: item.twitter_image,
-    authorName: item.author_name,
-    category: categoryFromBackend(item)
+    id: stringValue(item.id),
+    slug,
+    title: stringValue(item.title),
+    excerpt: stringValue(item.excerpt),
+    date: stringValue(item.published_at),
+    image: item.cover_image_url || undefined,
+    authorName: item.author?.nickname || item.author?.email || undefined,
+    category: categoryFromBlogger(item),
+    contentHtml: stringValue(item.html_content),
+    meta: {
+      title: item.meta_title || undefined,
+      desc: item.meta_description || undefined
+    },
+    canonicalUrl: item.canonical_url || undefined,
+    modifiedDate: item.updated_at || undefined,
+    path: item.path || (slug ? `/blog/${slug}` : undefined)
   };
 }
 
-export function mapBlogDetail(item: BackendBlogDetail | null | undefined): BlogArticleDetail | null {
-  if (!item) {
-    return null;
-  }
+function matchesSearch(article: BlogArticleDetail, search: string) {
+  const query = search.toLowerCase();
+  const haystack = [
+    article.title,
+    article.excerpt,
+    article.authorName,
+    article.category?.name,
+    article.category?.slug
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 
-  const base = mapBlogListItem(item);
-  if (!base.slug || !base.title) {
-    return null;
-  }
-
-  return {
-    ...base,
-    contentHtml: stringValue(item.post_content),
-    meta: {
-      title: item.meta?.title,
-      desc: item.meta?.desc
-    },
-    schemaJsonTrimmed: item.schemaJsonTrimmed,
-    canonicalUrl: item.canonicalUrl || item.canonical_url || item.canonical || item.sourceUrl || item.source_url,
-    modifiedDate: item.post_modified,
-    type: item.type
-  };
+  return haystack.includes(query);
 }
 
 export async function fetchBlogList(options: FetchBlogListOptions): Promise<BlogListResult> {
   const config = options.config ?? blogConfig;
   const fetcher = options.fetcher ?? fetch;
+  assertBloggerConfig(config);
   const pageNum = Math.max(1, Math.trunc(options.pageNum ?? 1));
-  const requestPageNum = pageNum - 1;
   const pageSize = options.pageSize ?? config.pageSize;
   const params = new URLSearchParams({
-    site: config.siteKey,
-    pageNum: String(requestPageNum),
-    pageSize: String(pageSize)
+    limit: String(pageSize),
+    offset: String((pageNum - 1) * pageSize)
   });
 
-  appendCategoryIds(params);
-
-  const search = options.search?.trim();
-  if (search) {
-    params.set("search", search);
+  const language = languageForLocale(config, options.locale);
+  if (language) {
+    params.set("language", language);
   }
 
   const type = options.type?.trim();
   if (type) {
-    params.set("type", type);
+    params.set("category_slug", type);
   }
 
-  const response = await fetcher(endpointUrl(config, "/n/blog/listDataV2", params), {
-    cache: "no-store"
-  });
-  const json = await readJson<BlogApiResponse<BlogListPayload>>(response, "Blog list");
-
-  const data = json.data ?? {};
-  const list = Array.isArray(data.list) ? data.list : [];
+  const response = await fetcher(
+    endpointUrl(config, `/api/integration/sites/${encodeURIComponent(config.siteSlug)}/posts`, params),
+    requestOptions(config)
+  );
+  const posts = await readJson<BloggerIntegrationPost[]>(response, "Blog list");
+  const search = options.search?.trim();
+  const articles = (Array.isArray(posts) ? posts : [])
+    .map(mapBloggerPost)
+    .filter((article) => article.slug && article.title)
+    .filter((article) => (search ? matchesSearch(article, search) : true));
 
   return {
-    articles: list.map(mapBlogListItem).filter((article) => article.slug && article.title),
-    total: numberValue(data.total),
+    articles,
+    total: articles.length,
     pageNum,
     pageSize
   };
@@ -169,18 +169,29 @@ export async function fetchBlogList(options: FetchBlogListOptions): Promise<Blog
 export async function fetchBlogDetail(options: FetchBlogDetailOptions): Promise<BlogArticleDetail | null> {
   const config = options.config ?? blogConfig;
   const fetcher = options.fetcher ?? fetch;
-  const params = new URLSearchParams({
-    site: config.siteKey,
-    slug: options.slug
-  });
+  assertBloggerConfig(config);
+  const params = new URLSearchParams();
 
-  appendCategoryIds(params);
+  const language = languageForLocale(config, options.locale);
+  if (language) {
+    params.set("language", language);
+  }
 
-  const response = await fetcher(endpointUrl(config, "/n/blog/detailData", params), {
-    cache: "no-store"
-  });
-  const json = await readJson<BlogApiResponse<BackendBlogDetail | BackendBlogDetail[]>>(response, "Blog detail");
-  const detail = Array.isArray(json.data) ? json.data[0] : json.data;
+  const response = await fetcher(
+    endpointUrl(
+      config,
+      `/api/integration/sites/${encodeURIComponent(config.siteSlug)}/posts/${encodeURIComponent(options.slug)}`,
+      params
+    ),
+    requestOptions(config)
+  );
 
-  return mapBlogDetail(detail);
+  if (response.status === 404) {
+    return null;
+  }
+
+  const detail = await readJson<BloggerIntegrationPost>(response, "Blog detail");
+  const article = mapBloggerPost(detail);
+
+  return article.slug && article.title ? article : null;
 }

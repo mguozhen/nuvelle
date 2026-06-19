@@ -180,7 +180,7 @@ export async function renderBlogSearch(locale: LocaleKey, query: SearchParamValu
 export async function renderBlogDetail(locale: LocaleKey, slug: string) {
   const article = await fetchBlogDetail({ locale, slug });
 
-  if (!article || (article.type && article.type !== "blog")) {
+  if (!article) {
     notFound();
   }
 
@@ -215,7 +215,7 @@ export function blogSearchMetadata(locale: LocaleKey, query: SearchParamValue) {
 export async function blogDetailMetadata(locale: LocaleKey, slug: string) {
   const article = await fetchBlogDetail({ locale, slug });
 
-  if (!article || (article.type && article.type !== "blog")) {
+  if (!article) {
     return {};
   }
 

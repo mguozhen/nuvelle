@@ -43,6 +43,7 @@ DB_PASSWORD_SECRET="${DB_PASSWORD_SECRET:-nuvelle-db-password}"
 DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-nuvelle-database-url}"
 FLATKEY_SECRET="${FLATKEY_SECRET:-nuvelle-flatkey-api-key}"
 REELSHORT_CPS_SECRET="${REELSHORT_CPS_SECRET:-nuvelle-reelshort-cps-token}"
+BLOGGER_ACCESS_KEY_SECRET="${BLOGGER_ACCESS_KEY_SECRET:-nuvelle-blogger-access-key}"
 
 DOMAIN_ROOT="${DOMAIN_ROOT:-nuvelle.ai}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.$DOMAIN_ROOT}"
@@ -810,25 +811,36 @@ deploy_website_service() {
   local service="$1"
   local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service:$TAG"
   local context="$BUILD_DIR/website-$service"
+  local secret_args=()
   local env_vars=(
-    "BLOG_SITE_KEY=${BLOG_SITE_KEY:-nuvelle.ai}"
+    "BLOGGER_API_URL=${BLOGGER_API_URL:-https://blogger-api-5qjldqffdq-uc.a.run.app}"
+    "BLOGGER_SITE_SLUG=${BLOGGER_SITE_SLUG:-nuvelle}"
+    "BLOGGER_LANGUAGE=${BLOGGER_LANGUAGE:-en}"
     "NEXT_PUBLIC_SITE_ORIGIN=https://$DOMAIN_ROOT"
-    "BLOG_SLX_HOST=${BLOG_SLX_HOST:-https://apps.voc.ai}"
     "BLOG_PAGE_SIZE=${BLOG_PAGE_SIZE:-12}"
   )
-  local category_env
+  local language_env
   local env_arg
 
-  for category_env in \
-    BLOG_CATEGORY_IDS_EN \
-    BLOG_CATEGORY_IDS_CN \
-    BLOG_CATEGORY_IDS_JP \
-    BLOG_CATEGORY_IDS_DE \
-    BLOG_CATEGORY_IDS_FR \
-    BLOG_CATEGORY_IDS_ES \
-    BLOG_CATEGORY_IDS_PT; do
-    if [[ -n "${!category_env:-}" ]]; then
-      env_vars+=("$category_env=${!category_env}")
+  if secret_exists "$BLOGGER_ACCESS_KEY_SECRET"; then
+    secret_args+=(--set-secrets=BLOGGER_ACCESS_KEY="$BLOGGER_ACCESS_KEY_SECRET":latest)
+  elif [[ -n "${BLOGGER_ACCESS_KEY:-}" ]]; then
+    upsert_secret_version "$BLOGGER_ACCESS_KEY_SECRET" "$BLOGGER_ACCESS_KEY"
+    secret_args+=(--set-secrets=BLOGGER_ACCESS_KEY="$BLOGGER_ACCESS_KEY_SECRET":latest)
+  else
+    die "$BLOGGER_ACCESS_KEY_SECRET is missing and BLOGGER_ACCESS_KEY is not set; website blog cannot fetch Blogger content."
+  fi
+
+  for language_env in \
+    BLOGGER_LANGUAGE_EN \
+    BLOGGER_LANGUAGE_CN \
+    BLOGGER_LANGUAGE_JP \
+    BLOGGER_LANGUAGE_DE \
+    BLOGGER_LANGUAGE_FR \
+    BLOGGER_LANGUAGE_ES \
+    BLOGGER_LANGUAGE_PT; do
+    if [[ -n "${!language_env:-}" ]]; then
+      env_vars+=("$language_env=${!language_env}")
     fi
   done
 
@@ -847,6 +859,7 @@ deploy_website_service() {
     --memory=512Mi \
     --min-instances=0 \
     --max-instances=4 \
+    "${secret_args[@]}" \
     --set-env-vars="$env_arg"
 }
 

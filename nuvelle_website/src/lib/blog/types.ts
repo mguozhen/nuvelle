@@ -4,7 +4,7 @@ export type BlogCategory = {
 };
 
 export type BlogArticleListItem = {
-  id: number;
+  id: string;
   slug: string;
   title: string;
   excerpt: string;
@@ -23,7 +23,7 @@ export type BlogArticleDetail = BlogArticleListItem & {
   schemaJsonTrimmed?: string;
   canonicalUrl?: string;
   modifiedDate?: string;
-  type?: string;
+  path?: string;
 };
 
 export type BlogListResult = {
@@ -33,37 +33,38 @@ export type BlogListResult = {
   pageSize: number;
 };
 
-export type BackendBlogListItem = {
-  ID?: number | string;
-  id?: number | string;
-  slug?: string;
-  post_name?: string;
-  post_title?: string;
-  title?: string;
-  post_excerpt?: string;
-  description?: string;
-  post_date?: string;
-  update_time?: string;
-  twitter_image?: string;
-  author_name?: string;
-  category_slug?: string;
-  category_name?: string;
-  category?: Partial<BlogCategory>;
-  detailUrl?: string;
+export type BloggerAuthor = {
+  id: string;
+  email: string;
+  nickname?: string | null;
+  avatar_url?: string | null;
 };
 
-export type BackendBlogDetail = BackendBlogListItem & {
-  post_content?: string;
-  meta?: {
-    title?: string;
-    desc?: string;
-  };
-  schemaJsonTrimmed?: string;
-  canonical?: string;
-  canonicalUrl?: string;
-  canonical_url?: string;
-  sourceUrl?: string;
-  source_url?: string;
-  post_modified?: string;
-  type?: string;
+export type BloggerCategory = {
+  id: string;
+  site_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BloggerIntegrationPost = {
+  id: string;
+  site_slug: string;
+  title: string;
+  slug: string;
+  language: string;
+  path: string;
+  html_content: string;
+  excerpt?: string | null;
+  cover_image_url?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  canonical_url?: string | null;
+  published_at: string;
+  updated_at: string;
+  author?: BloggerAuthor | null;
+  category?: BloggerCategory | null;
 };
