@@ -140,7 +140,7 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
               data-testid="generated-card"
             >
               <GeneratedPreview coverUrl={coverUrl} teaserUrl={teaserUrl} title={title} />
-              <h2 className="mt-3 line-clamp-2 h-12 text-lg font-semibold leading-6">{title}</h2>
+              <h2 className="mt-3 line-clamp-1 h-6 text-lg font-semibold leading-6">{title}</h2>
               <p className="mt-1 h-4 truncate text-xs text-[#9aa2c0]">
                 EP{item.episode || item.episode_ref?.episode_no || 1} - {item.duration || 30}s {item.status ? `- ${statusText(t, item.status, progress)}` : ""}
               </p>
@@ -157,9 +157,7 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
                     <div className="h-full rounded-full bg-[linear-gradient(90deg,#a14bff,#ff5fbf)]" style={{ width: `${progress}%` }} />
                   </div>
                 </div>
-              ) : (
-                <div className="mt-3 h-2" />
-              )}
+              ) : null}
               <div className="mt-3 h-24">
                 {item.caption ? (
                   <Textarea

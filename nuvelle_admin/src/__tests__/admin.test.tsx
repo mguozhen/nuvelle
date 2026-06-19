@@ -469,7 +469,7 @@ describe("admin app", () => {
     expect(await screen.findByText(/queued 5%/i)).toBeInTheDocument();
     const card = screen.getByTestId("generated-card");
     expect(card).toHaveClass("flex", "h-full", "flex-col");
-    expect(within(card).getByRole("heading", { name: "Demo Drama" })).toHaveClass("h-12");
+    expect(within(card).getByRole("heading", { name: "Demo Drama" })).toHaveClass("line-clamp-1", "h-6");
     expect(screen.getByRole("progressbar", { name: /queued 5%/i })).toHaveAttribute("aria-valuenow", "5");
     expect(screen.getByDisplayValue("high tension")).toBeInTheDocument();
     const regenButton = screen.getByRole("button", { name: /regen/i });
