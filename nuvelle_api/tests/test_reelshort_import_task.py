@@ -75,7 +75,7 @@ def test_import_task_all_matching_pages_by_resource_id(monkeypatch) -> None:
 
         def sync(self, payload):
             captured_payloads.append(payload)
-            if payload.start_after_resource_id is None:
+            if payload.start_after_resource_id == 0:
                 return ReelShortSyncResponse(scanned=2, updated=2, last_resource_id=10)
             return ReelShortSyncResponse(scanned=1, updated=1, last_resource_id=12)
 
@@ -91,7 +91,7 @@ def test_import_task_all_matching_pages_by_resource_id(monkeypatch) -> None:
     exit_code = import_reelshort.run(["--limit", "2", "--detail-only", "--all-matching"], output=output)
 
     assert exit_code == 0
-    assert [payload.start_after_resource_id for payload in captured_payloads] == [None, 10]
+    assert [payload.start_after_resource_id for payload in captured_payloads] == [0, 10]
     assert [payload.detail_only for payload in captured_payloads] == [True, True]
     assert all(session.closed for session in sessions)
     assert json.loads(output.getvalue()) == {

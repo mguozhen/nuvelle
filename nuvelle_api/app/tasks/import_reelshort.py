@@ -89,7 +89,7 @@ def run(argv: Sequence[str] | None = None, *, output: TextIO = sys.stdout) -> in
         raise ValueError("--all-matching cannot be combined with --resource-id")
 
     result = ReelShortSyncResponse()
-    start_after_resource_id: int | None = None
+    start_after_resource_id: int | None = 0 if args.all_matching else None
     while True:
         batch = run_once(args, start_after_resource_id=start_after_resource_id)
         merge_response(result, batch)
