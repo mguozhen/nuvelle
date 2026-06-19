@@ -27,7 +27,10 @@ class ReelShortImportService:
             limit=payload.limit,
             resource_id=payload.resource_id,
             detail_only=payload.detail_only,
+            start_after_resource_id=payload.start_after_resource_id,
         )
+        response.scanned = len(resources)
+        response.last_resource_id = resources[-1].id if resources else None
         for resource in resources:
             try:
                 existed = self._find_drama(str(resource.raw_data.get("id"))) is not None

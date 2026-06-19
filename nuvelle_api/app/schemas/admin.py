@@ -8,14 +8,17 @@ class ReelShortSyncRequest(BaseModel):
     resource_id: int | None = None
     limit: int = Field(default=50, ge=1, le=50000)
     detail_only: bool = False
+    start_after_resource_id: int | None = Field(default=None, ge=0)
     dry_run: bool = False
 
 
 class ReelShortSyncResponse(BaseModel):
+    scanned: int = 0
     imported: int = 0
     updated: int = 0
     skipped: int = 0
     failed: int = 0
+    last_resource_id: int | None = None
 
 
 class AdminEpisodeRead(BaseModel):
