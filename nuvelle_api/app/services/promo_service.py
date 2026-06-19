@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-import io
-import json
 import uuid
-import zipfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
 from fastapi import HTTPException
-from fastapi.responses import FileResponse, Response
-from nuvelle_kit import PromoGenerationRequest, generate_promo
-from nuvelle_kit.storage import slugify
+from fastapi.responses import Response
+from nuvelle_kit import PromoGenerationRequest, PromoGenerationResult, generate_promo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -28,10 +25,19 @@ from app.schemas.promo import (
     PromoJobFiles,
     PromoJobResponse,
 )
+from app.services.promo_asset_responder import PromoAssetResponder
 from app.services.promo_asset_store import PromoAssetStore
+from app.services.promo_assets import (
+    PROMO_ASSET_NAMES,
+    PROMO_COVER_FILE,
+    PROMO_TEASER_FILE,
+    promo_file_url,
+    read_plan_file,
+)
+from app.services.promo_batch_packager import PromoBatchPackager
 from app.services.reelshort_video_service import ReelShortVideoService
 
-ASSET_NAMES = {"teaser.mp4", "cover.jpg", "caption.txt", "plan.json"}
+PromoGenerator = Callable[[PromoGenerationRequest], PromoGenerationResult]
 PROGRESS_BY_STATUS = {
     PromoJobStatus.queued.value: 5,
     PromoJobStatus.downloading.value: 25,
@@ -42,10 +48,19 @@ PROGRESS_BY_STATUS = {
 
 
 class PromoService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        *,
+        asset_store: PromoAssetStore | None = None,
+        generator: PromoGenerator | None = None,
+    ) -> None:
         self.repository = PromoJobRepository(db)
         self.settings = get_settings()
-        self.asset_store = PromoAssetStore(self.settings)
+        self.asset_store = asset_store or PromoAssetStore(self.settings)
+        self.asset_responder = PromoAssetResponder(self.asset_store)
+        self.batch_packager = PromoBatchPackager(self.asset_store)
+        self.generator = generator or generate_promo
 
     def create_job(
         self,
@@ -128,57 +143,37 @@ class PromoService:
         )
 
     def build_batch_zip(self, batch_id: str) -> tuple[str, bytes]:
-        batch = self.get_batch(batch_id)
-        buf = io.BytesIO()
-        prefix = slugify(batch.title)
-        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-            summary_lines = [f"{batch.title} - TikTok promo pack\n{'=' * 50}\n"]
-            for item in sorted(batch.jobs, key=lambda value: value.ep):
-                job = self.repository.get(item.job_id)
-                if job is None or job.status != PromoJobStatus.done.value or not job.output_dir:
-                    continue
-                if self.asset_store.exists(job.output_dir, "teaser.mp4"):
-                    teaser = self.asset_store.read_asset(job.output_dir, "teaser.mp4")
-                    zf.writestr(f"{prefix}_EP{item.ep}.mp4", teaser.content)
-                caption = self.asset_store.read_text(job.output_dir, "caption.txt").strip()
-                plan = self._read_plan_text(self.asset_store.read_text(job.output_dir, "plan.json"))
-                hook_value = plan.get("hook", [])
-                hook = " / ".join(str(part) for part in hook_value) if isinstance(hook_value, list) else ""
-                logline = plan.get("logline", "")
-                summary_lines.extend(
-                    [
-                        f"\nEP{item.ep}\n{'-' * 30}",
-                        f"Title: {hook}",
-                        f"Logline: {logline}",
-                        f"TikTok safe: {'yes' if item.tt_safe else 'review - ' + item.tt_notes}",
-                        f"Caption:\n{caption}\n",
-                    ]
-                )
-            zf.writestr(f"{prefix}_summary.txt", "\n".join(summary_lines))
-        return f"{prefix}_promo_pack.zip", buf.getvalue()
+        jobs = self.repository.list_by_batch(batch_id)
+        if not jobs:
+            raise HTTPException(status_code=404, detail="batch not found")
+        return self.batch_packager.build_zip(title=jobs[0].title, jobs=jobs)
 
     def asset_response(
         self,
         job_id: str,
         filename: str,
         range_header: str | None = None,
-    ) -> FileResponse | Response:
-        if filename not in ASSET_NAMES:
+    ) -> Response:
+        if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
         job = self.repository.get(job_id)
         if job is None or not job.output_dir:
             raise HTTPException(status_code=404, detail="job not found")
-        return self._asset_response_for(job.output_dir, filename, range_header)
+        return self.asset_responder.response_for(job.output_dir, filename, range_header)
 
     def asset_response_by_slug(
         self,
         slug: str,
         filename: str,
         range_header: str | None = None,
-    ) -> FileResponse | Response:
-        if filename not in ASSET_NAMES:
+    ) -> Response:
+        if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
-        return self._asset_response_for(self.asset_store.location_for_slug(slug), filename, range_header)
+        return self.asset_responder.response_for(
+            self.asset_store.location_for_slug(slug),
+            filename,
+            range_header,
+        )
 
     def run_job(self, job_id: str, payload: PromoJobCreate) -> PromoJobResponse:
         job = self.repository.get(job_id)
@@ -196,7 +191,7 @@ class PromoService:
             job.log = "rendering"
             self.repository.update(job)
             output_dir = self.asset_store.output_dir_for(job.id)
-            result = generate_promo(
+            result = self.generator(
                 PromoGenerationRequest(
                     mp4=cast(Path, video_source),
                     title=payload.title,
@@ -214,12 +209,12 @@ class PromoService:
             storage_location = self.asset_store.persist_job_assets(
                 job_id=job.id,
                 output_dir=result.output_dir,
-                asset_names=ASSET_NAMES,
+                asset_names=PROMO_ASSET_NAMES,
             )
             job.status = PromoJobStatus.done.value
             job.output_dir = storage_location
-            job.teaser_url = self.file_url(job.id, "teaser.mp4")
-            job.cover_url = self.file_url(job.id, "cover.jpg")
+            job.teaser_url = promo_file_url(job.id, PROMO_TEASER_FILE)
+            job.cover_url = promo_file_url(job.id, PROMO_COVER_FILE)
             job.caption = result.caption_text
             job.log = "generated by nuvelle_kit package"
             job.tt_safe = bool(plan.get("tt_safe", True))
@@ -275,13 +270,9 @@ class PromoService:
         if job.status != PromoJobStatus.done.value:
             return None
         return PromoJobFiles(
-            teaser=self.file_url(job.id, "teaser.mp4"),
-            cover=self.file_url(job.id, "cover.jpg"),
+            teaser=promo_file_url(job.id, PROMO_TEASER_FILE),
+            cover=promo_file_url(job.id, PROMO_COVER_FILE),
         )
-
-    @staticmethod
-    def file_url(job_id: str, filename: str) -> str:
-        return f"/promo/jobs/{job_id}/files/{filename}"
 
     @staticmethod
     def _new_job_id() -> str:
@@ -300,44 +291,7 @@ class PromoService:
 
     @staticmethod
     def _read_plan(path: Path) -> dict[str, object]:
-        if not path.exists():
-            return {}
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {}
-        return cast(dict[str, object], data) if isinstance(data, dict) else {}
-
-    @staticmethod
-    def _read_plan_text(value: str) -> dict[str, object]:
-        try:
-            data = json.loads(value)
-        except json.JSONDecodeError:
-            return {}
-        return cast(dict[str, object], data) if isinstance(data, dict) else {}
-
-    def _asset_response_for(
-        self,
-        location: str,
-        filename: str,
-        range_header: str | None,
-    ) -> FileResponse | Response:
-        path = self.asset_store.local_asset_path(location, filename)
-        if path is not None:
-            if not path.exists():
-                raise HTTPException(status_code=404, detail="asset not found")
-            return FileResponse(path, filename=path.name)
-
-        asset = self.asset_store.read_asset(location, filename, range_header)
-        return Response(
-            asset.content,
-            status_code=asset.status_code,
-            media_type=asset.media_type,
-            headers={
-                **asset.headers,
-                "Content-Disposition": f'inline; filename="{filename}"',
-            },
-        )
+        return read_plan_file(path)
 
     def _record_generate_event(self, user_id: int, payload: PromoJobCreate) -> None:
         if payload.drama_id is None:

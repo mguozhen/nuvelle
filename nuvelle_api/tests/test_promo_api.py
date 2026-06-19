@@ -1,7 +1,10 @@
 import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+from nuvelle_kit.schemas import PromoGenerationRequest, PromoGenerationResult
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_invite_code
@@ -45,34 +48,58 @@ def seed_drama(db: Session) -> tuple[Drama, DramaEpisode]:
     return drama, episode
 
 
+def write_fake_generation(
+    output_dir: Path,
+    *,
+    caption: str = "caption",
+    plan: str = "{}",
+) -> PromoGenerationResult:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cover_path = output_dir / "cover.jpg"
+    teaser_path = output_dir / "teaser.mp4"
+    caption_path = output_dir / "caption.txt"
+    plan_path = output_dir / "plan.json"
+    cover_path.write_bytes(b"cover")
+    teaser_path.write_bytes(b"teaser")
+    caption_path.write_text(caption, encoding="utf-8")
+    plan_path.write_text(plan, encoding="utf-8")
+    return PromoGenerationResult(
+        output_dir=output_dir,
+        cover_path=cover_path,
+        teaser_path=teaser_path,
+        caption_path=caption_path,
+        plan_path=plan_path,
+        caption_text=caption,
+    )
+
+
+def fake_generator(
+    tmp_path: Path,
+    *,
+    caption: str = "caption",
+    plan: str = "{}",
+    assert_request: Callable[[PromoGenerationRequest], None] | None = None,
+    output_dir_for: Callable[[PromoGenerationRequest], Path] | None = None,
+) -> Callable[[PromoGenerationRequest], PromoGenerationResult]:
+    def generate(request: PromoGenerationRequest) -> PromoGenerationResult:
+        if assert_request is not None:
+            assert_request(request)
+        output_dir = output_dir_for(request) if output_dir_for is not None else tmp_path / request.slug
+        return write_fake_generation(output_dir, caption=caption, plan=plan)
+
+    return generate
+
+
 def test_promo_job_api_queues_and_finishes_with_mocked_generator(
     client: TestClient, monkeypatch, tmp_path
 ) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
-    def fake_generate_promo(request):
-        output_dir = tmp_path / request.slug
-        output_dir.mkdir()
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text('{"tt_safe": true, "tt_notes": "", "cover_warn": ""}')
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
-
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(
+        promo_service,
+        "generate_promo",
+        fake_generator(tmp_path, plan='{"tt_safe": true, "tt_notes": "", "cover_warn": ""}'),
+    )
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -101,31 +128,9 @@ def test_promo_job_api_queues_and_finishes_with_mocked_generator(
 
 
 def test_batch_api_queues_jobs_and_reports_status(client: TestClient, monkeypatch, tmp_path) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
-    def fake_generate_promo(request):
-        output_dir = tmp_path / request.slug
-        output_dir.mkdir(exist_ok=True)
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
-
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generator(tmp_path))
 
     response = client.post(
         "/api/v1/promo/batches",
@@ -146,32 +151,16 @@ def test_batch_api_queues_jobs_and_reports_status(client: TestClient, monkeypatc
 
 
 def test_promo_job_api_passes_no_ai_to_generator(client: TestClient, monkeypatch, tmp_path) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
-    def fake_generate_promo(request):
+    def assert_no_ai(request: PromoGenerationRequest) -> None:
         assert request.no_ai is True
-        output_dir = tmp_path / request.slug
-        output_dir.mkdir()
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
 
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(
+        promo_service,
+        "generate_promo",
+        fake_generator(tmp_path, assert_request=assert_no_ai),
+    )
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -193,8 +182,6 @@ def test_promo_job_api_passes_no_ai_to_generator(client: TestClient, monkeypatch
 def test_promo_job_uploads_generated_assets_to_configured_store(
     client: TestClient, db: Session, monkeypatch, tmp_path
 ) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
     stores = []
@@ -220,28 +207,16 @@ def test_promo_job_uploads_generated_assets_to_configured_store(
             self.cleaned.append(str(output_dir))
             shutil.rmtree(output_dir, ignore_errors=True)
 
-    def fake_generate_promo(request):
-        output_dir = request.output_dir
-        output_dir.mkdir(parents=True)
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
+    def request_output_dir(request: PromoGenerationRequest) -> Path:
+        assert request.output_dir is not None
+        return request.output_dir
 
     monkeypatch.setattr(promo_service, "PromoAssetStore", FakeAssetStore)
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(
+        promo_service,
+        "generate_promo",
+        fake_generator(tmp_path, output_dir_for=request_output_dir),
+    )
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -294,8 +269,7 @@ def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> 
                 },
             )
 
-    service = PromoService(db)
-    service.asset_store = FakeAssetStore()
+    service = PromoService(db, asset_store=FakeAssetStore())
 
     response = service.asset_response("gcs-job", "teaser.mp4", "bytes=0-1")
 
@@ -307,33 +281,11 @@ def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> 
 def test_authenticated_promo_job_stores_user_drama_episode_and_prompt(
     client: TestClient, db: Session, monkeypatch, tmp_path
 ) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
     drama, episode = seed_drama(db)
 
-    def fake_generate_promo(request):
-        output_dir = tmp_path / request.slug
-        output_dir.mkdir()
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
-
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generator(tmp_path))
     headers = auth_header(client, db)
     me = client.get("/api/v1/auth/me", headers=headers).json()
 
@@ -363,8 +315,6 @@ def test_authenticated_promo_job_stores_user_drama_episode_and_prompt(
 def test_promo_job_uses_refreshed_reelshort_play_url(
     client: TestClient, db: Session, monkeypatch, tmp_path
 ) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
     from app.services.reelshort_video_service import ReelShortVideoService
 
@@ -377,29 +327,15 @@ def test_promo_job_uses_refreshed_reelshort_play_url(
         assert episode_id == episode.id
         return refreshed_url
 
-    def fake_generate_promo(request):
+    def capture_source(request: PromoGenerationRequest) -> None:
         seen_sources.append(str(request.mp4))
-        output_dir = tmp_path / request.slug
-        output_dir.mkdir()
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
 
     monkeypatch.setattr(ReelShortVideoService, "refresh_episode_play_url", fake_refresh)
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(
+        promo_service,
+        "generate_promo",
+        fake_generator(tmp_path, assert_request=capture_source),
+    )
 
     response = client.post(
         "/api/v1/promo/jobs",
@@ -425,33 +361,18 @@ def test_promo_job_uses_refreshed_reelshort_play_url(
 def test_authenticated_promo_job_allows_regenerating_same_drama(
     client: TestClient, db: Session, monkeypatch, tmp_path
 ) -> None:
-    from nuvelle_kit.schemas import PromoGenerationResult
-
     from app.services import promo_service
 
     drama, episode = seed_drama(db)
 
-    def fake_generate_promo(request):
-        output_dir = tmp_path / request.slug / request.prompt.replace(" ", "_")
-        output_dir.mkdir(parents=True)
-        cover_path = output_dir / "cover.jpg"
-        teaser_path = output_dir / "teaser.mp4"
-        caption_path = output_dir / "caption.txt"
-        plan_path = output_dir / "plan.json"
-        cover_path.write_bytes(b"cover")
-        teaser_path.write_bytes(b"teaser")
-        caption_path.write_text("caption")
-        plan_path.write_text("{}")
-        return PromoGenerationResult(
-            output_dir=output_dir,
-            cover_path=cover_path,
-            teaser_path=teaser_path,
-            caption_path=caption_path,
-            plan_path=plan_path,
-            caption_text="caption",
-        )
+    def prompt_output_dir(request: PromoGenerationRequest) -> Path:
+        return tmp_path / request.slug / request.prompt.replace(" ", "_")
 
-    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+    monkeypatch.setattr(
+        promo_service,
+        "generate_promo",
+        fake_generator(tmp_path, output_dir_for=prompt_output_dir),
+    )
     headers = auth_header(client, db)
 
     first = client.post(

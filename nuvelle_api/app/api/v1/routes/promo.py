@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Header, Query
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 from app.api.deps import DbSession, OptionalCurrentUser
 from app.schemas.promo import (
@@ -38,7 +38,7 @@ def get_job_file(
     filename: str,
     db: DbSession,
     range_header: str | None = Header(default=None, alias="Range"),
-) -> FileResponse | Response:
+) -> Response:
     return PromoService(db).asset_response(job_id, filename, range_header)
 
 
@@ -144,5 +144,5 @@ def get_file_alias(
     n: str,
     db: DbSession,
     range_header: str | None = Header(default=None, alias="Range"),
-) -> FileResponse | Response:
+) -> Response:
     return PromoService(db).asset_response_by_slug(slug, n, range_header)
