@@ -13,6 +13,7 @@ import { I18nProvider, useI18n } from "@/i18n";
 import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
 import { nuvelleScore } from "@/lib/scoring";
 import type {
+  AdminDramaFilterOptions,
   AuthResponse,
   DramaEpisodeRecord,
   DramaRecord,
@@ -101,6 +102,11 @@ const initialBoardFilters: BoardFilters = {
   q: "",
   tag: ""
 };
+const emptyBoardFilterOptions: AdminDramaFilterOptions = {
+  platforms: [],
+  languages: [],
+  tags: []
+};
 
 const BOARD_PAGE_SIZE = 50;
 const TAB_ROUTES: Record<AdminTab, string> = {
@@ -173,6 +179,7 @@ function AdminApp() {
   const [boardFilters, setBoardFilters] = useState<BoardFilters>(initialBoardFilters);
   const [boardPage, setBoardPage] = useState(1);
   const [boardTotal, setBoardTotal] = useState(0);
+  const [boardFilterOptions, setBoardFilterOptions] = useState<AdminDramaFilterOptions>(emptyBoardFilterOptions);
   const [dramas, setDramas] = useState<DramaRecord[]>([]);
   const [swipeDrama, setSwipeDrama] = useState<DramaRecord | null>(null);
   const [votes, setVotes] = useState<Record<string, VoteVerdict>>({});
@@ -229,6 +236,14 @@ function AdminApp() {
     }
   }, [client, showStatus, t]);
 
+  const loadBoardFilterOptions = useCallback(async () => {
+    try {
+      setBoardFilterOptions(await client.getAdminDramaFilters());
+    } catch {
+      setBoardFilterOptions(emptyBoardFilterOptions);
+    }
+  }, [client]);
+
   const loadGenerated = useCallback(async () => {
     setGeneratedLoading(true);
 
@@ -261,8 +276,9 @@ function AdminApp() {
       return;
     }
 
+    void loadBoardFilterOptions();
     void loadGenerated();
-  }, [auth.token, loadGenerated]);
+  }, [auth.token, loadBoardFilterOptions, loadGenerated]);
 
   useEffect(() => {
     if (!auth.token || !generated.some((item) => isActiveGeneration(item.status))) {
@@ -320,6 +336,7 @@ function AdminApp() {
     clearAuthState();
     setAuth({ token: "", user: null });
     setBoardFilters(initialBoardFilters);
+    setBoardFilterOptions(emptyBoardFilterOptions);
     setBoardPage(1);
     setBoardTotal(0);
     setDramas([]);
@@ -607,6 +624,7 @@ function AdminApp() {
           element={
             <BoardView
               dramas={dramas}
+              filterOptions={boardFilterOptions}
               filters={boardFilters}
               isLoading={boardLoading}
               page={boardPage}

@@ -11,6 +11,7 @@ from app.models.promo_job import PromoJob, PromoJobStatus
 from app.models.user_drama_event import UserDramaEvent
 from app.schemas.admin import (
     AdminDramaDetail,
+    AdminDramaFilterOptions,
     AdminDramaListResponse,
     AdminDramaRead,
     AdminEpisodeRead,
@@ -105,6 +106,25 @@ class AdminDramaService:
         return AdminDramaListResponse(
             items=[self.to_read(drama, user, stats=stats) for drama in page],
             total=total,
+        )
+
+    def filter_options(self) -> AdminDramaFilterOptions:
+        platforms: set[str] = set()
+        languages: set[str] = set()
+        tags: set[str] = set()
+
+        for platform, language, drama_tags, show_tags in self.db.execute(
+            select(Drama.platform, Drama.language, Drama.tags, Drama.show_tags)
+        ):
+            self._add_string_value(platforms, platform)
+            self._add_string_value(languages, language)
+            self._add_string_values(tags, drama_tags)
+            self._add_string_values(tags, show_tags)
+
+        return AdminDramaFilterOptions(
+            platforms=sorted(platforms, key=str.casefold),
+            languages=sorted(languages, key=str.casefold),
+            tags=sorted(tags, key=str.casefold),
         )
 
     def get_drama(self, drama_id: int, user: AdminUser) -> AdminDramaDetail | None:
@@ -289,6 +309,21 @@ class AdminDramaService:
                 DramaEpisode.play_url.is_not(None),
             )
         )
+
+    @staticmethod
+    def _add_string_value(target: set[str], value: object) -> None:
+        if not isinstance(value, str):
+            return
+        normalized = value.strip()
+        if normalized:
+            target.add(normalized)
+
+    @classmethod
+    def _add_string_values(cls, target: set[str], values: object) -> None:
+        if not isinstance(values, list):
+            return
+        for value in values:
+            cls._add_string_value(target, value)
 
     def _matches_python_filters(
         self,

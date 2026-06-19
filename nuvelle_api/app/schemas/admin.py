@@ -66,6 +66,12 @@ class AdminDramaListResponse(BaseModel):
     total: int
 
 
+class AdminDramaFilterOptions(BaseModel):
+    platforms: list[str] = Field(default_factory=list)
+    languages: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
 class AdminDramaDetail(AdminDramaRead):
     episodes: list[AdminEpisodeRead] = Field(default_factory=list)
 

@@ -37,13 +37,14 @@ def seed_drama(
     *,
     genre: str | None = None,
     language: str = "English",
+    platform: str = "ReelShort",
     signal: str | None = None,
     tag: str = "Female",
     video_url: str | None = None,
 ) -> tuple[Drama, DramaEpisode]:
     drama = Drama(
         title=title,
-        platform="ReelShort",
+        platform=platform,
         genre=genre,
         language=language,
         tags=[tag],
@@ -91,6 +92,20 @@ def test_board_filters_by_query_language_tag_and_has_video(client: TestClient, d
     assert payload["items"][0]["has_video"] is True
     assert payload["items"][0]["recent_revenue"] == 2000
     assert payload["items"][0]["seen"] is False
+
+
+def test_admin_drama_filters_return_global_options(client: TestClient, db: Session) -> None:
+    seed_drama(db, "Billionaire Bride", language="English", platform="ReelShort", tag="Female")
+    seed_drama(db, "Werewolf King", language="Spanish", platform="DramaBox", tag="Fantasy")
+    headers = auth_header(client, db, "filters@example.com", "JOIN-FILTERS")
+
+    response = client.get("/api/v1/admin/dramas/filters", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["platforms"] == ["DramaBox", "ReelShort"]
+    assert payload["languages"] == ["English", "Spanish"]
+    assert payload["tags"] == ["Fantasy", "Female"]
 
 
 def test_board_filters_by_min_score(client: TestClient, db: Session) -> None:

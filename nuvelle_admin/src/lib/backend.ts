@@ -1,4 +1,5 @@
 import type {
+  AdminDramaFilterOptions,
   AdminDramaListResponse,
   AuthResponse,
   DramaEventRequest,
@@ -85,6 +86,12 @@ export class PromoBackendClient {
     query.set("limit", String(params.limit ?? 50));
     query.set("offset", String(params.offset ?? 0));
     return this.request<AdminDramaListResponse>(`/admin/dramas?${query.toString()}`, {
+      headers: this.headers(false)
+    });
+  }
+
+  getAdminDramaFilters(): Promise<AdminDramaFilterOptions> {
+    return this.request<AdminDramaFilterOptions>("/admin/dramas/filters", {
       headers: this.headers(false)
     });
   }

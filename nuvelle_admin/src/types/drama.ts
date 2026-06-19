@@ -48,6 +48,12 @@ export type AdminDramaListResponse = {
   total: number;
 };
 
+export type AdminDramaFilterOptions = {
+  platforms: string[];
+  languages: string[];
+  tags: string[];
+};
+
 export type PromoRequest = {
   url: string;
   title: string;

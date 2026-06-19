@@ -11,7 +11,7 @@ import { generationLabel } from "@/lib/generation";
 import { useI18n } from "@/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
-import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
+import type { AdminDramaFilterOptions, DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
 export type BoardFilter = "top" | "video" | "all";
 
@@ -25,6 +25,7 @@ export type BoardFilters = {
 
 type BoardViewProps = {
   dramas: DramaRecord[];
+  filterOptions?: AdminDramaFilterOptions;
   filters: BoardFilters;
   isLoading?: boolean;
   page: number;
@@ -72,6 +73,11 @@ const durationOptions = [8, 13, 20, 30, 45, 60].map((value) => ({
   value: String(value),
   label: `${value}s`
 }));
+const emptyFilterOptions: AdminDramaFilterOptions = {
+  platforms: [],
+  languages: [],
+  tags: []
+};
 
 function BoardSkeletonGrid() {
   return (
@@ -102,6 +108,7 @@ function BoardSkeletonGrid() {
 
 export function BoardView({
   dramas,
+  filterOptions = emptyFilterOptions,
   filters,
   isLoading = false,
   page,
@@ -133,11 +140,11 @@ export function BoardView({
   };
   const options = useMemo(
     () => ({
-      platforms: values([...dramas.map((drama) => drama.platform), filters.platform]),
-      languages: values([...dramas.map((drama) => drama.language), filters.language]),
-      tags: values([...dramas.flatMap((drama) => [...(drama.tags || []), ...(drama.show_tags || [])]), filters.tag])
+      platforms: values([...filterOptions.platforms, filters.platform]),
+      languages: values([...filterOptions.languages, filters.language]),
+      tags: values([...filterOptions.tags, filters.tag])
     }),
-    [dramas, filters.language, filters.platform, filters.tag]
+    [filterOptions.languages, filterOptions.platforms, filterOptions.tags, filters.language, filters.platform, filters.tag]
   );
   const ranked = useMemo(
     () =>

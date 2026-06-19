@@ -65,7 +65,7 @@ function pagedDramas(offset: number, length: number) {
   }));
 }
 
-function installFetchMock(options: { boardResponse?: (url: string) => Promise<Response>; detailResponse?: () => Promise<Response>; generatedResponse?: () => Promise<Response> } = {}) {
+function installFetchMock(options: { boardResponse?: (url: string) => Promise<Response>; detailResponse?: () => Promise<Response>; filterOptionsResponse?: () => Promise<Response>; generatedResponse?: () => Promise<Response> } = {}) {
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.endsWith("/auth/register")) {
@@ -73,6 +73,13 @@ function installFetchMock(options: { boardResponse?: (url: string) => Promise<Re
     }
     if (url.endsWith("/auth/login")) {
       return json({ access_token: "token-1", user: { id: 1, email: "promoter@example.com", role: "promoter", status: "active" } });
+    }
+    if (url.endsWith("/admin/dramas/filters")) {
+      return options.filterOptionsResponse?.() ?? json({
+        platforms: ["ReelShort", "DramaBox"],
+        languages: ["English", "Spanish"],
+        tags: ["Female", "Fantasy"]
+      });
     }
     if (url.includes("/admin/dramas?")) {
       return options.boardResponse?.(url) ?? json({ items: [dramaSummary], total: 1 });
@@ -186,6 +193,26 @@ describe("admin app", () => {
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
       )
     );
+  });
+
+  it("uses backend-provided board filter options instead of current page values", async () => {
+    const fetchMock = installFetchMock({
+      boardResponse: () => json({ items: [dramaSummary], total: 1 })
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas/filters",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+
+    await user.click(screen.getByRole("combobox", { name: /all languages/i }));
+
+    expect(await screen.findByRole("option", { name: "Spanish" })).toBeInTheDocument();
   });
 
   it("paginates board queries through the admin API and resets page on filters", async () => {

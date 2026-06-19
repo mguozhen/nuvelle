@@ -33,6 +33,17 @@ describe("admin backend client", () => {
     );
   });
 
+  it("loads admin drama filter options", async () => {
+    const filters = { platforms: ["ReelShort"], languages: ["English", "Spanish"], tags: ["Female"] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(filters)));
+    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
+    await expect(client.getAdminDramaFilters()).resolves.toEqual(filters);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/admin/dramas/filters",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+    );
+  });
+
   it("creates promo generation requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, id: "job-1" })));
     const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");

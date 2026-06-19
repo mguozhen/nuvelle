@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, Query
 from app.api.deps import AdminOnlyUser, CurrentUser, DbSession
 from app.schemas.admin import (
     AdminDramaDetail,
+    AdminDramaFilterOptions,
     AdminDramaListResponse,
     AdminDramaRead,
     DramaEventCreate,
@@ -53,6 +54,11 @@ def list_admin_dramas(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/dramas/filters", response_model=AdminDramaFilterOptions)
+def get_admin_drama_filters(db: DbSession, _user: CurrentUser) -> AdminDramaFilterOptions:
+    return AdminDramaService(db).filter_options()
 
 
 @router.get("/dramas/{drama_id}", response_model=AdminDramaDetail)
