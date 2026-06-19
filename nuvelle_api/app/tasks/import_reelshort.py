@@ -28,6 +28,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Import one third-party resource by internal id.",
     )
     parser.add_argument(
+        "--detail-only",
+        action="store_true",
+        help="Only scan ReelShort detail resources, currently book_type=1.",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="Build the import plan without writing dramas or episodes.",
@@ -37,7 +42,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def payload_from_args(args: argparse.Namespace) -> ReelShortSyncRequest:
-    return ReelShortSyncRequest(resource_id=args.resource_id, limit=args.limit, dry_run=args.dry_run)
+    return ReelShortSyncRequest(
+        resource_id=args.resource_id,
+        limit=args.limit,
+        detail_only=args.detail_only,
+        dry_run=args.dry_run,
+    )
 
 
 def run(argv: Sequence[str] | None = None, *, output: TextIO = sys.stdout) -> int:

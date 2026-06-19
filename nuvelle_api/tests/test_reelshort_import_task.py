@@ -15,11 +15,12 @@ class DummySession:
 
 def test_import_task_builds_payload_from_cli_args() -> None:
     payload = import_reelshort.payload_from_args(
-        import_reelshort.parse_args(["--limit", "25", "--resource-id", "42", "--dry-run"])
+        import_reelshort.parse_args(["--limit", "25", "--resource-id", "42", "--detail-only", "--dry-run"])
     )
 
     assert payload.limit == 25
     assert payload.resource_id == 42
+    assert payload.detail_only is True
     assert payload.dry_run is True
 
 

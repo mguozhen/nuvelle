@@ -150,6 +150,33 @@ def test_reelshort_import_prioritizes_pending_resources(client: TestClient, db: 
     assert db.query(Drama).filter(Drama.rs_book_id == "already-imported").count() == 0
 
 
+def test_reelshort_import_can_scan_detail_resources_only(client: TestClient, db: Session) -> None:
+    list_payload = fixture_payload()
+    list_payload["book_type"] = 0
+    list_payload["chapter_count"] = 0
+    list_payload["pay_start"] = 0
+    list_payload["publish_at"] = 0
+    list_payload["chapters"] = []
+    list_payload.pop("app_promotion_link")
+    list_payload.pop("book_promotion_link")
+    seed_resource(db, list_payload, source="reelshort_cps", source_app="reelshort")
+    seed_resource(db, source="reelshort_cps", source_app="reelshort")
+
+    response = client.post(
+        "/api/v1/admin/imports/reelshort/sync",
+        headers=auth_header(client, db),
+        json={"limit": 50, "detail_only": True},
+    )
+
+    drama = db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").one()
+    assert response.status_code == 200
+    assert response.json()["imported"] == 1
+    assert response.json()["updated"] == 0
+    assert drama.book_type == "1"
+    assert drama.platform_publish_at is not None
+    assert drama.episode_count == 66
+
+
 def test_reelshort_import_skips_non_cps_material_shape(client: TestClient, db: Session) -> None:
     material_payload = fixture_payload()
     material_payload.pop("id")
@@ -181,6 +208,67 @@ def test_reelshort_import_keeps_genre_within_indexed_column_limit(client: TestCl
     assert drama.genre.startswith("Long Tag 00, Long Tag 01")
     assert not drama.genre.endswith(",")
     assert drama.show_tags == long_tags
+
+
+def test_reelshort_import_treats_zero_publish_at_as_missing(client: TestClient, db: Session) -> None:
+    payload = fixture_payload()
+    payload["book_type"] = 0
+    payload["chapter_count"] = 0
+    payload["pay_start"] = 0
+    payload["publish_at"] = 0
+    payload["chapters"] = []
+    payload.pop("app_promotion_link")
+    payload.pop("book_promotion_link")
+    seed_resource(db, payload, source="reelshort_cps", source_app="reelshort")
+
+    response = client.post("/api/v1/admin/imports/reelshort/sync", headers=auth_header(client, db))
+
+    drama = db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").one()
+    assert response.status_code == 200
+    assert response.json()["failed"] == 0
+    assert drama.platform_publish_at is None
+    assert drama.episode_count is None
+    assert drama.pay_start is None
+
+
+def test_reelshort_import_does_not_let_list_resource_clear_detail_fields(
+    client: TestClient, db: Session
+) -> None:
+    detail_resource = seed_resource(db, source="reelshort_cps", source_app="reelshort")
+    headers = auth_header(client, db)
+    client.post(
+        "/api/v1/admin/imports/reelshort/sync",
+        headers=headers,
+        json={"resource_id": detail_resource.id},
+    )
+
+    list_payload = fixture_payload()
+    list_payload["book_type"] = 0
+    list_payload["chapter_count"] = 0
+    list_payload["pay_start"] = 0
+    list_payload["publish_at"] = 0
+    list_payload["chapters"] = []
+    list_payload.pop("app_promotion_link")
+    list_payload.pop("book_promotion_link")
+    list_resource = seed_resource(db, list_payload, source="reelshort_cps", source_app="reelshort")
+
+    response = client.post(
+        "/api/v1/admin/imports/reelshort/sync",
+        headers=headers,
+        json={"resource_id": list_resource.id},
+    )
+
+    drama = db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").one()
+    episodes = db.query(DramaEpisode).filter(DramaEpisode.drama_id == drama.id).all()
+    assert response.status_code == 200
+    assert response.json()["updated"] == 1
+    assert drama.book_type == "1"
+    assert drama.episode_count == 66
+    assert drama.pay_start == 12
+    assert drama.platform_publish_at is not None
+    assert drama.app_promotion_link == "https://reelslink.com/cps/y2drkZ"
+    assert drama.book_promotion_link == "https://reelslink.com/cps/7DYiOR"
+    assert len(episodes) == 2
 
 
 def test_reelshort_import_updates_existing_drama(client: TestClient, db: Session) -> None:

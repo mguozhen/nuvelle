@@ -6,7 +6,8 @@ from pydantic import BaseModel, Field
 
 class ReelShortSyncRequest(BaseModel):
     resource_id: int | None = None
-    limit: int = Field(default=50, ge=1, le=5000)
+    limit: int = Field(default=50, ge=1, le=50000)
+    detail_only: bool = False
     dry_run: bool = False
 
 

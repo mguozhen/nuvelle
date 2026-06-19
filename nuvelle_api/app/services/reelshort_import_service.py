@@ -23,7 +23,11 @@ class ReelShortImportService:
 
     def sync(self, payload: ReelShortSyncRequest) -> ReelShortSyncResponse:
         response = ReelShortSyncResponse()
-        resources = self.resources.list_reelshort(limit=payload.limit, resource_id=payload.resource_id)
+        resources = self.resources.list_reelshort(
+            limit=payload.limit,
+            resource_id=payload.resource_id,
+            detail_only=payload.detail_only,
+        )
         for resource in resources:
             try:
                 existed = self._find_drama(str(resource.raw_data.get("id"))) is not None
@@ -52,28 +56,74 @@ class ReelShortImportService:
             self.db.add(drama)
 
         chapters = self._chapters(raw)
+        is_detail_resource = self._is_detail_resource(raw, chapters)
         drama.title = str(raw.get("title") or resource.title)
         drama.platform = "ReelShort"
         drama.genre = self._genre(raw)
         drama.cover_image_url = self._optional_str(raw.get("pic") or resource.cover_url)
-        drama.video_url = self._optional_str(chapters[0].get("play_url")) if chapters else None
-        drama.source_url = self._optional_str(raw.get("book_promotion_link") or raw.get("app_promotion_link"))
-        drama.episode_count = self._optional_int(raw.get("chapter_count") or resource.episode_count)
+        self._set_detail_field(
+            drama,
+            "video_url",
+            self._optional_str(chapters[0].get("play_url")) if chapters else None,
+            overwrite=is_detail_resource,
+        )
+        self._set_detail_field(
+            drama,
+            "source_url",
+            self._optional_str(raw.get("book_promotion_link") or raw.get("app_promotion_link")),
+            overwrite=is_detail_resource,
+        )
+        self._set_detail_field(
+            drama,
+            "episode_count",
+            self._positive_int(raw.get("chapter_count") or resource.episode_count),
+            overwrite=is_detail_resource,
+        )
         drama.synopsis_or_hook = self._optional_str(raw.get("desc") or resource.synopsis)
         drama.signal = self._signal(raw)
-        drama.source_resource_id = resource.id
+        if is_detail_resource or drama.source_resource_id is None:
+            drama.source_resource_id = resource.id
         drama.language = self._optional_str(raw.get("lang") or resource.language)
         drama.tags = self._string_list(raw.get("tag"))
         drama.show_tags = self._string_list(raw.get("show_tag"))
-        drama.book_type = self._optional_str(raw.get("book_type"))
+        self._set_detail_field(
+            drama,
+            "book_type",
+            self._optional_str(raw.get("book_type")),
+            overwrite=is_detail_resource,
+        )
         drama.is_valid = self._optional_bool(raw.get("is_valid"))
-        drama.pay_start = self._optional_int(raw.get("pay_start"))
+        self._set_detail_field(
+            drama,
+            "pay_start",
+            self._positive_int(raw.get("pay_start")),
+            overwrite=is_detail_resource,
+        )
         drama.recent_revenue = self._optional_int(raw.get("recent_revenue"))
         drama.promoters_cnt = self._optional_int(raw.get("promoters_cnt"))
-        drama.promotion_code = self._optional_str(raw.get("promotion_code"))
-        drama.app_promotion_link = self._optional_str(raw.get("app_promotion_link"))
-        drama.book_promotion_link = self._optional_str(raw.get("book_promotion_link"))
-        drama.platform_publish_at = self._timestamp(raw.get("publish_at"))
+        self._set_detail_field(
+            drama,
+            "promotion_code",
+            self._optional_str(raw.get("promotion_code")),
+            overwrite=is_detail_resource,
+        )
+        self._set_detail_field(
+            drama,
+            "app_promotion_link",
+            self._optional_str(raw.get("app_promotion_link")),
+            overwrite=is_detail_resource,
+        )
+        self._set_detail_field(
+            drama,
+            "book_promotion_link",
+            self._optional_str(raw.get("book_promotion_link")),
+            overwrite=is_detail_resource,
+        )
+        publish_at = self._timestamp(raw.get("publish_at"))
+        if publish_at is not None:
+            self._set_detail_field(drama, "platform_publish_at", publish_at, overwrite=is_detail_resource)
+        elif self._is_epoch_placeholder(drama.platform_publish_at):
+            drama.platform_publish_at = None
         drama.source_first_seen_at = resource.first_seen_at
         drama.source_last_seen_at = resource.last_seen_at
         drama.source_last_changed_at = resource.last_changed_at
@@ -135,6 +185,11 @@ class ReelShortImportService:
             return None
         return int(value)
 
+    @classmethod
+    def _positive_int(cls, value: Any) -> int | None:
+        normalized = cls._optional_int(value)
+        return normalized if normalized is not None and normalized > 0 else None
+
     @staticmethod
     def _optional_bool(value: Any) -> bool | None:
         return value if isinstance(value, bool) else None
@@ -151,7 +206,37 @@ class ReelShortImportService:
     def _timestamp(value: Any) -> datetime | None:
         if value is None or value == "":
             return None
-        return datetime.fromtimestamp(int(value), tz=UTC)
+        timestamp = int(value)
+        if timestamp <= 0:
+            return None
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp // 1000
+        return datetime.fromtimestamp(timestamp, tz=UTC)
+
+    @classmethod
+    def _is_detail_resource(cls, raw: dict[str, Any], chapters: list[dict[str, Any]]) -> bool:
+        return bool(
+            chapters
+            or cls._positive_int(raw.get("chapter_count"))
+            or cls._positive_int(raw.get("pay_start"))
+            or cls._optional_str(raw.get("book_promotion_link"))
+            or cls._optional_str(raw.get("app_promotion_link"))
+        )
+
+    @staticmethod
+    def _set_detail_field(drama: Drama, field: str, value: Any, *, overwrite: bool) -> None:
+        if value is None:
+            return
+        current = getattr(drama, field)
+        if overwrite or current is None or current == "":
+            setattr(drama, field, value)
+
+    @staticmethod
+    def _is_epoch_placeholder(value: datetime | None) -> bool:
+        if value is None:
+            return False
+        normalized = value if value.tzinfo else value.replace(tzinfo=UTC)
+        return normalized < datetime(1970, 1, 2, tzinfo=UTC)
 
     @staticmethod
     def _hash(value: dict[str, Any]) -> str:

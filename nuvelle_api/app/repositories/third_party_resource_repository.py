@@ -8,10 +8,18 @@ class ThirdPartyResourceRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def list_reelshort(self, *, limit: int, resource_id: int | None = None) -> list[ThirdPartyDramaResource]:
+    def list_reelshort(
+        self,
+        *,
+        limit: int,
+        resource_id: int | None = None,
+        detail_only: bool = False,
+    ) -> list[ThirdPartyDramaResource]:
         stmt = select(ThirdPartyDramaResource).where(
             func.lower(ThirdPartyDramaResource.source).in_(["reelshort", "reelshort_cps"])
         )
+        if detail_only:
+            stmt = stmt.where(ThirdPartyDramaResource.book_type == "1")
         if resource_id is not None:
             stmt = stmt.where(ThirdPartyDramaResource.id == resource_id)
         else:
