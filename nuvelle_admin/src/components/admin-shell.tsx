@@ -3,8 +3,8 @@ import { Gauge, Library, LogOut, PanelTop, Settings, Sparkles } from "lucide-rea
 import { NavLink } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LanguageSwitcher } from "@/components/language-switcher";
-import { useI18n, type TranslationKey } from "@/lib/i18n";
+import { LanguageSwitcher } from "@/i18n/components/language-switcher";
+import { useI18n, type TranslationKey } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 export type AdminTab = "swipe" | "board" | "generated";

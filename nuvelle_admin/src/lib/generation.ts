@@ -1,5 +1,5 @@
 import type { GenerationState } from "@/types/drama";
-import type { TranslationKey } from "@/lib/i18n";
+import type { TranslationKey } from "@/i18n";
 
 const progressByStatus: Record<string, number> = {
   queued: 5,

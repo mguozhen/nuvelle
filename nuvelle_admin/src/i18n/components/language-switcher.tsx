@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { useI18n, type Locale } from "@/lib/i18n";
+import { useI18n, type Locale } from "@/i18n";
 
 const options: Array<{ label: string; shortLabel: string; value: Locale }> = [
   { label: "English", shortLabel: "EN", value: "en" },

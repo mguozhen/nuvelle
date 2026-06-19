@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { LanguageSwitcher } from "@/components/language-switcher";
+import { LanguageSwitcher } from "@/i18n/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import type { LoginRequest, RegisterRequest } from "@/types/drama";
 
 type LoginGateProps = {

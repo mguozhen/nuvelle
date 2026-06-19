@@ -8,7 +8,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { generationLabel } from "@/lib/generation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";

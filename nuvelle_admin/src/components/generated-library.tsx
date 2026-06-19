@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { generationProgress, isActiveGeneration } from "@/lib/generation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import type { GeneratedJob } from "@/types/drama";
 
 type GeneratedLibraryProps = {

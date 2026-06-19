@@ -9,7 +9,7 @@ import { SwipeView } from "@/components/swipe-view";
 import { clearAuthState, loadAuthState, saveAuthState, type AuthState } from "@/lib/auth";
 import { DEFAULT_BACKEND_URL, PromoBackendClient } from "@/lib/backend";
 import { generationLabel, generationState, isActiveGeneration, preferredGenerationStatus } from "@/lib/generation";
-import { I18nProvider, useI18n } from "@/lib/i18n";
+import { I18nProvider, useI18n } from "@/i18n";
 import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
 import { nuvelleScore } from "@/lib/scoring";
 import type {

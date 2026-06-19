@@ -1,5 +1,5 @@
 import { DEFAULT_BACKEND_URL } from "@/lib/backend";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 
 type BatchPanelProps = {
   batchId?: string;

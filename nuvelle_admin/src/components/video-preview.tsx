@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 type VideoPreviewProps = {

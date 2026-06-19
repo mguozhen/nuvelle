@@ -6,7 +6,7 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { VideoPreview } from "@/components/video-preview";
 import { generationLabel } from "@/lib/generation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import { nuvelleScore, tasteScore } from "@/lib/scoring";
 import type { DramaEpisodeRecord, DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 

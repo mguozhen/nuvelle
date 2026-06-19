@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { VideoPreview } from "@/components/video-preview";
 import { generationLabel } from "@/lib/generation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 

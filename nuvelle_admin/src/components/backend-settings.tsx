@@ -9,7 +9,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { useI18n } from "@/lib/i18n";
+import { useI18n } from "@/i18n";
 
 type BackendSettingsProps = {
   backendUrl: string;
