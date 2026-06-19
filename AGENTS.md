@@ -1,11 +1,3 @@
-<claude-mem-context>
-# Memory Context
-
-# [nuvelle] recent context, 2026-06-19 4:51pm GMT+8
-
-No previous sessions found.
-</claude-mem-context>
-
 ## Nuvelle 开发约定
 
 后续在本项目写代码时，不要只顺着现有实现做局部补丁。现有架构只能作为约束和迁移成本，不能作为唯一设计依据。
