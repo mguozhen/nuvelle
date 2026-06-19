@@ -3,7 +3,6 @@ from app.models.drama import Drama, DramaEpisode
 from app.models.promo_job import PromoJob, PromoJobStatus
 from app.models.third_party_resource import ThirdPartyDramaResource
 from app.models.user_drama_event import UserDramaEvent, UserDramaEventType
-from app.models.vote import Vote, VoteVerdict
 
 __all__ = [
     "AdminInvite",
@@ -17,6 +16,4 @@ __all__ = [
     "ThirdPartyDramaResource",
     "UserDramaEvent",
     "UserDramaEventType",
-    "Vote",
-    "VoteVerdict",
 ]

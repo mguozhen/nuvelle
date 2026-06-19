@@ -6,8 +6,7 @@ import type {
   GeneratedListResponse,
   LoginRequest,
   PromoRequest,
-  RegisterRequest,
-  VoteRecord
+  RegisterRequest
 } from "@/types/drama";
 
 export const DEFAULT_BACKEND_URL =
@@ -42,22 +41,6 @@ export class PromoBackendClient {
 
   health<T = unknown>(): Promise<T> {
     return this.request<T>("/health/live");
-  }
-
-  getVotes<T = unknown>(): Promise<T> {
-    return this.request<T>("/votes");
-  }
-
-  postVote(vote: VoteRecord): Promise<unknown> {
-    return this.request("/votes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        drama_id: vote.dramaId,
-        verdict: vote.verdict,
-        score: vote.score
-      })
-    });
   }
 
   register(payload: RegisterRequest): Promise<AuthResponse> {

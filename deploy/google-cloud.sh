@@ -35,6 +35,9 @@ SQL_DATABASE="${SQL_DATABASE:-nuvelle}"
 SQL_USER="${SQL_USER:-nuvelle}"
 SQL_EDITION="${SQL_EDITION:-ENTERPRISE}"
 SQL_TIER="${SQL_TIER:-db-f1-micro}"
+PROMO_GCS_BUCKET="${PROMO_GCS_BUCKET:-$PROJECT_ID-nuvelle-promo-assets}"
+PROMO_GCS_PREFIX="${PROMO_GCS_PREFIX:-promo}"
+PROMO_WORK_DIR="${PROMO_WORK_DIR:-/tmp/nuvelle_promo}"
 
 DB_PASSWORD_SECRET="${DB_PASSWORD_SECRET:-nuvelle-db-password}"
 DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-nuvelle-database-url}"
@@ -207,6 +210,7 @@ enable_google_cloud_services() {
     cloudresourcemanager.googleapis.com \
     iam.googleapis.com \
     sqladmin.googleapis.com \
+    storage.googleapis.com \
     secretmanager.googleapis.com \
     --project="$PROJECT_ID"
 }
@@ -326,11 +330,44 @@ ensure_infra() {
   enable_google_cloud_services
   ensure_artifact_repository
   ensure_database
+  ensure_promo_bucket
 }
 
 ensure_container_infra() {
   enable_google_cloud_services
   ensure_artifact_repository
+}
+
+runtime_service_account() {
+  local project_number
+  project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+  printf '%s' "${RUNTIME_SERVICE_ACCOUNT:-${project_number}-compute@developer.gserviceaccount.com}"
+}
+
+ensure_promo_bucket() {
+  log "Ensure promo GCS bucket"
+  local bucket="gs://$PROMO_GCS_BUCKET"
+  local runtime_sa
+
+  runtime_sa="$(runtime_service_account)"
+  if ! gcloud storage buckets describe "$bucket" --project="$PROJECT_ID" >/dev/null 2>&1; then
+    gcloud storage buckets create "$bucket" \
+      --project="$PROJECT_ID" \
+      --location="$REGION" \
+      --uniform-bucket-level-access
+  fi
+
+  if ! gcloud storage buckets add-iam-policy-binding "$bucket" \
+    --member="serviceAccount:$runtime_sa" \
+    --role="roles/storage.objectAdmin" \
+    --quiet >/dev/null; then
+    warn "Could not update IAM on $bucket directly; granting project-level Storage Object Admin to $runtime_sa."
+    gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+      --member="serviceAccount:$runtime_sa" \
+      --role="roles/storage.objectAdmin" \
+      --condition=None \
+      --quiet >/dev/null
+  fi
 }
 
 prepare_api_context() {
@@ -437,6 +474,7 @@ deploy_api() {
   local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$API_SERVICE:$TAG"
   local context="$BUILD_DIR/api"
   local secret_args=(--set-secrets=DATABASE_URL="$DATABASE_URL_SECRET":latest)
+  local env_vars
 
   if secret_exists "$FLATKEY_SECRET"; then
     secret_args+=(--set-secrets=FLATKEY_API_KEY="$FLATKEY_SECRET":latest)
@@ -463,6 +501,8 @@ deploy_api() {
     warn "$REELSHORT_CPS_SECRET is missing and REELSHORT_CPS_TOKEN is not set; ReelShort promo generation cannot refresh expired video URLs."
   fi
 
+  env_vars="ENVIRONMENT=production,WEB_CONCURRENCY=2,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_WORK_DIR=$PROMO_WORK_DIR,PROMO_GCS_BUCKET=$PROMO_GCS_BUCKET,PROMO_GCS_PREFIX=$PROMO_GCS_PREFIX,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=[\"*\"]"
+
   gcloud run deploy "$API_SERVICE" \
     --project="$PROJECT_ID" \
     --region="$REGION" \
@@ -477,7 +517,7 @@ deploy_api() {
     --max-instances=1 \
     --no-cpu-throttling \
     --add-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
-    --set-env-vars='ENVIRONMENT=production,WEB_CONCURRENCY=2,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=["*"]' \
+    --set-env-vars="$env_vars" \
     "${secret_args[@]}"
 
   API_URL="$(service_url "$API_SERVICE")"
@@ -725,7 +765,6 @@ verify_deploy() {
   [[ -n "$api_url" ]] || die "$API_SERVICE is missing."
 
   http_check "$api_url/api/v1/health/ready" "$API_SERVICE ready"
-  http_check "$api_url/api/v1/votes" "$API_SERVICE votes"
 
   for service in "$WEBSITE_SERVICE" "$MOBILE_SERVICE" "$WEB_SERVICE" "$ADMIN_SERVICE"; do
     verify_cloud_run_service "$service"

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import io
 import json
-import mimetypes
 import uuid
 import zipfile
 from pathlib import Path
 from typing import cast
 
 from fastapi import HTTPException
+from fastapi.responses import FileResponse, Response
 from nuvelle_kit import PromoGenerationRequest, generate_promo
 from nuvelle_kit.storage import slugify
 from sqlalchemy import select
@@ -28,6 +28,7 @@ from app.schemas.promo import (
     PromoJobFiles,
     PromoJobResponse,
 )
+from app.services.promo_asset_store import PromoAssetStore
 from app.services.reelshort_video_service import ReelShortVideoService
 
 ASSET_NAMES = {"teaser.mp4", "cover.jpg", "caption.txt", "plan.json"}
@@ -44,6 +45,7 @@ class PromoService:
     def __init__(self, db: Session) -> None:
         self.repository = PromoJobRepository(db)
         self.settings = get_settings()
+        self.asset_store = PromoAssetStore(self.settings)
 
     def create_job(
         self,
@@ -135,12 +137,11 @@ class PromoService:
                 job = self.repository.get(item.job_id)
                 if job is None or job.status != PromoJobStatus.done.value or not job.output_dir:
                     continue
-                output_dir = Path(job.output_dir)
-                teaser = output_dir / "teaser.mp4"
-                if teaser.exists():
-                    zf.write(teaser, f"{prefix}_EP{item.ep}.mp4")
-                caption = (output_dir / "caption.txt").read_text(encoding="utf-8").strip()
-                plan = self._read_plan(output_dir / "plan.json")
+                if self.asset_store.exists(job.output_dir, "teaser.mp4"):
+                    teaser = self.asset_store.read_asset(job.output_dir, "teaser.mp4")
+                    zf.writestr(f"{prefix}_EP{item.ep}.mp4", teaser.content)
+                caption = self.asset_store.read_text(job.output_dir, "caption.txt").strip()
+                plan = self._read_plan_text(self.asset_store.read_text(job.output_dir, "plan.json"))
                 hook_value = plan.get("hook", [])
                 hook = " / ".join(str(part) for part in hook_value) if isinstance(hook_value, list) else ""
                 logline = plan.get("logline", "")
@@ -156,24 +157,28 @@ class PromoService:
             zf.writestr(f"{prefix}_summary.txt", "\n".join(summary_lines))
         return f"{prefix}_promo_pack.zip", buf.getvalue()
 
-    def asset_path(self, job_id: str, filename: str) -> tuple[Path, str]:
+    def asset_response(
+        self,
+        job_id: str,
+        filename: str,
+        range_header: str | None = None,
+    ) -> FileResponse | Response:
         if filename not in ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
         job = self.repository.get(job_id)
         if job is None or not job.output_dir:
             raise HTTPException(status_code=404, detail="job not found")
-        path = Path(job.output_dir) / filename
-        if not path.exists():
-            raise HTTPException(status_code=404, detail="asset not found")
-        return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        return self._asset_response_for(job.output_dir, filename, range_header)
 
-    def asset_path_by_slug(self, slug: str, filename: str) -> tuple[Path, str]:
+    def asset_response_by_slug(
+        self,
+        slug: str,
+        filename: str,
+        range_header: str | None = None,
+    ) -> FileResponse | Response:
         if filename not in ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
-        path = Path(self.settings.promo_storage_dir).resolve() / Path(slug).name / filename
-        if not path.exists():
-            raise HTTPException(status_code=404, detail="asset not found")
-        return path, mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        return self._asset_response_for(self.asset_store.location_for_slug(slug), filename, range_header)
 
     def run_job(self, job_id: str, payload: PromoJobCreate) -> PromoJobResponse:
         job = self.repository.get(job_id)
@@ -190,6 +195,7 @@ class PromoService:
             job.status = PromoJobStatus.rendering.value
             job.log = "rendering"
             self.repository.update(job)
+            output_dir = self.asset_store.output_dir_for(job.id)
             result = generate_promo(
                 PromoGenerationRequest(
                     mp4=cast(Path, video_source),
@@ -201,12 +207,17 @@ class PromoService:
                     no_ai=payload.no_ai,
                     prompt=payload.prompt,
                     cover_image_url=payload.cover_url or payload.cover_image,
-                    output_dir=Path(self.settings.promo_storage_dir).resolve() / job.id,
+                    output_dir=output_dir,
                 )
             )
             plan = self._read_plan(result.plan_path)
+            storage_location = self.asset_store.persist_job_assets(
+                job_id=job.id,
+                output_dir=result.output_dir,
+                asset_names=ASSET_NAMES,
+            )
             job.status = PromoJobStatus.done.value
-            job.output_dir = str(result.output_dir)
+            job.output_dir = storage_location
             job.teaser_url = self.file_url(job.id, "teaser.mp4")
             job.cover_url = self.file_url(job.id, "cover.jpg")
             job.caption = result.caption_text
@@ -220,6 +231,9 @@ class PromoService:
             job.error = str(exc)
             job.log = str(exc)
             self.repository.update(job)
+        finally:
+            if "output_dir" in locals():
+                self.asset_store.cleanup_work_dir(output_dir)
         return self.to_response(job)
 
     @staticmethod
@@ -293,6 +307,37 @@ class PromoService:
         except json.JSONDecodeError:
             return {}
         return cast(dict[str, object], data) if isinstance(data, dict) else {}
+
+    @staticmethod
+    def _read_plan_text(value: str) -> dict[str, object]:
+        try:
+            data = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return cast(dict[str, object], data) if isinstance(data, dict) else {}
+
+    def _asset_response_for(
+        self,
+        location: str,
+        filename: str,
+        range_header: str | None,
+    ) -> FileResponse | Response:
+        path = self.asset_store.local_asset_path(location, filename)
+        if path is not None:
+            if not path.exists():
+                raise HTTPException(status_code=404, detail="asset not found")
+            return FileResponse(path, filename=path.name)
+
+        asset = self.asset_store.read_asset(location, filename, range_header)
+        return Response(
+            asset.content,
+            status_code=asset.status_code,
+            media_type=asset.media_type,
+            headers={
+                **asset.headers,
+                "Content-Disposition": f'inline; filename="{filename}"',
+            },
+        )
 
     def _record_generate_event(self, user_id: int, payload: PromoJobCreate) -> None:
         if payload.drama_id is None:

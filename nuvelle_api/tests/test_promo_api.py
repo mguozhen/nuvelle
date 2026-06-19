@@ -1,3 +1,4 @@
+import shutil
 from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
@@ -42,21 +43,6 @@ def seed_drama(db: Session) -> tuple[Drama, DramaEpisode]:
     db.refresh(drama)
     db.refresh(episode)
     return drama, episode
-
-
-def test_votes_are_recorded_and_returned(client: TestClient) -> None:
-    response = client.post(
-        "/api/v1/votes",
-        json={"drama_id": "7", "taster": "alex", "verdict": "fire", "score": 82, "tags": ["hook"]},
-    )
-    votes = client.get("/api/v1/votes")
-
-    assert response.status_code == 200
-    assert response.json() == {"ok": True, "rated": 1}
-    assert votes.status_code == 200
-    assert votes.json()["rated"] == ["7"]
-    assert votes.json()["count"] == 1
-    assert votes.json()["votes"]["7"][0]["verdict"] == "fire"
 
 
 def test_promo_job_api_queues_and_finishes_with_mocked_generator(
@@ -202,6 +188,120 @@ def test_promo_job_api_passes_no_ai_to_generator(client: TestClient, monkeypatch
 
     assert response.status_code == 200
     assert job.json()["status"] == "done"
+
+
+def test_promo_job_uploads_generated_assets_to_configured_store(
+    client: TestClient, db: Session, monkeypatch, tmp_path
+) -> None:
+    from nuvelle_kit.schemas import PromoGenerationResult
+
+    from app.services import promo_service
+
+    stores = []
+
+    class FakeAssetStore:
+        def __init__(self, settings) -> None:
+            self.root = tmp_path / "work"
+            self.persisted: dict[str, bytes] = {}
+            self.cleaned: list[str] = []
+            stores.append(self)
+
+        def output_dir_for(self, job_id: str):
+            return self.root / job_id
+
+        def persist_job_assets(self, *, job_id, output_dir, asset_names):
+            for filename in asset_names:
+                path = output_dir / filename
+                if path.exists():
+                    self.persisted[filename] = path.read_bytes()
+            return f"gs://bucket/promo/{job_id}"
+
+        def cleanup_work_dir(self, output_dir) -> None:
+            self.cleaned.append(str(output_dir))
+            shutil.rmtree(output_dir, ignore_errors=True)
+
+    def fake_generate_promo(request):
+        output_dir = request.output_dir
+        output_dir.mkdir(parents=True)
+        cover_path = output_dir / "cover.jpg"
+        teaser_path = output_dir / "teaser.mp4"
+        caption_path = output_dir / "caption.txt"
+        plan_path = output_dir / "plan.json"
+        cover_path.write_bytes(b"cover")
+        teaser_path.write_bytes(b"teaser")
+        caption_path.write_text("caption")
+        plan_path.write_text("{}")
+        return PromoGenerationResult(
+            output_dir=output_dir,
+            cover_path=cover_path,
+            teaser_path=teaser_path,
+            caption_path=caption_path,
+            plan_path=plan_path,
+            caption_text="caption",
+        )
+
+    monkeypatch.setattr(promo_service, "PromoAssetStore", FakeAssetStore)
+    monkeypatch.setattr(promo_service, "generate_promo", fake_generate_promo)
+
+    response = client.post(
+        "/api/v1/promo/jobs",
+        json={"video_url": "/tmp/input.mp4", "title": "GCS", "ep": 1, "dur": 10},
+    )
+
+    job = db.get(PromoJob, response.json()["job_id"])
+    assert response.status_code == 200
+    assert job is not None
+    assert job.status == "done"
+    assert job.output_dir == f"gs://bucket/promo/{job.id}"
+    assert job.teaser_url == f"/promo/jobs/{job.id}/files/teaser.mp4"
+    assert stores[0].persisted["teaser.mp4"] == b"teaser"
+    assert stores[0].cleaned == [str(tmp_path / "work" / job.id)]
+    assert not (tmp_path / "work" / job.id).exists()
+
+
+def test_promo_job_file_response_supports_non_local_range_reads(db: Session) -> None:
+    from app.services.promo_asset_store import StoredAsset
+    from app.services.promo_service import PromoService
+
+    job = PromoJob(
+        id="gcs-job",
+        status="done",
+        title="GCS",
+        episode=1,
+        duration=10,
+        source_url="https://example.com/input.mp4",
+        output_dir="gs://bucket/promo/gcs-job",
+    )
+    db.add(job)
+    db.commit()
+
+    class FakeAssetStore:
+        def local_asset_path(self, location, filename):
+            return None
+
+        def read_asset(self, location, filename, range_header):
+            assert location == "gs://bucket/promo/gcs-job"
+            assert filename == "teaser.mp4"
+            assert range_header == "bytes=0-1"
+            return StoredAsset(
+                content=b"te",
+                media_type="video/mp4",
+                status_code=206,
+                headers={
+                    "Accept-Ranges": "bytes",
+                    "Content-Range": "bytes 0-1/6",
+                    "Content-Length": "2",
+                },
+            )
+
+    service = PromoService(db)
+    service.asset_store = FakeAssetStore()
+
+    response = service.asset_response("gcs-job", "teaser.mp4", "bytes=0-1")
+
+    assert response.status_code == 206
+    assert response.body == b"te"
+    assert response.headers["content-range"] == "bytes 0-1/6"
 
 
 def test_authenticated_promo_job_stores_user_drama_episode_and_prompt(

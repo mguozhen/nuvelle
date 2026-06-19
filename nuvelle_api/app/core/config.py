@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://nuvelle:nuvelle_dev_password@localhost:5432/nuvelle"
     cors_origins: list[str] = default_cors_origins()
     promo_storage_dir: str = "../nuvelle_kit/out"
+    promo_work_dir: str = "/tmp/nuvelle_promo"
+    promo_gcs_bucket: str = ""
+    promo_gcs_prefix: str = "promo"
     promo_upload_dir: str = "../nuvelle_kit/_uploads"
     promo_cache_dir: str = "../nuvelle_kit/_vidcache"
     reelshort_cps_token: str = ""

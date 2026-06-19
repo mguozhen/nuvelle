@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Query
+from fastapi import APIRouter, BackgroundTasks, Header, Query
 from fastapi.responses import FileResponse, Response
 
 from app.api.deps import DbSession, OptionalCurrentUser
@@ -32,10 +32,14 @@ def get_job(job_id: str, db: DbSession) -> PromoJobResponse:
     return PromoService(db).get_job(job_id)
 
 
-@router.get("/promo/jobs/{job_id}/files/{filename}")
-def get_job_file(job_id: str, filename: str, db: DbSession) -> FileResponse:
-    path, media_type = PromoService(db).asset_path(job_id, filename)
-    return FileResponse(path, media_type=media_type, filename=path.name)
+@router.get("/promo/jobs/{job_id}/files/{filename}", response_model=None)
+def get_job_file(
+    job_id: str,
+    filename: str,
+    db: DbSession,
+    range_header: str | None = Header(default=None, alias="Range"),
+) -> FileResponse | Response:
+    return PromoService(db).asset_response(job_id, filename, range_header)
 
 
 @router.post("/promo/batches", response_model=PromoBatchCreateResponse)
@@ -134,7 +138,11 @@ def download_batch_alias(db: DbSession, batch_id: str = Query(alias="id")) -> Re
     )
 
 
-@router.get("/file")
-def get_file_alias(slug: str, n: str, db: DbSession) -> FileResponse:
-    path, media_type = PromoService(db).asset_path_by_slug(slug, n)
-    return FileResponse(path, media_type=media_type, filename=path.name)
+@router.get("/file", response_model=None)
+def get_file_alias(
+    slug: str,
+    n: str,
+    db: DbSession,
+    range_header: str | None = Header(default=None, alias="Range"),
+) -> FileResponse | Response:
+    return PromoService(db).asset_response_by_slug(slug, n, range_header)

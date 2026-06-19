@@ -8,3 +8,4 @@ pillow>=10.0.0
 passlib[bcrypt]>=1.7,<2
 bcrypt>=4,<5
 PyJWT>=2.10,<3
+google-cloud-storage>=2.18,<4

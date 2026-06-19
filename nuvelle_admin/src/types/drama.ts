@@ -48,12 +48,6 @@ export type AdminDramaListResponse = {
   total: number;
 };
 
-export type VoteRecord = {
-  dramaId: number | string;
-  verdict: VoteVerdict;
-  score: number;
-};
-
 export type PromoRequest = {
   url: string;
   title: string;
