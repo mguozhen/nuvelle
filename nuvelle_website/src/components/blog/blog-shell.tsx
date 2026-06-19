@@ -14,11 +14,21 @@ type BlogShellProps = {
   description: string;
   searchValue?: string;
   breadcrumbs?: BreadcrumbItem[];
+  structuredData?: unknown[];
   showHero?: boolean;
   children: ReactNode;
 };
 
-export function BlogShell({ locale, title, description, searchValue, breadcrumbs, showHero = true, children }: BlogShellProps) {
+export function BlogShell({
+  locale,
+  title,
+  description,
+  searchValue,
+  breadcrumbs,
+  structuredData,
+  showHero = true,
+  children
+}: BlogShellProps) {
   const copy = websiteCopy[locale];
   const localeInfo = getLocale(locale);
   const homeHref = homePathForLocale(locale);
@@ -84,6 +94,19 @@ export function BlogShell({ locale, title, description, searchValue, breadcrumbs
           }}
         />
       ) : null}
+      {structuredData?.map((item) => {
+        const serialized = serializeJsonLd(item);
+
+        return (
+          <script
+            key={serialized}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: serialized
+            }}
+          />
+        );
+      })}
     </>
   );
 }

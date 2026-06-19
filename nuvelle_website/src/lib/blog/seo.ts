@@ -5,10 +5,11 @@ import {
   buildAlternateLinks,
   buildDetailAlternateLinks,
   canonicalUrl,
+  normalizeSiteOrigin,
   type BlogRoute
 } from "@/lib/blog/urls";
 import type { BlogArticleDetail } from "@/lib/blog/types";
-import type { LocaleKey } from "@/lib/i18n";
+import { getLocale, type LocaleKey } from "@/lib/i18n";
 
 export type BreadcrumbItem = {
   name: string;
@@ -79,8 +80,47 @@ function excerptDescription(article: BlogArticleDetail) {
   return normalizeSeoDescription(article.excerpt || article.contentHtml);
 }
 
+function siteOrigin() {
+  return normalizeSiteOrigin(blogConfig.siteOrigin);
+}
+
+function brandedTitle(title: string) {
+  const normalized = normalizeSeoText(title);
+
+  return normalized.includes("Nuvelle") ? normalized : `${normalized} | Nuvelle`;
+}
+
+function openGraphLocale(locale: LocaleKey) {
+  return getLocale(locale).hrefLang.replace("-", "_");
+}
+
+function organizationJsonLd() {
+  return {
+    "@type": "Organization",
+    name: "Nuvelle",
+    url: siteOrigin()
+  };
+}
+
+function unique(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => normalizeSeoText(value)).filter(Boolean)));
+}
+
+function articleTags(article: BlogArticleDetail) {
+  return unique([article.category?.name, article.category?.slug]);
+}
+
+function articleKeywords(article: BlogArticleDetail) {
+  return unique([article.category?.name, article.category?.slug, "Nuvelle", "AI short dramas", "vertical dramas"]);
+}
+
+function listKeywords(title: string) {
+  return unique([title, "Nuvelle", "AI short dramas", "vertical dramas", "short drama blog"]);
+}
+
 export function blogPostingJsonLd(article: BlogArticleDetail, canonical: string) {
   const description = article.meta.desc ? normalizeSeoDescription(article.meta.desc) : excerptDescription(article);
+  const tags = articleTags(article);
 
   return {
     "@context": "https://schema.org",
@@ -91,7 +131,36 @@ export function blogPostingJsonLd(article: BlogArticleDetail, canonical: string)
     datePublished: article.date,
     dateModified: article.modifiedDate || article.date,
     author: article.authorName ? { "@type": "Person", name: article.authorName } : undefined,
-    mainEntityOfPage: canonical
+    articleSection: article.category?.name,
+    keywords: articleKeywords(article),
+    publisher: organizationJsonLd(),
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": canonical
+    },
+    about: tags.map((tag) => ({ "@type": "Thing", name: tag }))
+  };
+}
+
+export function blogCollectionJsonLd(
+  locale: LocaleKey,
+  route: Exclude<BlogRoute, { kind: "detail" }>,
+  title: string,
+  description: string
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Blog",
+    name: brandedTitle(title),
+    description: normalizeSeoDescription(description),
+    url: canonicalUrl(blogConfig.siteOrigin, locale, route),
+    inLanguage: getLocale(locale).hrefLang,
+    publisher: organizationJsonLd(),
+    isPartOf: {
+      "@type": "WebSite",
+      name: "Nuvelle",
+      url: siteOrigin()
+    }
   };
 }
 
@@ -103,20 +172,33 @@ export function metadataForBlogList(
 ): Metadata {
   const canonical = canonicalUrl(blogConfig.siteOrigin, locale, route);
   const alternates = buildAlternateLinks(blogConfig.siteOrigin, route);
+  const seoTitle = brandedTitle(title);
+  const noindex = route.kind === "search";
 
   return {
-    title,
+    title: seoTitle,
     description,
+    keywords: listKeywords(title),
+    robots: {
+      index: !noindex,
+      follow: true
+    },
     alternates: {
       canonical,
       languages: Object.fromEntries(alternates.map((item) => [item.hrefLang, item.href]))
     },
     openGraph: {
-      title,
+      title: seoTitle,
       description,
       url: canonical,
       siteName: "Nuvelle",
-      type: "website"
+      type: "website",
+      locale: openGraphLocale(locale)
+    },
+    twitter: {
+      card: "summary",
+      title: seoTitle,
+      description
     }
   };
 }
@@ -126,10 +208,18 @@ export function metadataForBlogDetail(locale: LocaleKey, article: BlogArticleDet
   const alternates = buildDetailAlternateLinks(blogConfig.siteOrigin, locale, slug);
   const title = normalizeSeoText(article.meta.title || article.title);
   const description = article.meta.desc ? normalizeSeoDescription(article.meta.desc) : excerptDescription(article);
+  const tags = articleTags(article);
 
   return {
     title,
     description,
+    authors: article.authorName ? [{ name: article.authorName }] : undefined,
+    category: article.category?.name,
+    keywords: articleKeywords(article),
+    robots: {
+      index: true,
+      follow: true
+    },
     alternates: {
       canonical,
       languages: Object.fromEntries(alternates.map((item) => [item.hrefLang, item.href]))
@@ -142,7 +232,11 @@ export function metadataForBlogDetail(locale: LocaleKey, article: BlogArticleDet
       siteName: "Nuvelle",
       type: "article",
       publishedTime: article.date,
-      modifiedTime: article.modifiedDate || article.date
+      modifiedTime: article.modifiedDate || article.date,
+      locale: openGraphLocale(locale),
+      authors: article.authorName ? [article.authorName] : undefined,
+      section: article.category?.name,
+      tags
     },
     twitter: {
       card: article.image ? "summary_large_image" : "summary",

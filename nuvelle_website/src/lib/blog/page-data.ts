@@ -6,7 +6,7 @@ import { BlogShell } from "@/components/blog/blog-shell";
 import { fetchBlogDetail, fetchBlogList } from "@/lib/blog/api";
 import { blogConfig } from "@/lib/blog/config";
 import type { BreadcrumbItem } from "@/lib/blog/seo";
-import { metadataForBlogDetail, metadataForBlogList } from "@/lib/blog/seo";
+import { blogCollectionJsonLd, metadataForBlogDetail, metadataForBlogList } from "@/lib/blog/seo";
 import type { BlogListResult } from "@/lib/blog/types";
 import { canonicalUrl, type BlogRoute } from "@/lib/blog/urls";
 import { getLocaleByRouteParam, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
@@ -130,6 +130,7 @@ export async function renderBlogList(locale: LocaleKey) {
     title: text.title,
     description: text.description,
     breadcrumbs: blogBreadcrumbs(locale, text.title, { kind: "list" }),
+    structuredData: [blogCollectionJsonLd(locale, { kind: "list" }, text.title, text.description)],
     children: createElement(BlogListPage, {
       locale,
       result,
@@ -148,6 +149,7 @@ export async function renderBlogCategory(locale: LocaleKey, slug: string) {
     title: text.title,
     description: text.description,
     breadcrumbs: blogBreadcrumbs(locale, text.title, { kind: "category", slug }),
+    structuredData: [blogCollectionJsonLd(locale, { kind: "category", slug }, text.title, text.description)],
     children: createElement(BlogListPage, {
       locale,
       result,
