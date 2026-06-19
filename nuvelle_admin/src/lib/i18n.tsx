@@ -1,4 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, type ReactNode } from "react";
+import i18next from "i18next";
+import { I18nextProvider, initReactI18next, useTranslation } from "react-i18next";
 
 const STORAGE_KEY = "nuvelle-admin-language";
 
@@ -242,8 +244,6 @@ const zh: Record<keyof typeof en, string> = {
   "swipe.solid": "点赞"
 };
 
-const messages = { en, zh };
-
 export type TranslationKey = keyof typeof en;
 
 type I18nContextValue = {
@@ -254,8 +254,6 @@ type I18nContextValue = {
   formatDate: (value?: string | null) => string;
 };
 
-const I18nContext = createContext<I18nContextValue | null>(null);
-
 function readStoredLocale(): Locale {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
@@ -265,32 +263,51 @@ function readStoredLocale(): Locale {
   }
 }
 
-function interpolate(message: string, values?: Record<string, string | number>): string {
-  if (!values) {
-    return message;
-  }
-
-  return Object.entries(values).reduce((current, [key, value]) => current.split(`{${key}}`).join(String(value)), message);
-}
+void i18next.use(initReactI18next).init({
+  resources: {
+    en: { translation: en },
+    zh: { translation: zh }
+  },
+  lng: readStoredLocale(),
+  fallbackLng: "en",
+  interpolation: {
+    prefix: "{",
+    suffix: "}",
+    escapeValue: false
+  },
+  initAsync: false
+});
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(readStoredLocale);
+  const storedLocale = readStoredLocale();
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(STORAGE_KEY, locale);
-    } catch {
-      // localStorage is not always available in embedded test or preview environments.
-    }
-  }, [locale]);
+  if (i18next.language !== storedLocale) {
+    void i18next.changeLanguage(storedLocale);
+  }
 
-  const setLocale = useCallback((nextLocale: Locale) => {
-    setLocaleState(nextLocale);
-  }, []);
+  return <I18nextProvider i18n={i18next}>{children}</I18nextProvider>;
+}
+
+export function useI18n(): I18nContextValue {
+  const { i18n, t: translate } = useTranslation();
+  const locale: Locale = i18n.resolvedLanguage === "zh" || i18n.language === "zh" ? "zh" : "en";
+
+  const setLocale = useCallback(
+    (nextLocale: Locale) => {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, nextLocale);
+      } catch {
+        // localStorage is not always available in embedded test or preview environments.
+      }
+
+      void i18n.changeLanguage(nextLocale);
+    },
+    [i18n]
+  );
 
   const t = useCallback(
-    (key: TranslationKey, values?: Record<string, string | number>) => interpolate(messages[locale][key], values),
-    [locale]
+    (key: TranslationKey, values?: Record<string, string | number>) => String(translate(key, values)),
+    [translate]
   );
 
   const formatCompact = useCallback(
@@ -322,20 +339,5 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     [locale]
   );
 
-  const value = useMemo<I18nContextValue>(
-    () => ({ locale, setLocale, t, formatCompact, formatDate }),
-    [formatCompact, formatDate, locale, setLocale, t]
-  );
-
-  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
-}
-
-export function useI18n(): I18nContextValue {
-  const context = useContext(I18nContext);
-
-  if (!context) {
-    throw new Error("useI18n must be used within I18nProvider");
-  }
-
-  return context;
+  return { locale, setLocale, t, formatCompact, formatDate };
 }
