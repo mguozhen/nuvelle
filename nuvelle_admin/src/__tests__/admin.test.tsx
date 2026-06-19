@@ -467,8 +467,13 @@ describe("admin app", () => {
     await user.click(screen.getByRole("link", { name: /generated/i }));
 
     expect(await screen.findByText(/queued 5%/i)).toBeInTheDocument();
+    const card = screen.getByTestId("generated-card");
+    expect(card).toHaveClass("flex", "h-full", "flex-col");
+    expect(within(card).getByRole("heading", { name: "Demo Drama" })).toHaveClass("h-12");
     expect(screen.getByRole("progressbar", { name: /queued 5%/i })).toHaveAttribute("aria-valuenow", "5");
     expect(screen.getByDisplayValue("high tension")).toBeInTheDocument();
+    const regenButton = screen.getByRole("button", { name: /regen/i });
+    expect(regenButton.className).toContain("bg-[linear-gradient(135deg,#b25cff,#ff5fbf)]");
   });
 
   it("uses a portrait contain preview for generated vertical videos", async () => {
