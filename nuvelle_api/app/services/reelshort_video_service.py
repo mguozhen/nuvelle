@@ -50,6 +50,11 @@ class ReelShortVideoService:
         self.db.commit()
         return play_url
 
+    def detail_for_drama(self, drama: Drama) -> dict[str, Any]:
+        if not drama.rs_book_id:
+            return {}
+        return self._book_detail(drama.rs_book_id, self._book_type_for(drama))
+
     def _book_detail(self, external_id: str, book_type: str | None) -> dict[str, Any]:
         base_url = self.settings.reelshort_cps_base_url.rstrip("/")
         payload = {

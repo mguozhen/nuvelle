@@ -18,6 +18,7 @@
     "deploy:web": "ONLY=web bash deploy/google-cloud.sh",
     "deploy:admin": "ONLY=admin bash deploy/google-cloud.sh",
     "deploy:import-reelshort": "ONLY=import-reelshort bash deploy/google-cloud.sh",
+    "deploy:transfer-reelshort-videos": "ONLY=transfer-reelshort-videos bash deploy/google-cloud.sh",
     "deploy:static": "ONLY=static bash deploy/google-cloud.sh",
     "deploy:verify": "ONLY=verify bash deploy/google-cloud.sh",
     "deploy:cdn": "ONLY=cdn bash deploy/google-cloud.sh",

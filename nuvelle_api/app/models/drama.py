@@ -37,6 +37,13 @@ class Drama(TimestampMixin, Base):
     source_first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     source_last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     source_last_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    video_transfer_status: Mapped[str | None] = mapped_column(String(40), index=True)
+    video_transfer_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    video_transfer_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    video_transfer_error: Mapped[str | None] = mapped_column(Text)
+    video_transfer_total_episodes: Mapped[int | None] = mapped_column(Integer)
+    video_transfer_done_episodes: Mapped[int | None] = mapped_column(Integer)
+    video_transfer_failed_episodes: Mapped[int | None] = mapped_column(Integer)
 
 
 class DramaEpisode(TimestampMixin, Base):
@@ -53,3 +60,10 @@ class DramaEpisode(TimestampMixin, Base):
     iframe_src: Mapped[str | None] = mapped_column(Text)
     content: Mapped[str | None] = mapped_column(Text)
     source_payload_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    source_play_url: Mapped[str | None] = mapped_column(Text)
+    gcs_uri: Mapped[str | None] = mapped_column(Text)
+    video_transfer_status: Mapped[str | None] = mapped_column(String(40), index=True)
+    video_transfer_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    video_transfer_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    video_transfer_error: Mapped[str | None] = mapped_column(Text)
+    video_content_length: Mapped[int | None] = mapped_column(Integer)

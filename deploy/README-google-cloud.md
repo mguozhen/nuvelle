@@ -31,6 +31,7 @@ deployment framework:
 | `pnpm deploy:web` | Build and deploy only the CPS portal |
 | `pnpm deploy:admin` | Build and deploy only the admin dashboard |
 | `pnpm deploy:import-reelshort` | Build the API image, deploy a Cloud Run Job, and run ReelShort resource import |
+| `pnpm deploy:transfer-reelshort-videos` | Build the API image, deploy a Cloud Run Job, and transfer ReelShort episode videos into GCS |
 | `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
 | `CF_API_TOKEN=... pnpm deploy:cdn` | Create promo Cloud CDN and sync `cdn.nuvelle.ai` DNS |
@@ -123,6 +124,46 @@ python -m app.tasks.import_reelshort --limit "$IMPORT_REELSHORT_LIMIT"
 
 Use `IMPORT_REELSHORT_DRY_RUN=true` before the first production write run, then
 remove it when the JSON summary looks correct.
+
+## ReelShort Video Transfer
+
+The video transfer job refreshes ReelShort episode URLs, downloads each episode
+once, uploads the MP4 to GCS, and stores both the third-party source URL and the
+Nuvelle playback URL on `drama_episodes`.
+
+Dry-run:
+
+```bash
+TRANSFER_REELSHORT_DRY_RUN=true TRANSFER_REELSHORT_LIMIT=500 pnpm deploy:transfer-reelshort-videos
+```
+
+Write run:
+
+```bash
+TRANSFER_REELSHORT_LIMIT=500 pnpm deploy:transfer-reelshort-videos
+```
+
+Useful overrides:
+
+```bash
+TRANSFER_REELSHORT_DRAMA_ID=123
+TRANSFER_REELSHORT_START_AFTER_DRAMA_ID=1000
+TRANSFER_REELSHORT_RETRY_FAILED=true
+TRANSFER_REELSHORT_FORCE=true
+TRANSFER_REELSHORT_DELAY_SECONDS=0.2
+TRANSFER_REELSHORT_TIMEOUT=86400
+VIDEO_GCS_BUCKET=vocai-gemini-prod-nuvelle-promo-assets
+VIDEO_GCS_PREFIX=videos
+VIDEO_PUBLIC_BASE_URL=https://cdn.nuvelle.ai
+SKIP_BACKEND_BUILD=true
+```
+
+The default deployment reuses the existing promo GCS bucket. If
+`VIDEO_PUBLIC_BASE_URL` is unset, the job stores API proxy playback URLs under
+the current `nuvelle-api` service so private GCS objects can still play. Set
+`VIDEO_PUBLIC_BASE_URL=https://cdn.nuvelle.ai` after the CDN DNS and bucket read
+permissions are confirmed. The job does not transcode or generate HLS variants,
+so the first batch only stores one MP4 per source episode.
 
 ## Services
 

@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import DbSession
-from app.schemas.drama import DramaRead
+from app.schemas.drama import DramaDetailRead, DramaRead
 from app.services.drama_service import DramaService
 
 router = APIRouter()
@@ -15,3 +15,11 @@ def list_dramas(
 ) -> list[DramaRead]:
     dramas = DramaService(db).list_dramas(limit=limit, offset=offset)
     return [DramaRead.model_validate(drama) for drama in dramas]
+
+
+@router.get("/{drama_id}", response_model=DramaDetailRead)
+def get_drama(drama_id: int, db: DbSession) -> DramaDetailRead:
+    drama = DramaService(db).get_drama_detail(drama_id)
+    if drama is None:
+        raise HTTPException(status_code=404, detail="drama not found")
+    return drama

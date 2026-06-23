@@ -15,6 +15,7 @@ shopt -s inherit_errexit 2>/dev/null || true
 #   pnpm deploy:web
 #   pnpm deploy:admin
 #   pnpm deploy:import-reelshort
+#   pnpm deploy:transfer-reelshort-videos
 #   pnpm deploy:verify
 #   CF_API_TOKEN=... pnpm deploy:domain
 #   SKIP_BACKEND_BUILD=true pnpm deploy
@@ -38,6 +39,10 @@ SQL_TIER="${SQL_TIER:-db-f1-micro}"
 PROMO_GCS_BUCKET="${PROMO_GCS_BUCKET:-$PROJECT_ID-nuvelle-promo-assets}"
 PROMO_GCS_PREFIX="${PROMO_GCS_PREFIX:-promo}"
 PROMO_WORK_DIR="${PROMO_WORK_DIR:-/tmp/nuvelle_promo}"
+VIDEO_GCS_BUCKET="${VIDEO_GCS_BUCKET:-$PROMO_GCS_BUCKET}"
+VIDEO_GCS_PREFIX="${VIDEO_GCS_PREFIX:-videos}"
+VIDEO_PUBLIC_BASE_URL="${VIDEO_PUBLIC_BASE_URL:-}"
+VIDEO_TRANSFER_WORK_DIR="${VIDEO_TRANSFER_WORK_DIR:-/tmp/nuvelle_video_transfer}"
 
 DB_PASSWORD_SECRET="${DB_PASSWORD_SECRET:-nuvelle-db-password}"
 DATABASE_URL_SECRET="${DATABASE_URL_SECRET:-nuvelle-database-url}"
@@ -71,6 +76,16 @@ IMPORT_REELSHORT_DETAIL_ONLY="${IMPORT_REELSHORT_DETAIL_ONLY:-false}"
 IMPORT_REELSHORT_ALL_MATCHING="${IMPORT_REELSHORT_ALL_MATCHING:-false}"
 IMPORT_REELSHORT_DRY_RUN="${IMPORT_REELSHORT_DRY_RUN:-false}"
 IMPORT_REELSHORT_TIMEOUT="${IMPORT_REELSHORT_TIMEOUT:-3600}"
+TRANSFER_REELSHORT_JOB="${TRANSFER_REELSHORT_JOB:-nuvelle-transfer-reelshort-videos}"
+TRANSFER_REELSHORT_LIMIT="${TRANSFER_REELSHORT_LIMIT:-500}"
+TRANSFER_REELSHORT_LANGUAGE="${TRANSFER_REELSHORT_LANGUAGE:-English}"
+TRANSFER_REELSHORT_DRAMA_ID="${TRANSFER_REELSHORT_DRAMA_ID:-}"
+TRANSFER_REELSHORT_START_AFTER_DRAMA_ID="${TRANSFER_REELSHORT_START_AFTER_DRAMA_ID:-}"
+TRANSFER_REELSHORT_RETRY_FAILED="${TRANSFER_REELSHORT_RETRY_FAILED:-false}"
+TRANSFER_REELSHORT_FORCE="${TRANSFER_REELSHORT_FORCE:-false}"
+TRANSFER_REELSHORT_DRY_RUN="${TRANSFER_REELSHORT_DRY_RUN:-false}"
+TRANSFER_REELSHORT_DELAY_SECONDS="${TRANSFER_REELSHORT_DELAY_SECONDS:-0.2}"
+TRANSFER_REELSHORT_TIMEOUT="${TRANSFER_REELSHORT_TIMEOUT:-86400}"
 
 API_URL=""
 
@@ -130,6 +145,15 @@ Environment:
   IMPORT_REELSHORT_LIMIT=$IMPORT_REELSHORT_LIMIT
   IMPORT_REELSHORT_RESOURCE_ID=<optional third_party_drama_resources.id>
   IMPORT_REELSHORT_DRY_RUN=true|false
+  TRANSFER_REELSHORT_LIMIT=$TRANSFER_REELSHORT_LIMIT
+  TRANSFER_REELSHORT_LANGUAGE=$TRANSFER_REELSHORT_LANGUAGE
+  TRANSFER_REELSHORT_DRAMA_ID=<optional dramas.id>
+  TRANSFER_REELSHORT_START_AFTER_DRAMA_ID=<optional dramas.id cursor>
+  TRANSFER_REELSHORT_RETRY_FAILED=true|false
+  TRANSFER_REELSHORT_FORCE=true|false
+  TRANSFER_REELSHORT_DRY_RUN=true|false
+  TRANSFER_REELSHORT_DELAY_SECONDS=$TRANSFER_REELSHORT_DELAY_SECONDS
+  TRANSFER_REELSHORT_TIMEOUT=$TRANSFER_REELSHORT_TIMEOUT
   CF_API_TOKEN=<Cloudflare token, only for ONLY=domain|cdn>
   CDN_DOMAIN=$CDN_DOMAIN
   USE_CUSTOM_API_DOMAIN=true|false
@@ -143,6 +167,7 @@ Examples:
   pnpm deploy:web
   pnpm deploy:admin
   IMPORT_REELSHORT_DRY_RUN=true pnpm deploy:import-reelshort
+  TRANSFER_REELSHORT_DRY_RUN=true pnpm deploy:transfer-reelshort-videos
   pnpm deploy:verify
   CF_API_TOKEN=... pnpm deploy:domain
   CF_API_TOKEN=... pnpm deploy:cdn
@@ -167,7 +192,7 @@ run_mode_in() {
 
 validate_mode() {
   case "$ONLY" in
-    all | api | frontend | static | website | mobile | web | admin | import-reelshort | verify | domain | cdn)
+    all | api | frontend | static | website | mobile | web | admin | import-reelshort | transfer-reelshort-videos | verify | domain | cdn)
       ;;
     help | -h | --help)
       usage
@@ -185,11 +210,11 @@ preflight() {
   require_cmd gcloud
   require_cmd python3
 
-  if run_mode_in all api frontend static website mobile web admin import-reelshort; then
+  if run_mode_in all api frontend static website mobile web admin import-reelshort transfer-reelshort-videos; then
     require_cmd rsync
   fi
 
-  if run_mode_in all api import-reelshort; then
+  if run_mode_in all api import-reelshort transfer-reelshort-videos; then
     require_cmd openssl
   fi
 
@@ -644,7 +669,7 @@ deploy_api() {
     warn "$REELSHORT_CPS_SECRET is missing and REELSHORT_CPS_TOKEN is not set; ReelShort promo generation cannot refresh expired video URLs."
   fi
 
-  env_vars="ENVIRONMENT=production,WEB_CONCURRENCY=2,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_WORK_DIR=$PROMO_WORK_DIR,PROMO_GCS_BUCKET=$PROMO_GCS_BUCKET,PROMO_GCS_PREFIX=$PROMO_GCS_PREFIX,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=[\"*\"]"
+  env_vars="ENVIRONMENT=production,WEB_CONCURRENCY=2,PROMO_STORAGE_DIR=/workspace/nuvelle_kit/out,PROMO_WORK_DIR=$PROMO_WORK_DIR,PROMO_GCS_BUCKET=$PROMO_GCS_BUCKET,PROMO_GCS_PREFIX=$PROMO_GCS_PREFIX,VIDEO_GCS_BUCKET=$VIDEO_GCS_BUCKET,VIDEO_GCS_PREFIX=$VIDEO_GCS_PREFIX,VIDEO_PUBLIC_BASE_URL=$VIDEO_PUBLIC_BASE_URL,VIDEO_TRANSFER_WORK_DIR=$VIDEO_TRANSFER_WORK_DIR,PROMO_UPLOAD_DIR=/workspace/nuvelle_kit/_uploads,PROMO_CACHE_DIR=/workspace/nuvelle_kit/_vidcache,CORS_ORIGINS=[\"*\"]"
 
   gcloud run deploy "$API_SERVICE" \
     --project="$PROJECT_ID" \
@@ -715,6 +740,81 @@ run_reelshort_import_job() {
     --set-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
     --set-env-vars=ENVIRONMENT=production \
     --set-secrets=DATABASE_URL="$DATABASE_URL_SECRET":latest \
+    --execute-now \
+    --wait
+}
+
+reelshort_video_transfer_args() {
+  local args="-m,app.tasks.transfer_reelshort_videos,--limit,$TRANSFER_REELSHORT_LIMIT,--language,$TRANSFER_REELSHORT_LANGUAGE,--delay-seconds,$TRANSFER_REELSHORT_DELAY_SECONDS"
+
+  if [[ -n "$TRANSFER_REELSHORT_DRAMA_ID" ]]; then
+    args="$args,--drama-id,$TRANSFER_REELSHORT_DRAMA_ID"
+  fi
+
+  if [[ -n "$TRANSFER_REELSHORT_START_AFTER_DRAMA_ID" ]]; then
+    args="$args,--start-after-drama-id,$TRANSFER_REELSHORT_START_AFTER_DRAMA_ID"
+  fi
+
+  if [[ "$TRANSFER_REELSHORT_RETRY_FAILED" == "true" ]]; then
+    args="$args,--retry-failed"
+  fi
+
+  if [[ "$TRANSFER_REELSHORT_FORCE" == "true" ]]; then
+    args="$args,--force"
+  fi
+
+  if [[ "$TRANSFER_REELSHORT_DRY_RUN" == "true" ]]; then
+    args="$args,--dry-run"
+  fi
+
+  printf '%s' "$args"
+}
+
+run_reelshort_video_transfer_job() {
+  log "Run ReelShort video transfer Cloud Run Job"
+  local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$API_SERVICE:$TAG"
+  local context="$BUILD_DIR/transfer-reelshort-videos"
+
+  if [[ "${SKIP_BACKEND_BUILD:-false}" == "true" ]]; then
+    echo "Skipping $API_SERVICE image build; reusing $image" >&2
+  else
+    prepare_api_context "$context"
+    submit_cloud_build "$context" "$context/cloudbuild-api.yaml" "_IMAGE=$image"
+  fi
+
+  local secret_args=(--set-secrets=DATABASE_URL="$DATABASE_URL_SECRET":latest)
+  if secret_exists "$REELSHORT_CPS_SECRET"; then
+    secret_args+=(--set-secrets=REELSHORT_CPS_TOKEN="$REELSHORT_CPS_SECRET":latest)
+  elif [[ -n "${REELSHORT_CPS_TOKEN:-}" ]]; then
+    upsert_secret_version "$REELSHORT_CPS_SECRET" "$REELSHORT_CPS_TOKEN"
+    secret_args+=(--set-secrets=REELSHORT_CPS_TOKEN="$REELSHORT_CPS_SECRET":latest)
+  else
+    die "$REELSHORT_CPS_SECRET is missing and REELSHORT_CPS_TOKEN is not set; video transfer cannot refresh expired ReelShort URLs."
+  fi
+
+  local video_public_base_url="$VIDEO_PUBLIC_BASE_URL"
+  if [[ -z "$video_public_base_url" ]]; then
+    local resolved_api_url
+    resolved_api_url="$(service_url "$API_SERVICE")"
+    [[ -n "$resolved_api_url" ]] || die "Cannot build video playback URLs because $API_SERVICE URL is unavailable. Deploy API first or set VIDEO_PUBLIC_BASE_URL."
+    video_public_base_url="$resolved_api_url/api/v1/video-assets"
+  fi
+  local env_vars="ENVIRONMENT=production,VIDEO_GCS_BUCKET=$VIDEO_GCS_BUCKET,VIDEO_GCS_PREFIX=$VIDEO_GCS_PREFIX,VIDEO_PUBLIC_BASE_URL=$video_public_base_url,VIDEO_TRANSFER_WORK_DIR=$VIDEO_TRANSFER_WORK_DIR"
+
+  gcloud run jobs deploy "$TRANSFER_REELSHORT_JOB" \
+    --project="$PROJECT_ID" \
+    --region="$REGION" \
+    --image="$image" \
+    --command=python \
+    --args="$(reelshort_video_transfer_args)" \
+    --cpu=1 \
+    --memory=1Gi \
+    --tasks=1 \
+    --max-retries=0 \
+    --task-timeout="$TRANSFER_REELSHORT_TIMEOUT" \
+    --set-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
+    --set-env-vars="$env_vars" \
+    "${secret_args[@]}" \
     --execute-now \
     --wait
 }
@@ -812,10 +912,18 @@ deploy_website_service() {
   local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$service:$TAG"
   local context="$BUILD_DIR/website-$service"
   local secret_args=()
+  local website_api_url="${NUVELLE_API_URL:-}"
+  if [[ -z "$website_api_url" ]]; then
+    local resolved_api_url
+    resolved_api_url="$(service_url "$API_SERVICE")"
+    [[ -n "$resolved_api_url" ]] || die "Cannot deploy website playback pages because $API_SERVICE URL is unavailable. Deploy API first or set NUVELLE_API_URL."
+    website_api_url="$resolved_api_url/api/v1"
+  fi
   local env_vars=(
     "BLOGGER_API_URL=${BLOGGER_API_URL:-https://blogger-api-5qjldqffdq-uc.a.run.app}"
     "BLOGGER_SITE_SLUG=${BLOGGER_SITE_SLUG:-nuvelle}"
     "BLOGGER_LANGUAGE=${BLOGGER_LANGUAGE:-en}"
+    "NUVELLE_API_URL=$website_api_url"
     "NEXT_PUBLIC_SITE_ORIGIN=https://$DOMAIN_ROOT"
     "BLOG_PAGE_SIZE=${BLOG_PAGE_SIZE:-12}"
   )
@@ -1131,6 +1239,13 @@ main() {
   if run_mode_is import-reelshort; then
     ensure_infra
     run_reelshort_import_job
+    print_summary
+    return
+  fi
+
+  if run_mode_is transfer-reelshort-videos; then
+    ensure_infra
+    run_reelshort_video_transfer_job
     print_summary
     return
   fi
