@@ -41,7 +41,9 @@ def seed_drama(
     signal: str | None = None,
     tag: str = "Female",
     video_url: str | None = None,
+    transferred: bool = True,
 ) -> tuple[Drama, DramaEpisode]:
+    resolved_video_url = video_url or f"https://cdn.nuvelle.ai/videos/reelshort/{title}/episodes/0001.mp4"
     drama = Drama(
         title=title,
         platform=platform,
@@ -50,7 +52,7 @@ def seed_drama(
         tags=[tag],
         show_tags=[tag],
         cover_image_url="https://example.com/cover.jpg",
-        video_url=video_url,
+        video_url=resolved_video_url,
         synopsis_or_hook=f"{title} hook",
         signal=signal,
         episode_count=2,
@@ -58,6 +60,7 @@ def seed_drama(
         recent_revenue=2000,
         promoters_cnt=1000,
         platform_publish_at=datetime(2026, 6, 1, tzinfo=UTC),
+        video_transfer_status="transferred" if transferred else None,
     )
     db.add(drama)
     db.flush()
@@ -65,8 +68,10 @@ def seed_drama(
         drama_id=drama.id,
         episode_no=1,
         chapter_id=f"{title}-c1",
-        play_url=video_url or f"https://example.com/{title}.mp4",
+        play_url=resolved_video_url,
         poster_url="https://example.com/poster.jpg",
+        gcs_uri=f"gs://video-bucket/videos/reelshort/{drama.id}/episodes/0001.mp4" if transferred else None,
+        video_transfer_status="transferred" if transferred else None,
     )
     db.add(episode)
     db.commit()
@@ -92,6 +97,20 @@ def test_board_filters_by_query_language_tag_and_has_video(client: TestClient, d
     assert payload["items"][0]["has_video"] is True
     assert payload["items"][0]["recent_revenue"] == 2000
     assert payload["items"][0]["seen"] is False
+
+
+def test_board_only_returns_transferred_video_resources_by_default(client: TestClient, db: Session) -> None:
+    transferred, _ = seed_drama(db, "Transferred Drama")
+    seed_drama(db, "Expired Source Drama", transferred=False)
+    headers = auth_header(client, db, "library@example.com", "JOIN-LIBRARY")
+
+    response = client.get("/api/v1/admin/dramas?language=English", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["id"] == transferred.id
+    assert payload["items"][0]["has_video"] is True
 
 
 def test_admin_drama_filters_return_global_options(client: TestClient, db: Session) -> None:
@@ -147,6 +166,17 @@ def test_swipe_next_excludes_handled_drama_for_same_user(client: TestClient, db:
     assert response.json()["id"] == second.id
 
 
+def test_swipe_next_skips_untransferred_video_resources(client: TestClient, db: Session) -> None:
+    transferred, _ = seed_drama(db, "Transferred Swipe")
+    seed_drama(db, "Expired Swipe", transferred=False)
+    headers = auth_header(client, db, "swipe-filter@example.com", "JOIN-SWIPE-FILTER")
+
+    response = client.get("/api/v1/admin/swipe/next", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == transferred.id
+
+
 def test_swipe_next_only_returns_english_dramas(client: TestClient, db: Session) -> None:
     english, _ = seed_drama(db, "English Drama", language="English")
     seed_drama(db, "Spanish Drama", language="Spanish")
@@ -173,6 +203,27 @@ def test_swipe_events_are_user_scoped(client: TestClient, db: Session) -> None:
 
     assert response.status_code == 200
     assert response.json()["id"] == drama.id
+
+
+def test_admin_drama_detail_only_includes_transferred_episodes(client: TestClient, db: Session) -> None:
+    drama, transferred_episode = seed_drama(db, "Episode Filter")
+    db.add(
+        DramaEpisode(
+            drama_id=drama.id,
+            episode_no=2,
+            chapter_id="Episode Filter-c2",
+            play_url="https://expired.example.com/episode-2.mp4",
+            poster_url="https://example.com/poster-2.jpg",
+        )
+    )
+    db.commit()
+    headers = auth_header(client, db, "detail-filter@example.com", "JOIN-DETAIL-FILTER")
+
+    response = client.get(f"/api/v1/admin/dramas/{drama.id}", headers=headers)
+
+    assert response.status_code == 200
+    episodes = response.json()["episodes"]
+    assert [episode["id"] for episode in episodes] == [transferred_episode.id]
 
 
 def test_generated_library_returns_current_user_jobs(client: TestClient, db: Session) -> None:

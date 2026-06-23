@@ -53,6 +53,7 @@ GENERATION_STATUS_RANK = {
 }
 VISIBLE_GENERATION_STATUSES = tuple(GENERATION_STATUS_RANK)
 SWIPE_LANGUAGE = "English"
+TRANSFERRED_VIDEO_STATUS = "transferred"
 
 
 class AdminDramaService:
@@ -73,7 +74,10 @@ class AdminDramaService:
         offset: int,
     ) -> AdminDramaListResponse:
         has_video_expr = self._has_video_exists()
-        stmt = select(Drama)
+        stmt = select(Drama).where(
+            Drama.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+            has_video_expr,
+        )
         if q:
             pattern = f"%{q.strip()}%"
             stmt = stmt.where(or_(Drama.title.ilike(pattern), Drama.synopsis_or_hook.ilike(pattern)))
@@ -114,7 +118,10 @@ class AdminDramaService:
         tags: set[str] = set()
 
         for platform, language, drama_tags, show_tags in self.db.execute(
-            select(Drama.platform, Drama.language, Drama.tags, Drama.show_tags)
+            select(Drama.platform, Drama.language, Drama.tags, Drama.show_tags).where(
+                Drama.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+                self._has_video_exists(),
+            )
         ):
             self._add_string_value(platforms, platform)
             self._add_string_value(languages, language)
@@ -128,7 +135,13 @@ class AdminDramaService:
         )
 
     def get_drama(self, drama_id: int, user: AdminUser) -> AdminDramaDetail | None:
-        drama = self.db.get(Drama, drama_id)
+        drama = self.db.scalars(
+            select(Drama).where(
+                Drama.id == drama_id,
+                Drama.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+                self._has_video_exists(),
+            )
+        ).first()
         if drama is None:
             return None
         episodes = self.episodes_for(drama.id)
@@ -151,6 +164,7 @@ class AdminDramaService:
             select(Drama)
             .where(~Drama.id.in_(handled))
             .where(Drama.language == SWIPE_LANGUAGE)
+            .where(Drama.video_transfer_status == TRANSFERRED_VIDEO_STATUS)
             .where(self._has_video_exists())
             .order_by(Drama.platform_publish_at.desc().nullslast(), Drama.id.desc())
             .limit(1)
@@ -202,6 +216,7 @@ class AdminDramaService:
         stmt = (
             select(DramaEpisode)
             .where(DramaEpisode.drama_id == drama_id)
+            .where(*self._transferred_episode_filters())
             .order_by(DramaEpisode.episode_no.asc())
         )
         return list(self.db.scalars(stmt).all())
@@ -209,7 +224,7 @@ class AdminDramaService:
     def has_video(self, drama_id: int) -> bool:
         stmt = (
             select(DramaEpisode.id)
-            .where(DramaEpisode.drama_id == drama_id, DramaEpisode.play_url.is_not(None))
+            .where(DramaEpisode.drama_id == drama_id, *self._transferred_episode_filters())
             .limit(1)
         )
         return self.db.scalars(stmt).first() is not None
@@ -243,7 +258,7 @@ class AdminDramaService:
         has_video_ids = set(
             self.db.scalars(
                 select(DramaEpisode.drama_id)
-                .where(DramaEpisode.drama_id.in_(drama_ids), DramaEpisode.play_url.is_not(None))
+                .where(DramaEpisode.drama_id.in_(drama_ids), *self._transferred_episode_filters())
                 .group_by(DramaEpisode.drama_id)
             ).all()
         )
@@ -306,8 +321,16 @@ class AdminDramaService:
         return exists(
             select(DramaEpisode.id).where(
                 DramaEpisode.drama_id == Drama.id,
-                DramaEpisode.play_url.is_not(None),
+                *AdminDramaService._transferred_episode_filters(),
             )
+        )
+
+    @staticmethod
+    def _transferred_episode_filters():
+        return (
+            DramaEpisode.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+            DramaEpisode.gcs_uri.is_not(None),
+            DramaEpisode.play_url.is_not(None),
         )
 
     @staticmethod
