@@ -14,6 +14,8 @@ from app.repositories.third_party_resource_repository import ThirdPartyResourceR
 from app.schemas.admin import ReelShortSyncRequest, ReelShortSyncResponse
 
 DRAMA_GENRE_LIMIT = 255
+TRANSFERRED_STATUS = "transferred"
+PENDING_STATUS = "pending"
 
 
 class ReelShortImportService:
@@ -63,7 +65,7 @@ class ReelShortImportService:
         drama.title = str(raw.get("title") or resource.title)
         drama.platform = "ReelShort"
         drama.genre = self._genre(raw)
-        drama.cover_image_url = self._optional_str(raw.get("pic") or resource.cover_url)
+        self._set_cover_source(drama, self._optional_str(raw.get("pic") or resource.cover_url))
         self._set_detail_field(
             drama,
             "video_url",
@@ -181,6 +183,19 @@ class ReelShortImportService:
             return None
         normalized = str(value).strip()
         return normalized or None
+
+    @staticmethod
+    def _set_cover_source(drama: Drama, source_url: str | None) -> None:
+        if not source_url:
+            return
+
+        source_changed = bool(drama.source_cover_image_url and drama.source_cover_image_url != source_url)
+        drama.source_cover_image_url = source_url
+        if drama.cover_transfer_status != TRANSFERRED_STATUS or not drama.cover_image_url:
+            drama.cover_image_url = source_url
+        elif source_changed:
+            drama.cover_transfer_status = PENDING_STATUS
+            drama.cover_transfer_error = None
 
     @staticmethod
     def _optional_int(value: Any) -> int | None:

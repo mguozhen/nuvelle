@@ -24,6 +24,7 @@ class FakeVideoStore:
     def __init__(self, *, fail_sources: set[str] | None = None) -> None:
         self.fail_sources = fail_sources or set()
         self.uploads: list[tuple[str, str]] = []
+        self.asset_uploads: list[tuple[str, str]] = []
 
     def upload_episode(self, *, source_url: str, object_name: str):
         self.uploads.append((source_url, object_name))
@@ -35,18 +36,30 @@ class FakeVideoStore:
             "content_length": 30_000_000,
         }
 
+    def upload_asset(self, *, source_url: str, object_name: str):
+        self.asset_uploads.append((source_url, object_name))
+        if source_url in self.fail_sources:
+            raise RuntimeError("asset upload failed")
+        return {
+            "gcs_uri": f"gs://video-bucket/videos/{object_name}",
+            "public_url": f"https://cdn.nuvelle.ai/videos/{object_name}",
+            "content_length": 120_000,
+        }
+
 
 def seed_reelshort_drama(
     db: Session,
     *,
     language: str = "English",
     rs_book_id: str = "book-1",
+    cover_image_url: str | None = None,
 ) -> tuple[Drama, list[DramaEpisode]]:
     drama = Drama(
         title="Transfer Me",
         platform="ReelShort",
         language=language,
         rs_book_id=rs_book_id,
+        cover_image_url=cover_image_url,
         book_type="1",
         video_url="https://expired.example.com/episode-1.mp4",
         episode_count=2,
@@ -77,6 +90,7 @@ def seed_reelshort_drama(
 
 def reelshort_detail() -> dict:
     return {
+        "pic": "https://fresh.example.com/cover.jpg",
         "chapters": [
             {
                 "t_chapter_id": "1",
@@ -95,7 +109,7 @@ def reelshort_detail() -> dict:
 
 
 def test_transfer_service_refreshes_once_and_uploads_all_episodes(db: Session) -> None:
-    drama, episodes = seed_reelshort_drama(db)
+    drama, episodes = seed_reelshort_drama(db, cover_image_url="https://expired.example.com/cover.jpg")
     detail_provider = FakeDetailProvider(reelshort_detail())
     video_store = FakeVideoStore()
 
@@ -118,12 +132,21 @@ def test_transfer_service_refreshes_once_and_uploads_all_episodes(db: Session) -
         ("https://fresh.example.com/episode-1.mp4", f"reelshort/{drama.id}/episodes/0001.mp4"),
         ("https://fresh.example.com/episode-2.mp4", f"reelshort/{drama.id}/episodes/0002.mp4"),
     ]
+    assert video_store.asset_uploads == [
+        ("https://fresh.example.com/cover.jpg", f"reelshort/{drama.id}/cover.jpg"),
+    ]
     assert drama.video_transfer_status == VideoTransferStatus.transferred.value
     assert drama.video_transfer_total_episodes == 2
     assert drama.video_transfer_done_episodes == 2
     assert drama.video_transfer_failed_episodes == 0
     assert drama.video_transfer_finished_at is not None
     assert drama.video_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"
+    assert drama.source_cover_image_url == "https://fresh.example.com/cover.jpg"
+    assert drama.cover_image_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/cover.jpg"
+    assert drama.cover_gcs_uri == f"gs://video-bucket/videos/reelshort/{drama.id}/cover.jpg"
+    assert drama.cover_transfer_status == VideoTransferStatus.transferred.value
+    assert drama.cover_transfer_at is not None
+    assert drama.cover_transfer_error is None
     assert episodes[0].source_play_url == "https://fresh.example.com/episode-1.mp4"
     assert episodes[0].play_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"
     assert episodes[0].gcs_uri == f"gs://video-bucket/videos/reelshort/{drama.id}/episodes/0001.mp4"
@@ -182,8 +205,10 @@ def test_transfer_service_skips_already_transferred_dramas_unless_forced(db: Ses
     assert summary.skipped_dramas == 0
 
 
-def test_transfer_service_summarizes_already_transferred_episodes_without_refreshing_detail(db: Session) -> None:
-    drama, episodes = seed_reelshort_drama(db)
+def test_transfer_service_summarizes_already_transferred_episodes_without_refreshing_detail(
+    db: Session,
+) -> None:
+    drama, episodes = seed_reelshort_drama(db, cover_image_url="https://expired.example.com/cover.jpg")
     drama.video_transfer_status = VideoTransferStatus.partial_failed.value
     drama.video_transfer_error = "previous retry stopped"
     for episode in episodes:
@@ -213,3 +238,42 @@ def test_transfer_service_summarizes_already_transferred_episodes_without_refres
     assert drama.video_transfer_failed_episodes == 0
     assert drama.video_transfer_error is None
     assert drama.video_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"
+
+
+def test_transfer_service_backfills_cover_for_already_transferred_drama_without_refreshing_detail(
+    db: Session,
+) -> None:
+    drama, episodes = seed_reelshort_drama(db, cover_image_url="https://expired.example.com/cover.png")
+    drama.video_transfer_status = VideoTransferStatus.transferred.value
+    drama.video_transfer_finished_at = datetime(2026, 6, 23, tzinfo=UTC)
+    for episode in episodes:
+        object_name = f"reelshort/{drama.id}/episodes/{episode.episode_no:04d}.mp4"
+        episode.video_transfer_status = VideoTransferStatus.transferred.value
+        episode.gcs_uri = f"gs://video-bucket/videos/{object_name}"
+        episode.play_url = f"https://cdn.nuvelle.ai/videos/{object_name}"
+    db.add(drama)
+    db.add_all(episodes)
+    db.commit()
+
+    detail_provider = FakeDetailProvider(reelshort_detail())
+    video_store = FakeVideoStore()
+
+    summary = ReelShortVideoTransferService(
+        db,
+        detail_provider=detail_provider,
+        video_store=video_store,
+    ).run(ReelShortVideoTransferRequest(limit=1, language="English"))
+
+    db.refresh(drama)
+
+    assert summary.scanned_dramas == 1
+    assert summary.transferred_dramas == 1
+    assert detail_provider.calls == []
+    assert video_store.uploads == []
+    assert video_store.asset_uploads == [
+        ("https://expired.example.com/cover.png", f"reelshort/{drama.id}/cover.png"),
+    ]
+    assert drama.source_cover_image_url == "https://expired.example.com/cover.png"
+    assert drama.cover_image_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/cover.png"
+    assert drama.cover_gcs_uri == f"gs://video-bucket/videos/reelshort/{drama.id}/cover.png"
+    assert drama.cover_transfer_status == VideoTransferStatus.transferred.value

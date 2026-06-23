@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.drama import Drama, DramaEpisode
+from app.models.drama import Drama
 from app.repositories.drama_repository import DramaRepository
 from app.schemas.drama import DramaDetailRead, DramaEpisodeRead, DramaRead
 

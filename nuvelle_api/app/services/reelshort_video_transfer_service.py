@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import mimetypes
 import shutil
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from time import sleep as default_sleep
 from typing import Any, Protocol
 
 from pydantic import BaseModel, Field
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -19,7 +20,7 @@ from app.models.drama import Drama, DramaEpisode
 from app.services.reelshort_video_service import BROWSER_USER_AGENT, ReelShortVideoService
 
 
-class VideoTransferStatus(str, Enum):
+class VideoTransferStatus(StrEnum):
     pending = "pending"
     refreshing = "refreshing"
     transferring = "transferring"
@@ -59,6 +60,8 @@ class ReelShortDetailProvider(Protocol):
 class VideoEpisodeStore(Protocol):
     def upload_episode(self, *, source_url: str, object_name: str) -> Any: ...
 
+    def upload_asset(self, *, source_url: str, object_name: str) -> Any: ...
+
 
 @dataclass(frozen=True)
 class VideoUploadResult:
@@ -92,17 +95,40 @@ class GcsVideoEpisodeStore:
             raise RuntimeError("VIDEO_PUBLIC_BASE_URL is required for CDN-only video playback")
 
     def upload_episode(self, *, source_url: str, object_name: str) -> VideoUploadResult:
+        return self._upload(
+            source_url=source_url,
+            object_name=object_name,
+            fallback_content_type="video/mp4",
+            accept="video/mp4,video/*,*/*",
+        )
+
+    def upload_asset(self, *, source_url: str, object_name: str) -> VideoUploadResult:
+        return self._upload(
+            source_url=source_url,
+            object_name=object_name,
+            fallback_content_type="application/octet-stream",
+            accept="image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        )
+
+    def _upload(
+        self,
+        *,
+        source_url: str,
+        object_name: str,
+        fallback_content_type: str,
+        accept: str,
+    ) -> VideoUploadResult:
         if not self.bucket_name:
             raise RuntimeError("VIDEO_GCS_BUCKET or PROMO_GCS_BUCKET is required")
 
         full_object_name = self._full_object_name(object_name)
-        local_path = self._download(source_url, full_object_name)
+        local_path = self._download(source_url, full_object_name, accept=accept)
         try:
             bucket = self._bucket()
             blob = bucket.blob(full_object_name)
             blob.upload_from_filename(
                 str(local_path),
-                content_type=mimetypes.guess_type(local_path.name)[0] or "video/mp4",
+                content_type=mimetypes.guess_type(local_path.name)[0] or fallback_content_type,
             )
             content_length = local_path.stat().st_size
         finally:
@@ -114,7 +140,7 @@ class GcsVideoEpisodeStore:
             content_length=content_length,
         )
 
-    def _download(self, source_url: str, object_name: str) -> Path:
+    def _download(self, source_url: str, object_name: str, *, accept: str) -> Path:
         target_dir = self.work_dir / object_name.replace("/", "_")
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / Path(object_name).name
@@ -122,7 +148,7 @@ class GcsVideoEpisodeStore:
             source_url,
             headers={
                 "User-Agent": BROWSER_USER_AGENT,
-                "Accept": "video/mp4,video/*,*/*",
+                "Accept": accept,
             },
         )
         with urllib.request.urlopen(request, timeout=120) as response, target.open("wb") as handle:
@@ -177,8 +203,10 @@ class ReelShortVideoTransferService:
             response.transferred_episodes += int(drama.video_transfer_done_episodes or 0)
             response.failed_episodes += int(drama.video_transfer_failed_episodes or 0)
             total = int(drama.video_transfer_total_episodes or 0)
+            completed = int(drama.video_transfer_done_episodes or 0)
+            failed = int(drama.video_transfer_failed_episodes or 0)
             response.skipped_episodes += max(
-                total - int(drama.video_transfer_done_episodes or 0) - int(drama.video_transfer_failed_episodes or 0),
+                total - completed - failed,
                 0,
             )
             if not request.dry_run:
@@ -213,6 +241,16 @@ class ReelShortVideoTransferService:
                     or_(
                         Drama.video_transfer_status.is_(None),
                         Drama.video_transfer_status != VideoTransferStatus.transferred.value,
+                        and_(
+                            or_(
+                                Drama.cover_transfer_status.is_(None),
+                                Drama.cover_transfer_status != VideoTransferStatus.transferred.value,
+                            ),
+                            or_(
+                                Drama.source_cover_image_url.is_not(None),
+                                Drama.cover_image_url.is_not(None),
+                            ),
+                        ),
                     )
                 )
         stmt = stmt.order_by(Drama.id.asc()).limit(request.limit)
@@ -234,6 +272,8 @@ class ReelShortVideoTransferService:
             return VideoTransferStatus.skipped
 
         if not request.force and all(self._episode_is_transferred(episode) for episode in episodes):
+            if not request.dry_run:
+                self._transfer_cover(drama)
             first_playable = next((episode for episode in episodes if episode.play_url), None)
             if first_playable is not None:
                 drama.video_url = first_playable.play_url
@@ -276,6 +316,8 @@ class ReelShortVideoTransferService:
                 finished_at=datetime.now(UTC),
             )
             return VideoTransferStatus.failed
+
+        self._transfer_cover(drama, detail)
 
         done = 0
         failed = 0
@@ -354,6 +396,34 @@ class ReelShortVideoTransferService:
         episode.video_transfer_error = None
         return EpisodeTransferResult(VideoTransferStatus.transferred)
 
+    def _transfer_cover(self, drama: Drama, detail: dict[str, Any] | None = None) -> EpisodeTransferResult:
+        if self._cover_is_transferred(drama):
+            return EpisodeTransferResult(VideoTransferStatus.transferred)
+
+        source_url = self._cover_source_url(drama, detail)
+        if not source_url:
+            return EpisodeTransferResult(VideoTransferStatus.skipped)
+
+        drama.source_cover_image_url = source_url
+        drama.cover_transfer_status = VideoTransferStatus.transferring.value
+        drama.cover_transfer_error = None
+        object_name = self._cover_object_name(drama, source_url)
+        try:
+            upload = self.video_store.upload_asset(source_url=source_url, object_name=object_name)
+        except Exception as exc:
+            error = str(exc)
+            drama.cover_transfer_status = VideoTransferStatus.failed.value
+            drama.cover_transfer_error = error
+            drama.cover_transfer_at = datetime.now(UTC)
+            return EpisodeTransferResult(VideoTransferStatus.failed, error)
+
+        drama.cover_gcs_uri = self._upload_value(upload, "gcs_uri")
+        drama.cover_image_url = self._upload_value(upload, "public_url")
+        drama.cover_transfer_status = VideoTransferStatus.transferred.value
+        drama.cover_transfer_at = datetime.now(UTC)
+        drama.cover_transfer_error = None
+        return EpisodeTransferResult(VideoTransferStatus.transferred)
+
     def _episodes_for(self, drama_id: int) -> list[DramaEpisode]:
         stmt = (
             select(DramaEpisode)
@@ -367,12 +437,52 @@ class ReelShortVideoTransferService:
         return f"reelshort/{drama.id}/episodes/{episode.episode_no:04d}.mp4"
 
     @staticmethod
+    def _cover_object_name(drama: Drama, source_url: str) -> str:
+        suffix = Path(urllib.parse.urlparse(source_url).path).suffix.lower()
+        if suffix not in {".jpg", ".jpeg", ".png", ".webp", ".avif"}:
+            suffix = ".jpg"
+        return f"reelshort/{drama.id}/cover{suffix}"
+
+    @staticmethod
     def _episode_is_transferred(episode: DramaEpisode) -> bool:
         return bool(
             episode.video_transfer_status == VideoTransferStatus.transferred.value
             and episode.gcs_uri
             and episode.play_url
         )
+
+    @staticmethod
+    def _cover_is_transferred(drama: Drama) -> bool:
+        return bool(
+            drama.cover_transfer_status == VideoTransferStatus.transferred.value
+            and drama.cover_gcs_uri
+            and drama.cover_image_url
+        )
+
+    def _cover_source_url(self, drama: Drama, detail: dict[str, Any] | None) -> str | None:
+        candidates = []
+        if detail:
+            candidates.extend(
+                [
+                    detail.get("pic"),
+                    detail.get("cover"),
+                    detail.get("cover_url"),
+                    detail.get("cover_image_url"),
+                ]
+            )
+        candidates.extend([drama.source_cover_image_url, drama.cover_image_url])
+
+        for value in candidates:
+            source_url = self._optional_str(value)
+            if source_url and not self._is_public_asset_url(source_url):
+                return source_url
+        return None
+
+    def _is_public_asset_url(self, url: str) -> bool:
+        public_base_url = self._optional_str(getattr(self.video_store, "public_base_url", None))
+        if not public_base_url:
+            return False
+        return url.startswith(public_base_url.rstrip("/") + "/")
 
     @staticmethod
     def _mark_drama(

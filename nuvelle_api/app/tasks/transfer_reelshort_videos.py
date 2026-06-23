@@ -16,7 +16,7 @@ from app.services.reelshort_video_transfer_service import (
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Refresh ReelShort episode URLs and transfer their videos into GCS.",
+        description="Refresh ReelShort episode URLs and transfer videos and cover images into GCS.",
     )
     parser.add_argument("--limit", type=int, default=500, help="Maximum dramas to scan in this run.")
     parser.add_argument("--language", default="English", help="Drama language to transfer.")
@@ -29,7 +29,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--retry-failed", action="store_true", help="Only retry failed or partial dramas.")
     parser.add_argument("--force", action="store_true", help="Re-transfer dramas even if already completed.")
-    parser.add_argument("--dry-run", action="store_true", help="Plan without downloading or uploading videos.")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Plan without downloading or uploading videos.",
+    )
     parser.add_argument("--delay-seconds", type=float, default=0.0, help="Delay between drama transfers.")
     parser.add_argument("--pretty", action="store_true", help="Print formatted JSON output.")
     return parser.parse_args(argv)

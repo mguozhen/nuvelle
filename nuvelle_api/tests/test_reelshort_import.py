@@ -94,6 +94,7 @@ def test_reelshort_resource_imports_drama_and_episodes(client: TestClient, db: S
     assert drama.title == "My Father's Billionaire Boss Treasured Me as His Bride"
     assert drama.language == "English"
     assert drama.platform == "ReelShort"
+    assert drama.source_cover_image_url == fixture_payload()["pic"]
     assert drama.recent_revenue == 2000
     assert drama.promoters_cnt == 1000
     assert drama.platform_publish_at is not None
@@ -113,6 +114,36 @@ def test_reelshort_import_accepts_crawler_source_app_shape(client: TestClient, d
     assert response.status_code == 200
     assert response.json()["imported"] == 1
     assert db.query(Drama).filter(Drama.rs_book_id == "6a2787e89a16b83b9c05c631").count() == 1
+
+
+def test_reelshort_import_preserves_transferred_cover_url_when_source_changes(
+    client: TestClient,
+    db: Session,
+) -> None:
+    payload = fixture_payload()
+    payload["pic"] = "https://fresh.example.com/new-cover.jpg"
+    db.add(
+        Drama(
+            title="Existing",
+            platform="ReelShort",
+            rs_book_id=payload["id"],
+            cover_image_url="https://cdn.nuvelle.ai/videos/reelshort/99/cover.jpg",
+            source_cover_image_url="https://expired.example.com/old-cover.jpg",
+            cover_gcs_uri="gs://video-bucket/videos/reelshort/99/cover.jpg",
+            cover_transfer_status="transferred",
+        )
+    )
+    db.commit()
+    seed_resource(db, payload, source="reelshort_cps", source_app="reelshort")
+
+    response = client.post("/api/v1/admin/imports/reelshort/sync", headers=auth_header(client, db))
+
+    drama = db.query(Drama).filter(Drama.rs_book_id == payload["id"]).one()
+    assert response.status_code == 200
+    assert response.json()["updated"] == 1
+    assert drama.source_cover_image_url == "https://fresh.example.com/new-cover.jpg"
+    assert drama.cover_image_url == "https://cdn.nuvelle.ai/videos/reelshort/99/cover.jpg"
+    assert drama.cover_transfer_status == "pending"
 
 
 def test_reelshort_import_prioritizes_pending_resources(client: TestClient, db: Session) -> None:

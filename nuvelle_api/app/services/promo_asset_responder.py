@@ -11,7 +11,13 @@ class PromoAssetResponder:
     def __init__(self, asset_store: PromoAssetStore) -> None:
         self.asset_store = asset_store
 
-    def response_for(self, location: str, filename: str, range_header: str | None = None, download: bool = False) -> Response:
+    def response_for(
+        self,
+        location: str,
+        filename: str,
+        range_header: str | None = None,
+        download: bool = False,
+    ) -> Response:
         if filename not in PROMO_ASSET_NAMES:
             raise HTTPException(status_code=404, detail="asset not found")
 

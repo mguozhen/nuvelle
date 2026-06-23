@@ -31,7 +31,7 @@ deployment framework:
 | `pnpm deploy:web` | Build and deploy only the CPS portal |
 | `pnpm deploy:admin` | Build and deploy only the admin dashboard |
 | `pnpm deploy:import-reelshort` | Build the API image, deploy a Cloud Run Job, and run ReelShort resource import |
-| `pnpm deploy:transfer-reelshort-videos` | Build the API image, deploy a Cloud Run Job, and transfer ReelShort episode videos into GCS |
+| `pnpm deploy:transfer-reelshort-videos` | Build the API image, deploy a Cloud Run Job, and transfer ReelShort episode videos and covers into GCS |
 | `pnpm deploy:rewrite-video-play-urls` | Build the API image, deploy a Cloud Run Job, and rewrite transferred playback URLs from `gcs_uri` |
 | `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
