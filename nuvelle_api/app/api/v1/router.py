@@ -1,11 +1,10 @@
 from fastapi import APIRouter
 
-from app.api.v1.routes import admin, auth, dramas, health, promo, video_assets
+from app.api.v1.routes import admin, auth, dramas, health, promo
 
 router = APIRouter()
 router.include_router(health.router, tags=["health"])
 router.include_router(auth.router, prefix="/auth", tags=["auth"])
 router.include_router(admin.router, prefix="/admin", tags=["admin"])
 router.include_router(dramas.router, prefix="/dramas", tags=["dramas"])
-router.include_router(video_assets.router, tags=["video-assets"])
 router.include_router(promo.router, tags=["promo"])

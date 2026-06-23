@@ -16,6 +16,7 @@ shopt -s inherit_errexit 2>/dev/null || true
 #   pnpm deploy:admin
 #   pnpm deploy:import-reelshort
 #   pnpm deploy:transfer-reelshort-videos
+#   pnpm deploy:rewrite-video-play-urls
 #   pnpm deploy:verify
 #   CF_API_TOKEN=... pnpm deploy:domain
 #   SKIP_BACKEND_BUILD=true pnpm deploy
@@ -52,6 +53,7 @@ BLOGGER_ACCESS_KEY_SECRET="${BLOGGER_ACCESS_KEY_SECRET:-nuvelle-blogger-access-k
 
 DOMAIN_ROOT="${DOMAIN_ROOT:-nuvelle.ai}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.$DOMAIN_ROOT}"
+VIDEO_PUBLIC_BASE_URL="${VIDEO_PUBLIC_BASE_URL:-https://$CDN_DOMAIN}"
 GOOGLE_SITE_VERIFICATION_TXT="${GOOGLE_SITE_VERIFICATION_TXT:-google-site-verification=5VahbGzMPJdrTqND3LmWmOpXWhEuuC4ZkYMD4cGfpm8}"
 USE_CUSTOM_API_DOMAIN="${USE_CUSTOM_API_DOMAIN:-false}"
 PROMO_CDN_PUBLIC_READ="${PROMO_CDN_PUBLIC_READ:-true}"
@@ -86,6 +88,14 @@ TRANSFER_REELSHORT_FORCE="${TRANSFER_REELSHORT_FORCE:-false}"
 TRANSFER_REELSHORT_DRY_RUN="${TRANSFER_REELSHORT_DRY_RUN:-false}"
 TRANSFER_REELSHORT_DELAY_SECONDS="${TRANSFER_REELSHORT_DELAY_SECONDS:-0.2}"
 TRANSFER_REELSHORT_TIMEOUT="${TRANSFER_REELSHORT_TIMEOUT:-86400}"
+REWRITE_VIDEO_PLAY_URLS_JOB="${REWRITE_VIDEO_PLAY_URLS_JOB:-nuvelle-rewrite-video-play-urls}"
+REWRITE_VIDEO_PLAY_URLS_LIMIT="${REWRITE_VIDEO_PLAY_URLS_LIMIT:-500}"
+REWRITE_VIDEO_PLAY_URLS_PLATFORM="${REWRITE_VIDEO_PLAY_URLS_PLATFORM:-reelshort}"
+REWRITE_VIDEO_PLAY_URLS_LANGUAGE="${REWRITE_VIDEO_PLAY_URLS_LANGUAGE:-English}"
+REWRITE_VIDEO_PLAY_URLS_DRAMA_ID="${REWRITE_VIDEO_PLAY_URLS_DRAMA_ID:-}"
+REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID="${REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID:-}"
+REWRITE_VIDEO_PLAY_URLS_DRY_RUN="${REWRITE_VIDEO_PLAY_URLS_DRY_RUN:-true}"
+REWRITE_VIDEO_PLAY_URLS_TIMEOUT="${REWRITE_VIDEO_PLAY_URLS_TIMEOUT:-3600}"
 
 API_URL=""
 
@@ -136,7 +146,7 @@ Usage:
   pnpm deploy
 
 Environment:
-  ONLY=all|api|frontend|static|website|mobile|web|admin|import-reelshort|verify|domain|cdn
+  ONLY=all|api|frontend|static|website|mobile|web|admin|import-reelshort|transfer-reelshort-videos|rewrite-video-play-urls|verify|domain|cdn
   PROJECT_ID=$PROJECT_ID
   REGION=$REGION
   REPOSITORY=$REPOSITORY
@@ -154,6 +164,12 @@ Environment:
   TRANSFER_REELSHORT_DRY_RUN=true|false
   TRANSFER_REELSHORT_DELAY_SECONDS=$TRANSFER_REELSHORT_DELAY_SECONDS
   TRANSFER_REELSHORT_TIMEOUT=$TRANSFER_REELSHORT_TIMEOUT
+  REWRITE_VIDEO_PLAY_URLS_LIMIT=$REWRITE_VIDEO_PLAY_URLS_LIMIT
+  REWRITE_VIDEO_PLAY_URLS_PLATFORM=$REWRITE_VIDEO_PLAY_URLS_PLATFORM
+  REWRITE_VIDEO_PLAY_URLS_LANGUAGE=$REWRITE_VIDEO_PLAY_URLS_LANGUAGE
+  REWRITE_VIDEO_PLAY_URLS_DRAMA_ID=<optional dramas.id>
+  REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID=<optional dramas.id cursor>
+  REWRITE_VIDEO_PLAY_URLS_DRY_RUN=true|false
   CF_API_TOKEN=<Cloudflare token, only for ONLY=domain|cdn>
   CDN_DOMAIN=$CDN_DOMAIN
   USE_CUSTOM_API_DOMAIN=true|false
@@ -168,6 +184,7 @@ Examples:
   pnpm deploy:admin
   IMPORT_REELSHORT_DRY_RUN=true pnpm deploy:import-reelshort
   TRANSFER_REELSHORT_DRY_RUN=true pnpm deploy:transfer-reelshort-videos
+  REWRITE_VIDEO_PLAY_URLS_DRY_RUN=false pnpm deploy:rewrite-video-play-urls
   pnpm deploy:verify
   CF_API_TOKEN=... pnpm deploy:domain
   CF_API_TOKEN=... pnpm deploy:cdn
@@ -192,7 +209,7 @@ run_mode_in() {
 
 validate_mode() {
   case "$ONLY" in
-    all | api | frontend | static | website | mobile | web | admin | import-reelshort | transfer-reelshort-videos | verify | domain | cdn)
+    all | api | frontend | static | website | mobile | web | admin | import-reelshort | transfer-reelshort-videos | rewrite-video-play-urls | verify | domain | cdn)
       ;;
     help | -h | --help)
       usage
@@ -210,11 +227,11 @@ preflight() {
   require_cmd gcloud
   require_cmd python3
 
-  if run_mode_in all api frontend static website mobile web admin import-reelshort transfer-reelshort-videos; then
+  if run_mode_in all api frontend static website mobile web admin import-reelshort transfer-reelshort-videos rewrite-video-play-urls; then
     require_cmd rsync
   fi
 
-  if run_mode_in all api import-reelshort transfer-reelshort-videos; then
+  if run_mode_in all api import-reelshort transfer-reelshort-videos rewrite-video-play-urls; then
     require_cmd openssl
   fi
 
@@ -793,12 +810,7 @@ run_reelshort_video_transfer_job() {
   fi
 
   local video_public_base_url="$VIDEO_PUBLIC_BASE_URL"
-  if [[ -z "$video_public_base_url" ]]; then
-    local resolved_api_url
-    resolved_api_url="$(service_url "$API_SERVICE")"
-    [[ -n "$resolved_api_url" ]] || die "Cannot build video playback URLs because $API_SERVICE URL is unavailable. Deploy API first or set VIDEO_PUBLIC_BASE_URL."
-    video_public_base_url="$resolved_api_url/api/v1/video-assets"
-  fi
+  [[ -n "$video_public_base_url" ]] || die "VIDEO_PUBLIC_BASE_URL is required for CDN-only video playback."
   local env_vars="ENVIRONMENT=production,VIDEO_GCS_BUCKET=$VIDEO_GCS_BUCKET,VIDEO_GCS_PREFIX=$VIDEO_GCS_PREFIX,VIDEO_PUBLIC_BASE_URL=$video_public_base_url,VIDEO_TRANSFER_WORK_DIR=$VIDEO_TRANSFER_WORK_DIR"
 
   gcloud run jobs deploy "$TRANSFER_REELSHORT_JOB" \
@@ -815,6 +827,58 @@ run_reelshort_video_transfer_job() {
     --set-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
     --set-env-vars="$env_vars" \
     "${secret_args[@]}" \
+    --execute-now \
+    --wait
+}
+
+rewrite_video_play_urls_args() {
+  local args="--limit,$REWRITE_VIDEO_PLAY_URLS_LIMIT,--platform,$REWRITE_VIDEO_PLAY_URLS_PLATFORM,--language,$REWRITE_VIDEO_PLAY_URLS_LANGUAGE,--public-base-url,$VIDEO_PUBLIC_BASE_URL,--pretty"
+
+  if [[ -n "$REWRITE_VIDEO_PLAY_URLS_DRAMA_ID" ]]; then
+    args="$args,--drama-id,$REWRITE_VIDEO_PLAY_URLS_DRAMA_ID"
+  fi
+
+  if [[ -n "$REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID" ]]; then
+    args="$args,--start-after-drama-id,$REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID"
+  fi
+
+  if [[ "$REWRITE_VIDEO_PLAY_URLS_DRY_RUN" == "false" ]]; then
+    args="$args,--write"
+  else
+    args="$args,--dry-run"
+  fi
+
+  printf '%s' "$args"
+}
+
+run_video_play_url_rewrite_job() {
+  log "Run video playback URL rewrite Cloud Run Job"
+  local image="$REGION-docker.pkg.dev/$PROJECT_ID/$REPOSITORY/$API_SERVICE:$TAG"
+  local context="$BUILD_DIR/rewrite-video-play-urls"
+
+  [[ -n "$VIDEO_PUBLIC_BASE_URL" ]] || die "VIDEO_PUBLIC_BASE_URL is required for CDN-only video playback."
+
+  if [[ "${SKIP_BACKEND_BUILD:-false}" == "true" ]]; then
+    echo "Skipping $API_SERVICE image build; reusing $image" >&2
+  else
+    prepare_api_context "$context"
+    submit_cloud_build "$context" "$context/cloudbuild-api.yaml" "_IMAGE=$image"
+  fi
+
+  gcloud run jobs deploy "$REWRITE_VIDEO_PLAY_URLS_JOB" \
+    --project="$PROJECT_ID" \
+    --region="$REGION" \
+    --image="$image" \
+    --command=python \
+    --args="$(rewrite_video_play_urls_args)" \
+    --cpu=1 \
+    --memory=512Mi \
+    --tasks=1 \
+    --max-retries=0 \
+    --task-timeout="$REWRITE_VIDEO_PLAY_URLS_TIMEOUT" \
+    --set-cloudsql-instances="$PROJECT_ID:$REGION:$SQL_INSTANCE" \
+    --set-env-vars="ENVIRONMENT=production,VIDEO_PUBLIC_BASE_URL=$VIDEO_PUBLIC_BASE_URL" \
+    --set-secrets=DATABASE_URL="$DATABASE_URL_SECRET":latest \
     --execute-now \
     --wait
 }
@@ -1246,6 +1310,13 @@ main() {
   if run_mode_is transfer-reelshort-videos; then
     ensure_infra
     run_reelshort_video_transfer_job
+    print_summary
+    return
+  fi
+
+  if run_mode_is rewrite-video-play-urls; then
+    ensure_infra
+    run_video_play_url_rewrite_job
     print_summary
     return
   fi

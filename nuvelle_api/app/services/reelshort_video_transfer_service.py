@@ -88,6 +88,8 @@ class GcsVideoEpisodeStore:
         self.prefix = self.settings.video_gcs_prefix.strip("/")
         self.public_base_url = self.settings.video_public_base_url.strip().rstrip("/")
         self.work_dir = Path(self.settings.video_transfer_work_dir)
+        if not self.public_base_url:
+            raise RuntimeError("VIDEO_PUBLIC_BASE_URL is required for CDN-only video playback")
 
     def upload_episode(self, *, source_url: str, object_name: str) -> VideoUploadResult:
         if not self.bucket_name:
@@ -137,9 +139,7 @@ class GcsVideoEpisodeStore:
         return f"{self.prefix}/{object_name}" if self.prefix else object_name
 
     def _public_url(self, object_name: str) -> str:
-        if self.public_base_url:
-            return f"{self.public_base_url}/{object_name}"
-        return f"https://storage.googleapis.com/{self.bucket_name}/{object_name}"
+        return f"{self.public_base_url}/{object_name}"
 
 
 class ReelShortVideoTransferService:

@@ -30,8 +30,8 @@ class FakeVideoStore:
         if source_url in self.fail_sources:
             raise RuntimeError("download failed")
         return {
-            "gcs_uri": f"gs://video-bucket/{object_name}",
-            "public_url": f"https://cdn.nuvelle.ai/{object_name}",
+            "gcs_uri": f"gs://video-bucket/videos/{object_name}",
+            "public_url": f"https://cdn.nuvelle.ai/videos/{object_name}",
             "content_length": 30_000_000,
         }
 
@@ -123,10 +123,10 @@ def test_transfer_service_refreshes_once_and_uploads_all_episodes(db: Session) -
     assert drama.video_transfer_done_episodes == 2
     assert drama.video_transfer_failed_episodes == 0
     assert drama.video_transfer_finished_at is not None
-    assert drama.video_url == f"https://cdn.nuvelle.ai/reelshort/{drama.id}/episodes/0001.mp4"
+    assert drama.video_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"
     assert episodes[0].source_play_url == "https://fresh.example.com/episode-1.mp4"
-    assert episodes[0].play_url == f"https://cdn.nuvelle.ai/reelshort/{drama.id}/episodes/0001.mp4"
-    assert episodes[0].gcs_uri == f"gs://video-bucket/reelshort/{drama.id}/episodes/0001.mp4"
+    assert episodes[0].play_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"
+    assert episodes[0].gcs_uri == f"gs://video-bucket/videos/reelshort/{drama.id}/episodes/0001.mp4"
     assert episodes[0].video_transfer_status == VideoTransferStatus.transferred.value
     assert episodes[0].video_content_length == 30_000_000
     assert episodes[0].video_transfer_at is not None
@@ -189,8 +189,8 @@ def test_transfer_service_summarizes_already_transferred_episodes_without_refres
     for episode in episodes:
         object_name = f"reelshort/{drama.id}/episodes/{episode.episode_no:04d}.mp4"
         episode.video_transfer_status = VideoTransferStatus.transferred.value
-        episode.gcs_uri = f"gs://video-bucket/{object_name}"
-        episode.play_url = f"https://cdn.nuvelle.ai/{object_name}"
+        episode.gcs_uri = f"gs://video-bucket/videos/{object_name}"
+        episode.play_url = f"https://cdn.nuvelle.ai/videos/{object_name}"
     db.add(drama)
     db.add_all(episodes)
     db.commit()
@@ -212,4 +212,4 @@ def test_transfer_service_summarizes_already_transferred_episodes_without_refres
     assert drama.video_transfer_done_episodes == 2
     assert drama.video_transfer_failed_episodes == 0
     assert drama.video_transfer_error is None
-    assert drama.video_url == f"https://cdn.nuvelle.ai/reelshort/{drama.id}/episodes/0001.mp4"
+    assert drama.video_url == f"https://cdn.nuvelle.ai/videos/reelshort/{drama.id}/episodes/0001.mp4"

@@ -32,6 +32,7 @@ deployment framework:
 | `pnpm deploy:admin` | Build and deploy only the admin dashboard |
 | `pnpm deploy:import-reelshort` | Build the API image, deploy a Cloud Run Job, and run ReelShort resource import |
 | `pnpm deploy:transfer-reelshort-videos` | Build the API image, deploy a Cloud Run Job, and transfer ReelShort episode videos into GCS |
+| `pnpm deploy:rewrite-video-play-urls` | Build the API image, deploy a Cloud Run Job, and rewrite transferred playback URLs from `gcs_uri` |
 | `pnpm deploy:static` | Deploy existing website `.next` and other frontend `dist` folders without rebuilding frontends |
 | `pnpm deploy:verify` | Verify Cloud Run URLs and API health |
 | `CF_API_TOKEN=... pnpm deploy:cdn` | Create promo Cloud CDN and sync `cdn.nuvelle.ai` DNS |
@@ -158,12 +159,40 @@ VIDEO_PUBLIC_BASE_URL=https://cdn.nuvelle.ai
 SKIP_BACKEND_BUILD=true
 ```
 
-The default deployment reuses the existing promo GCS bucket. If
-`VIDEO_PUBLIC_BASE_URL` is unset, the job stores API proxy playback URLs under
-the current `nuvelle-api` service so private GCS objects can still play. Set
-`VIDEO_PUBLIC_BASE_URL=https://cdn.nuvelle.ai` after the CDN DNS and bucket read
-permissions are confirmed. The job does not transcode or generate HLS variants,
-so the first batch only stores one MP4 per source episode.
+The default deployment reuses the existing promo GCS bucket and stores CDN
+playback URLs under `https://cdn.nuvelle.ai`. `VIDEO_PUBLIC_BASE_URL` is
+required for video transfer; do not use the API service as a playback fallback.
+Confirm CDN DNS and bucket read permissions before rewriting production
+`play_url` values. The job does not transcode or generate HLS variants, so the
+first batch only stores one MP4 per source episode.
+
+## Video Playback URL Rewrite
+
+When CDN settings change, rewrite transferred episode playback URLs from the
+stored `gcs_uri` instead of string-replacing an old domain. The job defaults to a
+dry run:
+
+```bash
+pnpm deploy:rewrite-video-play-urls
+```
+
+Write production changes only after CDN returns playable MP4 responses:
+
+```bash
+REWRITE_VIDEO_PLAY_URLS_DRY_RUN=false pnpm deploy:rewrite-video-play-urls
+```
+
+Useful overrides:
+
+```bash
+REWRITE_VIDEO_PLAY_URLS_LIMIT=500
+REWRITE_VIDEO_PLAY_URLS_PLATFORM=reelshort
+REWRITE_VIDEO_PLAY_URLS_LANGUAGE=English
+REWRITE_VIDEO_PLAY_URLS_DRAMA_ID=21159
+REWRITE_VIDEO_PLAY_URLS_START_AFTER_DRAMA_ID=21655
+VIDEO_PUBLIC_BASE_URL=https://cdn.nuvelle.ai
+SKIP_BACKEND_BUILD=true
+```
 
 ## Services
 
