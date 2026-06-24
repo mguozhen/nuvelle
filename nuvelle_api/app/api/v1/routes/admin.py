@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import RedirectResponse
 
 from app.api.deps import AdminOnlyUser, CurrentUser, DbSession
 from app.schemas.admin import (
@@ -17,6 +18,7 @@ from app.services.admin_drama_service import AdminDramaService
 from app.services.generated_service import GeneratedService
 from app.services.reelshort_import_service import ReelShortImportService
 from app.services.user_event_service import UserEventService
+from app.services.video_download_service import VideoDownloadService
 
 router = APIRouter()
 
@@ -67,6 +69,17 @@ def get_admin_drama(drama_id: int, db: DbSession, user: CurrentUser) -> AdminDra
     if drama is None:
         raise HTTPException(status_code=404, detail="drama not found")
     return drama
+
+
+@router.get("/dramas/{drama_id}/episodes/{episode_id}/download", response_model=None)
+def download_admin_episode(
+    drama_id: int,
+    episode_id: int,
+    db: DbSession,
+    user: CurrentUser,
+) -> RedirectResponse:
+    url = VideoDownloadService(db).episode_download_url(user, drama_id, episode_id)
+    return RedirectResponse(url, status_code=302)
 
 
 @router.get("/swipe/next", response_model=AdminDramaRead)

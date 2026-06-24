@@ -23,6 +23,7 @@ export type BoardFilters = {
 };
 
 type BoardViewProps = {
+  assetBaseUrl: string;
   dramas: DramaRecord[];
   filterOptions?: AdminDramaFilterOptions;
   filters: BoardFilters;
@@ -86,6 +87,7 @@ function BoardSkeletonGrid() {
 }
 
 export function BoardView({
+  assetBaseUrl,
   dramas,
   filterOptions = emptyFilterOptions,
   filters,
@@ -268,6 +270,7 @@ export function BoardView({
         />
       ) : null}
       <DramaModal
+        assetBaseUrl={assetBaseUrl}
         drama={selectedDrama}
         duration={duration}
         onGenerate={onGenerate}

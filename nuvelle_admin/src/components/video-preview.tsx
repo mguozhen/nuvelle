@@ -16,7 +16,7 @@ type VideoPreviewProps = {
   url?: string | null;
 };
 
-function playSilently(video: HTMLVideoElement) {
+function requestPlayback(video: HTMLVideoElement) {
   try {
     const playResult = video.play();
     if (playResult && typeof playResult.catch === "function") {
@@ -33,7 +33,7 @@ export function VideoPreview({
   className,
   controls = true,
   embedUrl,
-  muted = true,
+  muted = false,
   playRequestKey = 0,
   poster,
   title,
@@ -78,7 +78,7 @@ export function VideoPreview({
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (autoPlay) {
-          playSilently(video);
+          requestPlayback(video);
         }
       });
       hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -90,7 +90,7 @@ export function VideoPreview({
       video.src = url;
       video.load();
       if (autoPlay) {
-        playSilently(video);
+        requestPlayback(video);
       }
     }
 
@@ -111,7 +111,7 @@ export function VideoPreview({
       return;
     }
 
-    playSilently(video);
+    requestPlayback(video);
   }, [playRequestKey, shouldUseEmbed, url]);
 
   return (

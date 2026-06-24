@@ -1,5 +1,5 @@
-from fastapi import APIRouter, BackgroundTasks, Header, Query
-from fastapi.responses import Response
+from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
+from fastapi.responses import RedirectResponse, Response
 
 from app.api.deps import DbSession, OptionalCurrentUser
 from app.schemas.promo import (
@@ -41,6 +41,13 @@ def get_job_file(
     download: bool = Query(default=False),
 ) -> Response:
     return PromoService(db).asset_response(job_id, filename, range_header, download)
+
+
+@router.get("/promo/jobs/{job_id}/files/{filename}/download", response_model=None)
+def download_job_file(job_id: str, filename: str, request: Request, db: DbSession) -> RedirectResponse:
+    fallback_url = f"{request.url_for('get_job_file', job_id=job_id, filename=filename)}?download=1"
+    url = PromoService(db).asset_download_url(job_id, filename, fallback_url)
+    return RedirectResponse(url, status_code=302)
 
 
 @router.post("/promo/batches", response_model=PromoBatchCreateResponse)

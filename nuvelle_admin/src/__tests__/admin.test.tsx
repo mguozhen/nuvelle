@@ -363,6 +363,7 @@ describe("admin app", () => {
 
     const video = await screen.findByLabelText("Demo Drama video");
     await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://cdn.example/ep1.mp4"));
+    expect((video as HTMLVideoElement).muted).toBe(false);
 
     fireEvent.wheel(screen.getByTestId("swipe-feed"), { deltaY: 180 });
 
@@ -414,9 +415,15 @@ describe("admin app", () => {
     expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
     expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
+    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download"
+    );
     expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("download");
-    expect(screen.getByRole("link", { name: /download ep 2/i })).toHaveAttribute("href", "https://cdn.example/ep2.mp4");
+    expect(screen.getByRole("link", { name: /download ep 2/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/admin/dramas/1/episodes/11/download"
+    );
     expect(screen.queryByText("https://cdn.example/ep1.mp4")).not.toBeInTheDocument();
     expect(screen.queryByText("https://cdn.example/ep2.mp4")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
@@ -518,11 +525,56 @@ describe("admin app", () => {
     expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
     expect(screen.getByRole("link", { name: /teaser/i })).toHaveAttribute(
       "href",
-      "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4?download=1"
+      "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4/download"
     );
     expect(screen.getByRole("link", { name: /cover/i })).toHaveAttribute(
       "href",
       "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/cover.jpg?download=1"
+    );
+  });
+
+  it("downloads generated videos through the API route even when preview URLs are absolute", async () => {
+    const user = userEvent.setup();
+    installFetchMock({
+      generatedResponse: () =>
+        json({
+          items: [
+            {
+              id: "job-cdn",
+              job_id: "job-cdn",
+              status: "done",
+              progress: 100,
+              title: "Demo Drama",
+              episode: 1,
+              duration: 20,
+              source_url: "https://cdn.example/ep1.mp4",
+              prompt: "high tension",
+              files: {
+                teaser: "https://cdn.nuvelle.ai/promo/jobs/job-cdn/files/teaser.mp4",
+                cover: "https://cdn.nuvelle.ai/promo/jobs/job-cdn/files/cover.jpg"
+              },
+              drama: { id: 1, title: "Demo Drama" },
+              episode_ref: { id: 10, episode_no: 1 },
+              created_at: "2026-06-18T00:00:00Z"
+            }
+          ],
+          total: 1
+        })
+    });
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("link", { name: /generated/i }));
+
+    const video = await screen.findByLabelText("Demo Drama generated video");
+    expect(video).toHaveAttribute("src", "https://cdn.nuvelle.ai/promo/jobs/job-cdn/files/teaser.mp4");
+    expect(screen.getByRole("link", { name: /teaser/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/promo/jobs/job-cdn/files/teaser.mp4/download"
+    );
+    expect(screen.getByRole("link", { name: /cover/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/promo/jobs/job-cdn/files/cover.jpg?download=1"
     );
   });
 
@@ -558,7 +610,10 @@ describe("admin app", () => {
     await waitFor(() => expect(screen.getByText("Source tags")).toBeInTheDocument());
     expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Generate$/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("href", "https://cdn.example/ep1.mp4");
+    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute(
+      "href",
+      "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download"
+    );
     expect(within(screen.getByRole("button", { name: /play ep 1/i })).getByText(/Generated|Queued 5%/)).toBeInTheDocument();
     expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate all available episodes/i })).toBeInTheDocument();

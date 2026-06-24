@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     video_gcs_prefix: str = "videos"
     video_public_base_url: str = ""
     video_transfer_work_dir: str = "/tmp/nuvelle_video_transfer"
+    signed_download_url_ttl_seconds: int = 600
     promo_upload_dir: str = "../nuvelle_kit/_uploads"
     promo_cache_dir: str = "../nuvelle_kit/_vidcache"
     reelshort_cps_token: str = ""

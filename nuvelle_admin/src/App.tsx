@@ -623,6 +623,7 @@ function AdminApp() {
           path="/board"
           element={
             <BoardView
+              assetBaseUrl={backendUrl}
               dramas={dramas}
               filterOptions={boardFilterOptions}
               filters={boardFilters}

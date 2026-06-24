@@ -162,6 +162,30 @@ class PromoService:
             raise HTTPException(status_code=404, detail="job not found")
         return self.asset_responder.response_for(job.output_dir, filename, range_header, download)
 
+    def asset_download_url(
+        self,
+        job_id: str,
+        filename: str,
+        fallback_url: str | None = None,
+    ) -> str:
+        if filename not in PROMO_ASSET_NAMES:
+            raise HTTPException(status_code=404, detail="asset not found")
+        job = self.repository.get(job_id)
+        if job is None or not job.output_dir:
+            raise HTTPException(status_code=404, detail="job not found")
+
+        url = self.asset_store.signed_download_url(
+            job.output_dir,
+            filename,
+            download_filename=filename,
+            expires_in=self.settings.signed_download_url_ttl_seconds,
+        )
+        if url:
+            return url
+        if fallback_url:
+            return fallback_url
+        raise HTTPException(status_code=409, detail="signed download URL is not available for this asset")
+
     def asset_response_by_slug(
         self,
         slug: str,

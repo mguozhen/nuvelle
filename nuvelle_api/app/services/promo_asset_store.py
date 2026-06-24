@@ -45,3 +45,18 @@ class PromoAssetStore:
 
     def local_asset_path(self, location: str, filename: str) -> Path | None:
         return self.storage.local_path(location, filename)
+
+    def signed_download_url(
+        self,
+        location: str,
+        filename: str,
+        *,
+        download_filename: str,
+        expires_in: int,
+    ) -> str | None:
+        return self.storage.signed_download_url(
+            location,
+            filename,
+            download_filename=download_filename,
+            expires_in=expires_in,
+        )

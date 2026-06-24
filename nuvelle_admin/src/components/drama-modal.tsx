@@ -16,6 +16,7 @@ import { nuvelleScore } from "@/lib/scoring";
 import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
 type DramaModalProps = {
+  assetBaseUrl: string;
   drama: DramaRecord | null;
   duration: number;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
@@ -35,7 +36,22 @@ type EpisodeOption = {
   generationProgress?: number;
 };
 
-export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
+function assetUrl(baseUrl: string, value: string): string {
+  return `${baseUrl}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
+function episodeDownloadUrl(baseUrl: string, dramaId: string | number, episodeId: string | number | undefined): string | undefined {
+  if (episodeId === undefined) {
+    return undefined;
+  }
+
+  return assetUrl(
+    baseUrl,
+    `/admin/dramas/${encodeURIComponent(String(dramaId))}/episodes/${encodeURIComponent(String(episodeId))}/download`,
+  );
+}
+
+export function DramaModal({ assetBaseUrl, drama, duration, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [playRequestKey, setPlayRequestKey] = useState(0);
   const [prompt, setPrompt] = useState("");
@@ -219,6 +235,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
                         generation_progress: episode.generationProgress
                       });
                       const isPlayable = Boolean(episode.url || episode.iframeSrc);
+                      const downloadHref = episodeDownloadUrl(assetBaseUrl, drama.id, episode.id) || episode.url;
 
                       return (
                         <div
@@ -265,7 +282,7 @@ export function DramaModal({ drama, duration, onGenerate, onGenerateBatch, getGe
                                 <a
                                   aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
                                   download
-                                  href={episode.url}
+                                  href={downloadHref}
                                   rel="noreferrer"
                                   target="_blank"
                                   onClick={(event) => event.stopPropagation()}

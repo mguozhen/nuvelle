@@ -37,6 +37,27 @@ function downloadUrl(value?: string): string | undefined {
   return url.toString();
 }
 
+function videoDownloadUrl(baseUrl: string, previewUrl?: string, jobId?: string): string | undefined {
+  if (!previewUrl || !jobId) {
+    return undefined;
+  }
+
+  return assetUrl(baseUrl, `/promo/jobs/${encodeURIComponent(jobId)}/files/teaser.mp4/download`);
+}
+
+function generatedAssetDownloadUrl(
+  baseUrl: string,
+  previewUrl?: string,
+  jobId?: string,
+  filename?: "cover.jpg",
+): string | undefined {
+  if (!previewUrl || !jobId || !filename) {
+    return undefined;
+  }
+
+  return downloadUrl(assetUrl(baseUrl, `/promo/jobs/${encodeURIComponent(jobId)}/files/${filename}`));
+}
+
 function GeneratedSkeletonGrid() {
   return (
     <section aria-busy="true">
@@ -139,8 +160,8 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
           const prompt = prompts[key] ?? item.prompt ?? "";
           const teaserUrl = assetUrl(assetBaseUrl, item.files?.teaser);
           const coverUrl = assetUrl(assetBaseUrl, item.files?.cover);
-          const teaserDownloadUrl = downloadUrl(teaserUrl);
-          const coverDownloadUrl = downloadUrl(coverUrl);
+          const teaserDownloadUrl = videoDownloadUrl(assetBaseUrl, teaserUrl, item.job_id || item.id);
+          const coverDownloadUrl = generatedAssetDownloadUrl(assetBaseUrl, coverUrl, item.job_id || item.id, "cover.jpg");
           const title = item.drama?.title || item.title || t("common.untitledPromo");
           const progress = generationProgress(item.status, item.progress);
           const active = isActiveGeneration(item.status);

@@ -226,6 +226,44 @@ def test_admin_drama_detail_only_includes_transferred_episodes(client: TestClien
     assert [episode["id"] for episode in episodes] == [transferred_episode.id]
 
 
+def test_admin_episode_download_redirects_to_signed_url(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.services.promo_asset_store import PromoAssetStore
+
+    drama, episode = seed_drama(db, "Download Episode")
+    headers = auth_header(client, db, "episode-download@example.com", "JOIN-EP-DOWNLOAD")
+    seen: dict[str, object] = {}
+
+    def fake_signed_download_url(self, location, filename, *, download_filename, expires_in):
+        seen.update(
+            location=location,
+            filename=filename,
+            download_filename=download_filename,
+            expires_in=expires_in,
+        )
+        return "https://storage.example/signed-episode"
+
+    monkeypatch.setattr(PromoAssetStore, "signed_download_url", fake_signed_download_url, raising=False)
+
+    response = client.get(
+        f"/api/v1/admin/dramas/{drama.id}/episodes/{episode.id}/download",
+        headers=headers,
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "https://storage.example/signed-episode"
+    assert seen == {
+        "location": episode.gcs_uri,
+        "filename": "",
+        "download_filename": "Download Episode-ep-1.mp4",
+        "expires_in": 600,
+    }
+
+
 def test_generated_library_returns_current_user_jobs(client: TestClient, db: Session) -> None:
     drama, episode = seed_drama(db, "Generated Drama")
     headers = auth_header(client, db, "promoter@example.com", "JOIN-5")
