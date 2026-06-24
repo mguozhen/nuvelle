@@ -7,7 +7,8 @@ import type {
   GeneratedListResponse,
   LoginRequest,
   PromoRequest,
-  RegisterRequest
+  RegisterRequest,
+  SignedDownloadUrlResponse
 } from "@/types/drama";
 
 export const DEFAULT_BACKEND_URL =
@@ -102,6 +103,15 @@ export class PromoBackendClient {
     });
   }
 
+  getAdminEpisodeDownloadUrl(dramaId: string | number, episodeId: string | number): Promise<SignedDownloadUrlResponse> {
+    return this.request<SignedDownloadUrlResponse>(
+      `/admin/dramas/${encodeURIComponent(String(dramaId))}/episodes/${encodeURIComponent(String(episodeId))}/download-url`,
+      {
+        headers: this.headers(false)
+      }
+    );
+  }
+
   swipeNext(): Promise<DramaRecord> {
     return this.request<DramaRecord>("/admin/swipe/next", {
       headers: this.headers(false)
@@ -141,6 +151,15 @@ export class PromoBackendClient {
 
   getJob<T = unknown>(jobId: string): Promise<T> {
     return this.request<T>(`/promo/jobs/${encodeURIComponent(jobId)}`);
+  }
+
+  getPromoJobFileDownloadUrl(jobId: string, filename: string): Promise<SignedDownloadUrlResponse> {
+    return this.request<SignedDownloadUrlResponse>(
+      `/promo/jobs/${encodeURIComponent(jobId)}/files/${encodeURIComponent(filename)}/download-url`,
+      {
+        headers: this.headers(false)
+      }
+    );
   }
 
   generateBatch<T = unknown>(payload: { items: PromoRequest[]; prompt?: string }): Promise<T> {

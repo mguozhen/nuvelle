@@ -14,6 +14,7 @@ from app.schemas.admin import (
     ReelShortSyncRequest,
     ReelShortSyncResponse,
 )
+from app.schemas.download import SignedDownloadUrlResponse
 from app.services.admin_drama_service import AdminDramaService
 from app.services.generated_service import GeneratedService
 from app.services.reelshort_import_service import ReelShortImportService
@@ -69,6 +70,17 @@ def get_admin_drama(drama_id: int, db: DbSession, user: CurrentUser) -> AdminDra
     if drama is None:
         raise HTTPException(status_code=404, detail="drama not found")
     return drama
+
+
+@router.get("/dramas/{drama_id}/episodes/{episode_id}/download-url", response_model=SignedDownloadUrlResponse)
+def get_admin_episode_download_url(
+    drama_id: int,
+    episode_id: int,
+    db: DbSession,
+    user: CurrentUser,
+) -> SignedDownloadUrlResponse:
+    url = VideoDownloadService(db).episode_download_url(user, drama_id, episode_id)
+    return SignedDownloadUrlResponse(url=url)
 
 
 @router.get("/dramas/{drama_id}/episodes/{episode_id}/download", response_model=None)

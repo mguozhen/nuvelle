@@ -87,6 +87,14 @@ function installFetchMock(options: { boardResponse?: (url: string) => Promise<Re
     if (url.endsWith("/admin/dramas/1")) {
       return options.detailResponse?.() ?? json(drama);
     }
+    const episodeDownloadUrlMatch = url.match(/\/admin\/dramas\/1\/episodes\/(\d+)\/download-url$/);
+    if (episodeDownloadUrlMatch) {
+      return json({ url: `https://storage.example/signed-episode-${episodeDownloadUrlMatch[1]}` });
+    }
+    const generatedDownloadUrlMatch = url.match(/\/promo\/jobs\/([^/]+)\/files\/teaser\.mp4\/download-url$/);
+    if (generatedDownloadUrlMatch) {
+      return json({ url: `https://storage.example/${generatedDownloadUrlMatch[1]}-teaser.mp4` });
+    }
     if (url.endsWith("/admin/swipe/next")) {
       return json(dramaSummary);
     }
@@ -415,15 +423,9 @@ describe("admin app", () => {
     expect(screen.getByRole("button", { name: /play ep 3/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^play$/i })).not.toBeInTheDocument();
     expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute(
-      "href",
-      "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download"
-    );
-    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute("download");
-    expect(screen.getByRole("link", { name: /download ep 2/i })).toHaveAttribute(
-      "href",
-      "http://localhost:8000/api/v1/admin/dramas/1/episodes/11/download"
-    );
+    expect(screen.getByRole("button", { name: /download ep 1/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download ep 2/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /download ep 1/i })).not.toBeInTheDocument();
     expect(screen.queryByText("https://cdn.example/ep1.mp4")).not.toBeInTheDocument();
     expect(screen.queryByText("https://cdn.example/ep2.mp4")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
@@ -465,6 +467,29 @@ describe("admin app", () => {
         video_url: "https://cdn.example/ep2.mp4"
       })
     );
+  });
+
+  it("requests a signed episode download URL with bearer auth before starting the download", async () => {
+    const fetchMock = installFetchMock();
+    const clickMock = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("button", { name: /details/i }));
+    const download = await screen.findByRole("button", { name: /download ep 1/i });
+
+    expect(screen.queryByRole("link", { name: /download ep 1/i })).not.toBeInTheDocument();
+
+    await user.click(download);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download-url",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    expect(clickMock).toHaveBeenCalledTimes(1);
   });
 
   it("shows generated library from backend", async () => {
@@ -523,14 +548,60 @@ describe("admin app", () => {
     expect(frame.firstElementChild).toHaveClass("aspect-[9/16]");
     expect(video).toHaveClass("object-contain");
     expect(video).toHaveAttribute("src", "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4");
-    expect(screen.getByRole("link", { name: /teaser/i })).toHaveAttribute(
-      "href",
-      "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4/download"
-    );
+    expect(screen.getByRole("button", { name: /teaser/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /teaser/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /cover/i })).toHaveAttribute(
       "href",
       "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/cover.jpg?download=1"
     );
+  });
+
+  it("requests a signed generated video download URL with bearer auth before starting the download", async () => {
+    const fetchMock = installFetchMock({
+      generatedResponse: () =>
+        json({
+          items: [
+            {
+              id: "job-vertical",
+              job_id: "job-vertical",
+              status: "done",
+              progress: 100,
+              title: "Demo Drama",
+              episode: 1,
+              duration: 20,
+              source_url: "https://cdn.example/ep1.mp4",
+              prompt: "high tension",
+              files: {
+                teaser: "/promo/jobs/job-vertical/files/teaser.mp4",
+                cover: "/promo/jobs/job-vertical/files/cover.jpg"
+              },
+              drama: { id: 1, title: "Demo Drama" },
+              episode_ref: { id: 10, episode_no: 1 },
+              created_at: "2026-06-18T00:00:00Z"
+            }
+          ],
+          total: 1
+        })
+    });
+    const clickMock = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("link", { name: /generated/i }));
+    const teaserDownload = await screen.findByRole("button", { name: /teaser/i });
+
+    expect(screen.queryByRole("link", { name: /teaser/i })).not.toBeInTheDocument();
+
+    await user.click(teaserDownload);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/promo/jobs/job-vertical/files/teaser.mp4/download-url",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    expect(clickMock).toHaveBeenCalledTimes(1);
   });
 
   it("downloads generated videos through the API route even when preview URLs are absolute", async () => {
@@ -568,10 +639,8 @@ describe("admin app", () => {
 
     const video = await screen.findByLabelText("Demo Drama generated video");
     expect(video).toHaveAttribute("src", "https://cdn.nuvelle.ai/promo/jobs/job-cdn/files/teaser.mp4");
-    expect(screen.getByRole("link", { name: /teaser/i })).toHaveAttribute(
-      "href",
-      "http://localhost:8000/api/v1/promo/jobs/job-cdn/files/teaser.mp4/download"
-    );
+    expect(screen.getByRole("button", { name: /teaser/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /teaser/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /cover/i })).toHaveAttribute(
       "href",
       "http://localhost:8000/api/v1/promo/jobs/job-cdn/files/cover.jpg?download=1"
@@ -610,10 +679,8 @@ describe("admin app", () => {
     await waitFor(() => expect(screen.getByText("Source tags")).toBeInTheDocument());
     expect(screen.queryByPlaceholderText(/paste an episode video url/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Generate$/ })).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download ep 1/i })).toHaveAttribute(
-      "href",
-      "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download"
-    );
+    expect(screen.getByRole("button", { name: /download ep 1/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /download ep 1/i })).not.toBeInTheDocument();
     expect(within(screen.getByRole("button", { name: /play ep 1/i })).getByText(/Generated|Queued 5%/)).toBeInTheDocument();
     expect(within(screen.getByRole("button", { name: /play ep 2/i })).getByText("Not generated")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /generate all available episodes/i })).toBeInTheDocument();

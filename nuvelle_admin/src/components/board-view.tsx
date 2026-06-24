@@ -23,7 +23,6 @@ export type BoardFilters = {
 };
 
 type BoardViewProps = {
-  assetBaseUrl: string;
   dramas: DramaRecord[];
   filterOptions?: AdminDramaFilterOptions;
   filters: BoardFilters;
@@ -32,6 +31,7 @@ type BoardViewProps = {
   pageSize: number;
   total: number;
   votes: Record<string, VoteVerdict>;
+  onDownloadEpisode: (drama: DramaRecord, episode: { id?: number; episode: number; url: string }) => void | Promise<void>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
@@ -87,7 +87,6 @@ function BoardSkeletonGrid() {
 }
 
 export function BoardView({
-  assetBaseUrl,
   dramas,
   filterOptions = emptyFilterOptions,
   filters,
@@ -96,6 +95,7 @@ export function BoardView({
   pageSize,
   total,
   votes,
+  onDownloadEpisode,
   onGenerate,
   onGenerateBatch,
   getGenerationState,
@@ -270,9 +270,9 @@ export function BoardView({
         />
       ) : null}
       <DramaModal
-        assetBaseUrl={assetBaseUrl}
         drama={selectedDrama}
         duration={duration}
+        onDownloadEpisode={onDownloadEpisode}
         onGenerate={onGenerate}
         onGenerateBatch={onGenerateBatch}
         getGenerationState={getGenerationState}

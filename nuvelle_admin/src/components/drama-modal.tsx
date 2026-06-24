@@ -15,17 +15,6 @@ import { useI18n } from "@/i18n";
 import { nuvelleScore } from "@/lib/scoring";
 import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } from "@/types/drama";
 
-type DramaModalProps = {
-  assetBaseUrl: string;
-  drama: DramaRecord | null;
-  duration: number;
-  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
-  onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
-  getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
-  onOpenChange: (open: boolean) => void;
-  onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
-};
-
 type EpisodeOption = {
   id?: number;
   episode: number;
@@ -36,22 +25,18 @@ type EpisodeOption = {
   generationProgress?: number;
 };
 
-function assetUrl(baseUrl: string, value: string): string {
-  return `${baseUrl}${value.startsWith("/") ? value : `/${value}`}`;
-}
+type DramaModalProps = {
+  drama: DramaRecord | null;
+  duration: number;
+  onDownloadEpisode: (drama: DramaRecord, episode: EpisodeOption) => void | Promise<void>;
+  onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
+  onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
+  getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
+  onOpenChange: (open: boolean) => void;
+  onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
+};
 
-function episodeDownloadUrl(baseUrl: string, dramaId: string | number, episodeId: string | number | undefined): string | undefined {
-  if (episodeId === undefined) {
-    return undefined;
-  }
-
-  return assetUrl(
-    baseUrl,
-    `/admin/dramas/${encodeURIComponent(String(dramaId))}/episodes/${encodeURIComponent(String(episodeId))}/download`,
-  );
-}
-
-export function DramaModal({ assetBaseUrl, drama, duration, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
+export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [playRequestKey, setPlayRequestKey] = useState(0);
   const [prompt, setPrompt] = useState("");
@@ -235,7 +220,6 @@ export function DramaModal({ assetBaseUrl, drama, duration, onGenerate, onGenera
                         generation_progress: episode.generationProgress
                       });
                       const isPlayable = Boolean(episode.url || episode.iframeSrc);
-                      const downloadHref = episodeDownloadUrl(assetBaseUrl, drama.id, episode.id) || episode.url;
 
                       return (
                         <div
@@ -278,19 +262,19 @@ export function DramaModal({ assetBaseUrl, drama, duration, onGenerate, onGenera
                           </div>
                           <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
                             {episode.url ? (
-                              <Button asChild className="whitespace-nowrap" size="sm" variant="outline">
-                                <a
-                                  aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
-                                  download
-                                  href={downloadHref}
-                                  rel="noreferrer"
-                                  target="_blank"
-                                  onClick={(event) => event.stopPropagation()}
-                                  onKeyDown={(event) => event.stopPropagation()}
-                                >
-                                  <Download className="h-3.5 w-3.5" />
-                                  {t("detail.download")}
-                                </a>
+                              <Button
+                                aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
+                                className="whitespace-nowrap"
+                                size="sm"
+                                variant="outline"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void onDownloadEpisode(drama, episode);
+                                }}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                {t("detail.download")}
                               </Button>
                             ) : (
                               <Button

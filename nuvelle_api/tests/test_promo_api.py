@@ -194,6 +194,47 @@ def test_promo_job_file_download_redirects_to_signed_url(
     }
 
 
+def test_promo_job_file_download_url_returns_signed_url_json(
+    client: TestClient, db: Session, monkeypatch
+) -> None:
+    from app.services.promo_asset_store import PromoAssetStore
+
+    job = PromoJob(
+        id="signed-job",
+        status="done",
+        title="Signed",
+        episode=1,
+        duration=10,
+        source_url="https://example.com/input.mp4",
+        output_dir="gs://video-bucket/promo/signed-job",
+    )
+    db.add(job)
+    db.commit()
+    seen: dict[str, object] = {}
+
+    def fake_signed_download_url(self, location, filename, *, download_filename, expires_in):
+        seen.update(
+            location=location,
+            filename=filename,
+            download_filename=download_filename,
+            expires_in=expires_in,
+        )
+        return "https://storage.example/signed-teaser"
+
+    monkeypatch.setattr(PromoAssetStore, "signed_download_url", fake_signed_download_url, raising=False)
+
+    response = client.get("/api/v1/promo/jobs/signed-job/files/teaser.mp4/download-url")
+
+    assert response.status_code == 200
+    assert response.json() == {"url": "https://storage.example/signed-teaser"}
+    assert seen == {
+        "location": "gs://video-bucket/promo/signed-job",
+        "filename": "teaser.mp4",
+        "download_filename": "teaser.mp4",
+        "expires_in": 600,
+    }
+
+
 def test_batch_api_queues_jobs_and_reports_status(client: TestClient, monkeypatch, tmp_path) -> None:
     from app.services import promo_service
 

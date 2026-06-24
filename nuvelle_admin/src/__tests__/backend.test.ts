@@ -44,6 +44,23 @@ describe("admin backend client", () => {
     );
   });
 
+  it("requests signed video download URLs with bearer tokens", async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response(JSON.stringify({ url: "https://storage.example/signed-video" }))));
+    const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");
+
+    await expect(client.getAdminEpisodeDownloadUrl(1, 10)).resolves.toEqual({ url: "https://storage.example/signed-video" });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/admin/dramas/1/episodes/10/download-url",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+    );
+
+    await client.getPromoJobFileDownloadUrl("job-1", "teaser.mp4");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/promo/jobs/job-1/files/teaser.mp4/download-url",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+    );
+  });
+
   it("creates promo generation requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true, id: "job-1" })));
     const client = new PromoBackendClient("http://localhost:8000/api/v1", fetchMock, "token-1");

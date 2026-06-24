@@ -122,6 +122,10 @@ export type GeneratedListResponse = {
   total: number;
 };
 
+export type SignedDownloadUrlResponse = {
+  url: string;
+};
+
 export type GenerationState = {
   disabled: boolean;
   status?: string | null;

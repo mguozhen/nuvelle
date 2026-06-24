@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, Query, Request
 from fastapi.responses import RedirectResponse, Response
 
 from app.api.deps import DbSession, OptionalCurrentUser
+from app.schemas.download import SignedDownloadUrlResponse
 from app.schemas.promo import (
     PromoBatchCreate,
     PromoBatchCreateResponse,
@@ -41,6 +42,12 @@ def get_job_file(
     download: bool = Query(default=False),
 ) -> Response:
     return PromoService(db).asset_response(job_id, filename, range_header, download)
+
+
+@router.get("/promo/jobs/{job_id}/files/{filename}/download-url", response_model=SignedDownloadUrlResponse)
+def get_job_file_download_url(job_id: str, filename: str, db: DbSession) -> SignedDownloadUrlResponse:
+    url = PromoService(db).asset_download_url(job_id, filename)
+    return SignedDownloadUrlResponse(url=url)
 
 
 @router.get("/promo/jobs/{job_id}/files/{filename}/download", response_model=None)

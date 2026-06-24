@@ -5,6 +5,7 @@ export const en = {
   "app.batchSubmitted": "Batch submitted",
   "app.cantReachGenerator": "Can't reach the cloud generator. Check backend URL.",
   "app.dramaEventFailed": "Drama event sync failed",
+  "app.downloadFailed": "Download failed",
   "app.libraryLoadFailed": "Material library failed to load",
   "app.missingSourceVideo": "Missing source video",
   "app.noBatchEpisodes": "No available episodes for batch generation",

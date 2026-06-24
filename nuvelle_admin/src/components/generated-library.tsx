@@ -12,6 +12,7 @@ type GeneratedLibraryProps = {
   assetBaseUrl: string;
   generated: GeneratedJob[];
   isLoading?: boolean;
+  onDownloadVideo: (item: GeneratedJob) => void | Promise<void>;
   onRegenerate: (item: GeneratedJob, prompt: string) => void;
 };
 
@@ -35,14 +36,6 @@ function downloadUrl(value?: string): string | undefined {
   const url = new URL(value, window.location.origin);
   url.searchParams.set("download", "1");
   return url.toString();
-}
-
-function videoDownloadUrl(baseUrl: string, previewUrl?: string, jobId?: string): string | undefined {
-  if (!previewUrl || !jobId) {
-    return undefined;
-  }
-
-  return assetUrl(baseUrl, `/promo/jobs/${encodeURIComponent(jobId)}/files/teaser.mp4/download`);
 }
 
 function generatedAssetDownloadUrl(
@@ -134,7 +127,7 @@ function GeneratedPreview({ coverUrl, teaserUrl, title }: { coverUrl?: string; t
   );
 }
 
-export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, onRegenerate }: GeneratedLibraryProps) {
+export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, onDownloadVideo, onRegenerate }: GeneratedLibraryProps) {
   const { t } = useI18n();
   const [prompts, setPrompts] = useState<Record<string, string>>({});
 
@@ -160,7 +153,7 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
           const prompt = prompts[key] ?? item.prompt ?? "";
           const teaserUrl = assetUrl(assetBaseUrl, item.files?.teaser);
           const coverUrl = assetUrl(assetBaseUrl, item.files?.cover);
-          const teaserDownloadUrl = videoDownloadUrl(assetBaseUrl, teaserUrl, item.job_id || item.id);
+          const canDownloadTeaser = Boolean(teaserUrl && (item.job_id || item.id));
           const coverDownloadUrl = generatedAssetDownloadUrl(assetBaseUrl, coverUrl, item.job_id || item.id, "cover.jpg");
           const title = item.drama?.title || item.title || t("common.untitledPromo");
           const progress = generationProgress(item.status, item.progress);
@@ -201,12 +194,10 @@ export function GeneratedLibrary({ assetBaseUrl, generated, isLoading = false, o
                 ) : null}
               </div>
               <div className="mt-3 flex h-8 flex-wrap gap-2 overflow-hidden">
-                {teaserDownloadUrl ? (
-                  <Button asChild size="sm" variant="outline">
-                    <a download="teaser.mp4" href={teaserDownloadUrl}>
-                      <Download className="h-3.5 w-3.5" />
-                      {t("generated.teaser")}
-                    </a>
+                {canDownloadTeaser ? (
+                  <Button size="sm" variant="outline" onClick={() => void onDownloadVideo(item)}>
+                    <Download className="h-3.5 w-3.5" />
+                    {t("generated.teaser")}
                   </Button>
                 ) : null}
                 {coverDownloadUrl ? (

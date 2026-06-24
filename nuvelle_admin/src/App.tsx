@@ -8,6 +8,7 @@ import { LoginGate } from "@/components/login-gate";
 import { SwipeView } from "@/components/swipe-view";
 import { clearAuthState, loadAuthState, saveAuthState, type AuthState } from "@/lib/auth";
 import { DEFAULT_BACKEND_URL, PromoBackendClient } from "@/lib/backend";
+import { startBrowserDownload } from "@/lib/download";
 import { generationLabel, generationState, isActiveGeneration, preferredGenerationStatus } from "@/lib/generation";
 import { I18nProvider, useI18n } from "@/i18n";
 import { loadBackendUrl, saveBackendUrl } from "@/lib/storage";
@@ -34,6 +35,12 @@ type EpisodeCandidate = {
   poster_url?: string | null;
   generation_status?: string | null;
   generation_progress?: number;
+};
+
+type DownloadEpisode = {
+  id?: number;
+  episode: number;
+  url?: string | null;
 };
 
 function toEpisodeRecords(drama: DramaRecord): EpisodeCandidate[] {
@@ -577,6 +584,46 @@ function AdminApp() {
     [client, getGenerationState, resolveDramaForGeneration, showStatus, t]
   );
 
+  const downloadEpisode = useCallback(
+    async (drama: DramaRecord, episode: DownloadEpisode) => {
+      try {
+        if (episode.id !== undefined) {
+          const response = await client.getAdminEpisodeDownloadUrl(drama.id, episode.id);
+          startBrowserDownload(response.url, `${drama.title || "episode"}-ep-${episode.episode}.mp4`);
+          return;
+        }
+
+        if (episode.url) {
+          startBrowserDownload(episode.url, `${drama.title || "episode"}-ep-${episode.episode}.mp4`);
+          return;
+        }
+
+        showStatus(t("app.downloadFailed"));
+      } catch {
+        showStatus(t("app.downloadFailed"));
+      }
+    },
+    [client, showStatus, t]
+  );
+
+  const downloadGeneratedVideo = useCallback(
+    async (item: GeneratedJob) => {
+      const jobId = item.job_id || item.id;
+      if (!jobId) {
+        showStatus(t("app.downloadFailed"));
+        return;
+      }
+
+      try {
+        const response = await client.getPromoJobFileDownloadUrl(jobId, "teaser.mp4");
+        startBrowserDownload(response.url, "teaser.mp4");
+      } catch {
+        showStatus(t("app.downloadFailed"));
+      }
+    },
+    [client, showStatus, t]
+  );
+
   const activeSwipeDrama = swipeDrama;
   const ratedCount = new Set([...Object.keys(votes), ...dramas.filter((drama) => drama.seen).map((drama) => String(drama.id))]).size;
   const fireCount = Object.values(votes).filter((verdict) => verdict === "fire").length;
@@ -623,7 +670,6 @@ function AdminApp() {
           path="/board"
           element={
             <BoardView
-              assetBaseUrl={backendUrl}
               dramas={dramas}
               filterOptions={boardFilterOptions}
               filters={boardFilters}
@@ -632,6 +678,7 @@ function AdminApp() {
               pageSize={BOARD_PAGE_SIZE}
               total={boardTotal}
               votes={votes}
+              onDownloadEpisode={downloadEpisode}
               onGenerate={generateForDrama}
               onGenerateBatch={generateBatch}
               getGenerationState={getGenerationState}
@@ -649,6 +696,7 @@ function AdminApp() {
               assetBaseUrl={backendUrl}
               generated={generated}
               isLoading={generatedLoading}
+              onDownloadVideo={downloadGeneratedVideo}
               onRegenerate={(item, prompt) => {
                 if (!item.source_url) {
                   showStatus(t("app.missingSourceVideo"));

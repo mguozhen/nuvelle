@@ -7,6 +7,7 @@ export const zh: Record<keyof typeof en, string> = {
   "app.batchSubmitted": "批量任务已提交",
   "app.cantReachGenerator": "无法连接云端生成器，请检查后端地址。",
   "app.dramaEventFailed": "短剧事件同步失败",
+  "app.downloadFailed": "下载失败",
   "app.libraryLoadFailed": "素材库加载失败",
   "app.missingSourceVideo": "缺少源视频",
   "app.noBatchEpisodes": "没有可批量生成的剧集",
