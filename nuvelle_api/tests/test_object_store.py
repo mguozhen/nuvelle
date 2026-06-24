@@ -1,4 +1,4 @@
-from app.storage.object_store import ObjectStorage, StoredObject
+from app.storage.object_store import GcsObjectStorageBackend, ObjectStorage, StoredObject
 
 
 def object_storage(tmp_path, *, bucket: str = "") -> ObjectStorage:
@@ -48,3 +48,40 @@ def test_object_storage_routes_gcs_locations_to_gcs_backend(tmp_path) -> None:
 
     assert stored_object.content == b"asset"
     assert seen == [("gs://bucket/promo/job-1", "teaser.mp4", "bytes=0-1")]
+
+
+def test_gcs_signed_url_falls_back_to_iam_signing_identity(monkeypatch, tmp_path) -> None:
+    backend = GcsObjectStorageBackend(bucket_name="promo-assets", prefix="promo", work_dir=tmp_path)
+    calls: list[dict[str, object]] = []
+
+    class FakeBlob:
+        def generate_signed_url(self, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise AttributeError("you need a private key to sign credentials")
+            return "https://storage.example/signed"
+
+    class FakeBucket:
+        def blob(self, object_name):
+            assert object_name == "videos/drama-1/ep-1.mp4"
+            return FakeBlob()
+
+    monkeypatch.setattr(backend, "_bucket", lambda bucket_name=None: FakeBucket())
+    monkeypatch.setattr(
+        backend,
+        "_iam_signing_identity",
+        lambda: ("runtime@example.iam.gserviceaccount.com", "token-1"),
+        raising=False,
+    )
+
+    url = backend.signed_download_url(
+        "gs://promo-assets/videos/drama-1/ep-1.mp4",
+        "",
+        download_filename="Demo-ep-1.mp4",
+        expires_in=600,
+    )
+
+    assert url == "https://storage.example/signed"
+    assert "access_token" not in calls[0]
+    assert calls[1]["access_token"] == "token-1"
+    assert calls[1]["service_account_email"] == "runtime@example.iam.gserviceaccount.com"

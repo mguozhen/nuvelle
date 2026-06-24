@@ -259,14 +259,54 @@ class GcsObjectStorageBackend:
             return None
 
         blob = self._bucket(bucket_name).blob(full_object_name)
-        return blob.generate_signed_url(
-            version="v4",
-            expiration=timedelta(seconds=max(1, expires_in)),
-            method="GET",
-            response_disposition=(
+        kwargs = self._signed_url_kwargs(download_filename=download_filename, expires_in=expires_in)
+        try:
+            return blob.generate_signed_url(**kwargs)
+        except AttributeError as exc:
+            if "private key" not in str(exc):
+                raise
+
+            signing_identity = self._iam_signing_identity()
+            if signing_identity is None:
+                raise
+
+            service_account_email, access_token = signing_identity
+            return blob.generate_signed_url(
+                **kwargs,
+                service_account_email=service_account_email,
+                access_token=access_token,
+            )
+
+    def _signed_url_kwargs(self, *, download_filename: str, expires_in: int) -> dict[str, object]:
+        return {
+            "version": "v4",
+            "expiration": timedelta(seconds=max(1, expires_in)),
+            "method": "GET",
+            "response_disposition": (
                 f'attachment; filename="{safe_content_disposition_filename(download_filename)}"'
             ),
-        )
+        }
+
+    def _iam_signing_identity(self) -> tuple[str, str] | None:
+        import google.auth
+        from google.auth.compute_engine import _metadata
+        from google.auth.transport.requests import Request
+
+        request = Request()
+        credentials, _project_id = google.auth.default(scopes=["https://www.googleapis.com/auth/cloud-platform"])
+        if not getattr(credentials, "token", None):
+            credentials.refresh(request)
+
+        service_account_email = getattr(credentials, "service_account_email", None)
+        if not service_account_email or "@" not in service_account_email:
+            service_account_info = _metadata.get_service_account_info(request, service_account="default")
+            service_account_email = service_account_info.get("email")
+
+        access_token = getattr(credentials, "token", None)
+        if not service_account_email or not access_token:
+            return None
+
+        return service_account_email, access_token
 
     def _bucket(self, bucket_name: str | None = None):
         from google.cloud import storage

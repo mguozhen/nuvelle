@@ -266,6 +266,7 @@ enable_google_cloud_services() {
     artifactregistry.googleapis.com \
     cloudresourcemanager.googleapis.com \
     iam.googleapis.com \
+    iamcredentials.googleapis.com \
     sqladmin.googleapis.com \
     storage.googleapis.com \
     compute.googleapis.com \
@@ -388,6 +389,7 @@ ensure_infra() {
   enable_google_cloud_services
   ensure_artifact_repository
   ensure_database
+  ensure_runtime_signing_permissions
   ensure_promo_bucket
 }
 
@@ -400,6 +402,18 @@ runtime_service_account() {
   local project_number
   project_number="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
   printf '%s' "${RUNTIME_SERVICE_ACCOUNT:-${project_number}-compute@developer.gserviceaccount.com}"
+}
+
+ensure_runtime_signing_permissions() {
+  log "Ensure runtime service account can sign download URLs"
+  local runtime_sa
+
+  runtime_sa="$(runtime_service_account)"
+  gcloud iam service-accounts add-iam-policy-binding "$runtime_sa" \
+    --project="$PROJECT_ID" \
+    --member="serviceAccount:$runtime_sa" \
+    --role="roles/iam.serviceAccountTokenCreator" \
+    --quiet >/dev/null
 }
 
 ensure_promo_bucket() {
