@@ -14,6 +14,7 @@ function hostnameFromHostHeader(value: string | null | undefined) {
 export function siteRedirectUrl(url: URL, options: RedirectOptions = {}) {
   const canonicalUrl = new URL(url.toString());
   const requestHostname = hostnameFromHostHeader(options.host) ?? canonicalUrl.hostname;
+  const isProductionHost = requestHostname === canonicalHost || requestHostname === wwwHost;
   let shouldRedirect = false;
 
   if (requestHostname === wwwHost) {
@@ -22,7 +23,7 @@ export function siteRedirectUrl(url: URL, options: RedirectOptions = {}) {
   }
 
   if (
-    (requestHostname === canonicalHost || requestHostname === wwwHost) &&
+    isProductionHost &&
     (canonicalUrl.protocol === "http:" || options.forwardedProto === "http")
   ) {
     canonicalUrl.hostname = canonicalHost;
@@ -37,6 +38,12 @@ export function siteRedirectUrl(url: URL, options: RedirectOptions = {}) {
 
   if (!shouldRedirect) {
     return null;
+  }
+
+  if (isProductionHost) {
+    canonicalUrl.protocol = "https:";
+    canonicalUrl.hostname = canonicalHost;
+    canonicalUrl.port = "";
   }
 
   return canonicalUrl.toString();

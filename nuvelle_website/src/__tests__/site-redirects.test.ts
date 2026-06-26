@@ -7,7 +7,7 @@ describe("site redirects", () => {
       "https://nuvelle.ai/blog?x=1"
     );
     expect(siteRedirectUrl(new URL("http://localhost:48080/blog?x=1"), { host: "www.nuvelle.ai:48080" })).toBe(
-      "https://nuvelle.ai:48080/blog?x=1"
+      "https://nuvelle.ai/blog?x=1"
     );
   });
 
@@ -27,7 +27,7 @@ describe("site redirects", () => {
         forwardedProto: "http",
         host: "nuvelle.ai"
       })
-    ).toBe("https://nuvelle.ai:48080/blog");
+    ).toBe("https://nuvelle.ai/blog");
   });
 
   it("combines www and legacy poster redirects in one canonical URL", () => {
