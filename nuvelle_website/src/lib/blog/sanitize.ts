@@ -86,6 +86,7 @@ const articleSanitizeOptions = {
   allowProtocolRelative: false,
   parseStyleAttributes: false,
   transformTags: {
+    h1: "h2",
     a: transformAnchor,
     img: transformImage
   }

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { BannerItem, Drama } from "@/data/dramas";
 import { getDramaBySlug, statForDrama } from "@/data/dramas";
+import { posterPath } from "@/lib/site/seo";
 import { cn } from "@/lib/utils";
 
 type HeroCarouselProps = {
@@ -62,7 +63,7 @@ export function HeroCarousel({ items, onOpen }: HeroCarouselProps) {
           >
             <img
               className="absolute inset-0 h-full w-full scale-105 object-cover object-center brightness-[0.58]"
-              src={`/posters/${drama.slug}.png`}
+              src={posterPath(drama.slug)}
               alt=""
             />
             <div className="absolute inset-0 bg-[linear-gradient(96deg,rgba(9,11,20,0.96)_0%,rgba(9,11,20,0.78)_34%,rgba(9,11,20,0.35)_58%,rgba(9,11,20,0.08)_82%),linear-gradient(0deg,#090b14_4%,rgba(9,11,20,0)_45%)]" />
@@ -73,7 +74,7 @@ export function HeroCarousel({ items, onOpen }: HeroCarouselProps) {
               className="absolute right-[7%] top-1/2 hidden w-56 -translate-y-1/2 overflow-hidden rounded-lg border border-white/15 shadow-2xl shadow-black/50 outline-none transition-transform duration-300 hover:scale-[1.02] focus-visible:ring-2 focus-visible:ring-white/70 lg:block"
               onClick={() => onOpen(drama)}
             >
-              <img className="aspect-[2/3] w-full object-cover" src={`/posters/${drama.slug}.png`} alt={drama.title} />
+              <img className="aspect-[2/3] w-full object-cover" src={posterPath(drama.slug)} alt={drama.title} />
             </button>
 
             <div className="relative z-10 mx-auto flex min-h-[33rem] max-w-[1320px] flex-col justify-center px-5 py-20 sm:min-h-[38rem] sm:px-7">

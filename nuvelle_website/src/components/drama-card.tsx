@@ -1,6 +1,7 @@
 import { Play } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { Drama } from "@/data/dramas";
+import { posterPath } from "@/lib/site/seo";
 import { cn } from "@/lib/utils";
 
 type DramaCardProps = {
@@ -24,7 +25,7 @@ export function DramaCard({ drama, onOpen, rank, searchAlias }: DramaCardProps) 
         <span className="relative block w-24 flex-none overflow-hidden rounded-md border border-white/12 bg-zinc-900 shadow-xl shadow-black/35 sm:w-32">
           <img
             className="aspect-[2/3] h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            src={`/posters/${drama.slug}.png`}
+            src={posterPath(drama.slug)}
             alt={drama.title}
             loading="lazy"
           />
@@ -44,7 +45,7 @@ export function DramaCard({ drama, onOpen, rank, searchAlias }: DramaCardProps) 
       <span className="relative block overflow-hidden rounded-lg border border-white/12 bg-[#141826] shadow-xl shadow-black/25">
         <img
           className="aspect-[2/3] h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          src={`/posters/${drama.slug}.png`}
+          src={posterPath(drama.slug)}
           alt={drama.title}
           loading="lazy"
         />

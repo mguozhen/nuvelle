@@ -11,6 +11,7 @@ describe("website home page", () => {
     expect(screen.getByText("Nuvelle")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Nuvelle home" })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: "Blog" })).toHaveAttribute("href", "/blog");
+    expect(screen.getByRole("heading", { level: 1, name: /ai short dramas/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "New Releases" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Top 10 This Week" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Hidden Identity" })).toBeInTheDocument();
@@ -18,6 +19,7 @@ describe("website home page", () => {
     expect(screen.getByRole("heading", { name: "Love at First Sight" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Revenge & Reversal" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Second Chance" })).toBeInTheDocument();
+    expect(document.querySelector('a[href="#"]')).not.toBeInTheDocument();
     await user.click(screen.getAllByText("The CEO's Secret Wife")[0]);
     const dialog = screen.getByRole("dialog");
     expect(dialog).toHaveTextContent("Watch Episode 1");
@@ -53,7 +55,10 @@ describe("website home page", () => {
     expect(screen.getByRole("heading", { name: "最新上线" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "隐藏身份" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "公司" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "关于 Nuvelle" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "关于 Nuvelle" })).toHaveAttribute("href", "/cn");
+    expect(screen.getAllByRole("link", { name: "创作者" }).every((link) => link.getAttribute("href") === "/cn#app")).toBe(
+      true
+    );
     expect(screen.getAllByText("获取 App").length).toBeGreaterThan(0);
   });
 

@@ -10,6 +10,7 @@ import { blogCollectionJsonLd, metadataForBlogDetail, metadataForBlogList } from
 import type { BlogListResult } from "@/lib/blog/types";
 import { canonicalUrl, type BlogRoute } from "@/lib/blog/urls";
 import { getLocaleByRouteParam, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
+import { blogListDescription, blogListTitle } from "@/lib/site/seo";
 
 type SafeListFetchOptions = {
   locale: LocaleKey;
@@ -55,11 +56,9 @@ async function safeListFetch(options: SafeListFetchOptions): Promise<BlogListRes
 }
 
 function listText(locale: LocaleKey) {
-  const copy = websiteCopy[locale];
-
   return {
-    title: copy.nav.blog,
-    description: "Read the latest Nuvelle story notes, release updates, and creator insights.",
+    title: blogListTitle,
+    description: blogListDescription,
     emptyTitle: "No blog posts yet",
     emptyBody: "Check back soon for Nuvelle updates and story recommendations."
   };

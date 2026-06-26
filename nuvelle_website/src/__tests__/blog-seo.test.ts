@@ -23,7 +23,12 @@ const article: BlogArticleDetail = {
 
 describe("blog seo", () => {
   it("adds indexable metadata for blog list pages and noindexes search pages", () => {
-    const listMetadata = metadataForBlogList("en", { kind: "list" }, "Blog", "Latest Nuvelle updates.");
+    const listMetadata = metadataForBlogList(
+      "en",
+      { kind: "list" },
+      "Nuvelle AI Short Drama Journal and Creator Playbooks",
+      "Explore Nuvelle story notes, AI short drama release updates, creator playbooks, and fandom trends for vertical series viewers."
+    );
     const searchMetadata = metadataForBlogList(
       "en",
       { kind: "search", query: "creator" },
@@ -32,12 +37,22 @@ describe("blog seo", () => {
     );
 
     expect(listMetadata).toMatchObject({
-      title: "Blog | Nuvelle",
+      title: "Nuvelle AI Short Drama Journal and Creator Playbooks",
       robots: { index: true, follow: true },
+      openGraph: {
+        images: expect.arrayContaining([
+          expect.objectContaining({
+            url: "https://nuvelle.ai/posters/_lead.jpg",
+            alt: "Nuvelle AI short drama posters"
+          })
+        ])
+      },
       twitter: {
-        card: "summary",
-        title: "Blog | Nuvelle",
-        description: "Latest Nuvelle updates."
+        card: "summary_large_image",
+        title: "Nuvelle AI Short Drama Journal and Creator Playbooks",
+        description:
+          "Explore Nuvelle story notes, AI short drama release updates, creator playbooks, and fandom trends for vertical series viewers.",
+        images: ["https://nuvelle.ai/posters/_lead.jpg"]
       }
     });
     expect(searchMetadata).toMatchObject({

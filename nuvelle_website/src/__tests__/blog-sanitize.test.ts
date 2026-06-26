@@ -80,4 +80,11 @@ describe("blog sanitizer", () => {
   it("strips html for descriptions", () => {
     expect(stripHtml("<p>Hello <strong>Nuvelle</strong></p>").trim()).toBe("Hello Nuvelle");
   });
+
+  it("downgrades article body h1 elements so the page title stays the only h1", () => {
+    const sanitized = sanitizeArticleHtml("<h1>Duplicate article title</h1><p>Body</p>");
+
+    expect(sanitized).toContain("<h2>Duplicate article title</h2>");
+    expect(sanitized).not.toContain("<h1>");
+  });
 });

@@ -14,6 +14,7 @@ import {
 import type { Drama } from "@/data/dramas";
 import { statForDrama } from "@/data/dramas";
 import type { WebsiteCopy } from "@/lib/i18n";
+import { posterPath } from "@/lib/site/seo";
 
 type DramaModalProps = {
   drama: Drama | null;
@@ -52,7 +53,7 @@ export function DramaModal({ drama, onClose, onGetApp, copy }: DramaModalProps) 
             <div className="relative min-h-72 overflow-hidden md:min-h-full">
               <img
                 className="h-full max-h-[34rem] w-full object-cover md:max-h-none"
-                src={`/posters/${drama.slug}.png`}
+                src={posterPath(drama.slug)}
                 alt={drama.title}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0f1320] via-transparent to-transparent md:bg-gradient-to-r md:from-transparent md:to-[#0f1320]" />

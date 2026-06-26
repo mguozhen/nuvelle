@@ -10,6 +10,7 @@ import {
 } from "@/lib/blog/urls";
 import type { BlogArticleDetail } from "@/lib/blog/types";
 import { getLocale, type LocaleKey } from "@/lib/i18n";
+import { defaultShareImage, siteImageUrl, siteName } from "@/lib/site/seo";
 
 export type BreadcrumbItem = {
   name: string;
@@ -87,7 +88,7 @@ function siteOrigin() {
 function brandedTitle(title: string) {
   const normalized = normalizeSeoText(title);
 
-  return normalized.includes("Nuvelle") ? normalized : `${normalized} | Nuvelle`;
+  return normalized.includes(siteName) ? normalized : `${normalized} | ${siteName}`;
 }
 
 function openGraphLocale(locale: LocaleKey) {
@@ -97,7 +98,7 @@ function openGraphLocale(locale: LocaleKey) {
 function organizationJsonLd() {
   return {
     "@type": "Organization",
-    name: "Nuvelle",
+    name: siteName,
     url: siteOrigin()
   };
 }
@@ -111,11 +112,11 @@ function articleTags(article: BlogArticleDetail) {
 }
 
 function articleKeywords(article: BlogArticleDetail) {
-  return unique([article.category?.name, article.category?.slug, "Nuvelle", "AI short dramas", "vertical dramas"]);
+  return unique([article.category?.name, article.category?.slug, siteName, "AI short dramas", "vertical dramas"]);
 }
 
 function listKeywords(title: string) {
-  return unique([title, "Nuvelle", "AI short dramas", "vertical dramas", "short drama blog"]);
+  return unique([title, siteName, "AI short dramas", "vertical dramas", "short drama blog"]);
 }
 
 export function blogPostingJsonLd(article: BlogArticleDetail, canonical: string) {
@@ -158,7 +159,7 @@ export function blogCollectionJsonLd(
     publisher: organizationJsonLd(),
     isPartOf: {
       "@type": "WebSite",
-      name: "Nuvelle",
+      name: siteName,
       url: siteOrigin()
     }
   };
@@ -191,14 +192,16 @@ export function metadataForBlogList(
       title: seoTitle,
       description,
       url: canonical,
-      siteName: "Nuvelle",
+      siteName,
       type: "website",
-      locale: openGraphLocale(locale)
+      locale: openGraphLocale(locale),
+      images: [defaultShareImage()]
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title: seoTitle,
-      description
+      description,
+      images: [siteImageUrl()]
     }
   };
 }
@@ -229,7 +232,7 @@ export function metadataForBlogDetail(locale: LocaleKey, article: BlogArticleDet
       description,
       url: canonical,
       images: article.image ? [article.image] : undefined,
-      siteName: "Nuvelle",
+      siteName,
       type: "article",
       publishedTime: article.date,
       modifiedTime: article.modifiedDate || article.date,

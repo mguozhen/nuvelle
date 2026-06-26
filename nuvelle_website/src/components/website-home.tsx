@@ -17,6 +17,7 @@ import {
   top10,
   type Drama
 } from "@/data/dramas";
+import { blogPath } from "@/lib/blog/urls";
 import { categoryRowKeys, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
 
 const searchDisplayAliases: Record<string, string> = {
@@ -74,6 +75,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
       </header>
 
       <main className="min-h-screen bg-[#0b0d16] text-white">
+        <h1 className="sr-only">Nuvelle AI short dramas for mobile-first vertical series fans</h1>
         <HeroCarousel items={bannerItems} onOpen={openDrama} />
 
         <section className="mx-auto max-w-[1320px] px-5 py-12 sm:px-7">
@@ -113,11 +115,12 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
             title={copy.rows.newReleases}
             slugs={rows["New Releases"]}
             viewAllLabel={copy.rows.viewAll}
+            viewAllHref={`${homeHref}#new`}
             onOpen={openDrama}
           />
 
           <section className="mb-11">
-            <RowHeader title={copy.rows.top10} viewAllLabel={copy.rows.viewAll} />
+            <RowHeader title={copy.rows.top10} viewAllLabel={copy.rows.viewAll} viewAllHref={`${homeHref}#categories`} />
             <div className="flex snap-x gap-5 overflow-x-auto pb-3 [scrollbar-color:#2a3050_transparent]">
               {top10.map((slug, index) => {
                 const drama = getDramaBySlug(slug);
@@ -133,6 +136,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
                 title={copy.rowTitles[title]}
                 slugs={rows[title]}
                 viewAllLabel={copy.rows.viewAll}
+                viewAllHref={`${homeHref}#categories`}
                 onOpen={openDrama}
               />
             ))}
@@ -144,6 +148,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
             title={copy.rows.secondChance}
             slugs={rows["Second Chance"]}
             viewAllLabel={copy.rows.viewAll}
+            viewAllHref={`${homeHref}#app`}
             onOpen={openDrama}
           />
         </section>
@@ -161,7 +166,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
               <ul className="mt-4 space-y-2 text-sm">
                 {links.map((link) => (
                   <li key={link}>
-                    <a className="transition-colors hover:text-white" href="#">
+                    <a className="transition-colors hover:text-white" href={footerHref(locale, link)}>
                       {link}
                     </a>
                   </li>
@@ -188,11 +193,50 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
   );
 }
 
-function RowHeader({ title, viewAllLabel }: { title: string; viewAllLabel: string }) {
+function footerHref(locale: LocaleKey, label: string) {
+  const normalized = label.toLowerCase();
+  const homeHref = homePathForLocale(locale);
+
+  if (
+    normalized.includes("category") ||
+    normalized.includes("分类") ||
+    normalized.includes("カテゴリ") ||
+    normalized.includes("kategorien") ||
+    normalized.includes("catégorie") ||
+    normalized.includes("categor")
+  ) {
+    return `${homeHref}#categories`;
+  }
+
+  if (
+    normalized.includes("creator") ||
+    normalized.includes("创作者") ||
+    normalized.includes("クリエイター") ||
+    normalized.includes("créateur")
+  ) {
+    return `${homeHref}#app`;
+  }
+
+  if (
+    normalized.includes("support") ||
+    normalized.includes("contact") ||
+    normalized.includes("privacy") ||
+    normalized.includes("terms") ||
+    normalized.includes("policy") ||
+    normalized.includes("press") ||
+    normalized.includes("career")
+  ) {
+    return blogPath(locale, { kind: "list" });
+  }
+
+  return homeHref;
+}
+
+function RowHeader({ title, viewAllLabel, viewAllHref }: { title: string; viewAllLabel: string; viewAllHref: string }) {
   return (
     <div className="mb-4 flex items-center justify-between gap-4">
       <h2 className="text-2xl font-semibold tracking-normal text-white">{title}</h2>
-      <a className="text-sm font-medium text-[#8f98b6] transition-colors hover:text-white" href="#">
+      <a className="text-sm font-medium text-[#8f98b6] transition-colors hover:text-white" href={viewAllHref}>
         {viewAllLabel}
       </a>
     </div>
@@ -204,17 +248,19 @@ function CatalogRow({
   title,
   slugs,
   viewAllLabel,
+  viewAllHref,
   onOpen
 }: {
   id?: string;
   title: string;
   slugs: string[];
   viewAllLabel: string;
+  viewAllHref: string;
   onOpen: (drama: Drama) => void;
 }) {
   return (
     <section id={id} className="mb-11">
-      <RowHeader title={title} viewAllLabel={viewAllLabel} />
+      <RowHeader title={title} viewAllLabel={viewAllLabel} viewAllHref={viewAllHref} />
       <div className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-color:#2a3050_transparent]">
         {slugs.map((slug) => {
           const drama = getDramaBySlug(slug);
