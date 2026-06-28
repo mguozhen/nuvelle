@@ -249,6 +249,37 @@ describe("admin app", () => {
     expect(await screen.findByRole("option", { name: "Spanish" })).toBeInTheDocument();
   });
 
+  it("searches and virtualizes backend-provided tag filter options", async () => {
+    const tags = Array.from({ length: 80 }, (_, index) => `Tag ${String(index + 1).padStart(2, "0")}`);
+    const fetchMock = installFetchMock({
+      filterOptionsResponse: () => json({ platforms: ["ReelShort"], languages: ["English"], tags }),
+      boardResponse: () => json({ items: [dramaSummary], total: 1 })
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user);
+
+    await user.click(screen.getByRole("combobox", { name: /all tags/i }));
+
+    const tagSearch = await screen.findByRole("searchbox", { name: /search tags/i });
+    expect(screen.getByRole("option", { name: "Tag 01" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Tag 80" })).not.toBeInTheDocument();
+
+    await user.type(tagSearch, "Tag 80");
+
+    const distantTag = await screen.findByRole("option", { name: "Tag 80" });
+    expect(screen.queryByRole("option", { name: "Tag 01" })).not.toBeInTheDocument();
+
+    await user.click(distantTag);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas?language=English&tag=Tag+80&has_video=true&limit=50&offset=0",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+  });
+
   it("paginates board queries through the admin API and resets page on filters", async () => {
     const fetchMock = installFetchMock({
       boardResponse: (url) => {

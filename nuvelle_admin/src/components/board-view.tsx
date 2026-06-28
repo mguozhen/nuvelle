@@ -197,8 +197,12 @@ export function BoardView({
         />
         <Select
           aria-label={t("board.allTags")}
+          noMatchesLabel={t("board.noTagMatches")}
           options={[{ value: "", label: t("board.allTags") }, ...options.tags.map((value) => ({ value, label: value }))]}
+          searchable
+          searchLabel={t("board.searchTags")}
           value={filters.tag}
+          virtualized
           onValueChange={(value) => onFiltersChange({ tag: value })}
         />
       </div>
