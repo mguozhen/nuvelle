@@ -33,6 +33,7 @@ type EpisodeCandidate = {
   iframe_src?: string | null;
   play_url?: string | null;
   poster_url?: string | null;
+  has_video?: boolean;
   generation_status?: string | null;
   generation_progress?: number;
 };
@@ -41,6 +42,10 @@ type DownloadEpisode = {
   id?: number;
   episode: number;
   url?: string | null;
+};
+
+type PlayableEpisode = DownloadEpisode & {
+  hasVideo?: boolean;
 };
 
 function toEpisodeRecords(drama: DramaRecord): EpisodeCandidate[] {
@@ -66,6 +71,10 @@ function toEpisodeRecords(drama: DramaRecord): EpisodeCandidate[] {
   return [];
 }
 
+function isPlayableEpisode(episode: EpisodeCandidate): boolean {
+  return Boolean(episode.play_url || episode.iframe_src || (episode.has_video && episode.id !== undefined));
+}
+
 function firstPlayableEpisode(drama: DramaRecord, episodeNo?: number, videoUrl?: string | null): EpisodeCandidate | null {
   if (videoUrl) {
     return { episode_no: episodeNo || 1, play_url: videoUrl };
@@ -73,7 +82,7 @@ function firstPlayableEpisode(drama: DramaRecord, episodeNo?: number, videoUrl?:
 
   const episodes = toEpisodeRecords(drama);
   const requested = episodeNo ? episodes.find((episode) => episode.episode_no === episodeNo) : null;
-  return requested || episodes.find((episode) => Boolean(episode.play_url)) || null;
+  return (requested && isPlayableEpisode(requested) ? requested : null) || episodes.find(isPlayableEpisode) || null;
 }
 
 function normalizeDrama(raw: DramaRecord): DramaRecord {
@@ -84,17 +93,19 @@ function normalizeDrama(raw: DramaRecord): DramaRecord {
       iframe_src: episode.iframe_src ?? null,
       play_url: episode.play_url ?? null,
       poster_url: episode.poster_url ?? null,
+      has_video: episode.has_video ?? Boolean(episode.play_url || episode.iframe_src),
       generation_status: episode.generation_status ?? null,
       generation_progress: episode.generation_progress ?? 0
     }))
     .sort((a, b) => a.episode_no - b.episode_no) as DramaEpisodeRecord[];
   const firstPlayUrl = episodeList.find((episode) => episode.play_url)?.play_url || raw.video_url || null;
+  const hasVideo = episodeList.some((episode) => Boolean(episode.play_url || episode.iframe_src || episode.has_video));
 
   return {
     ...raw,
     episode_list: episodeList,
     video_url: firstPlayUrl,
-    has_video: raw.has_video ?? Boolean(firstPlayUrl)
+    has_video: raw.has_video ?? hasVideo
   };
 }
 
@@ -490,13 +501,44 @@ function AdminApp() {
     [generated]
   );
 
+  const resolveEpisodePlayUrl = useCallback(
+    async (drama: DramaRecord, episode: PlayableEpisode) => {
+      if (episode.url) {
+        return episode.url;
+      }
+
+      if (episode.id === undefined) {
+        return null;
+      }
+
+      const response = await client.getAdminEpisodePlayUrl(drama.id, episode.id);
+      return response.url;
+    },
+    [client]
+  );
+
   const generateForDrama = useCallback(
     async (drama: DramaRecord, duration: number, prompt = "", episode?: number, videoUrl?: string | null) => {
       try {
         const detail = await resolveDramaForGeneration(drama, episode, videoUrl);
         const selectedEpisode = firstPlayableEpisode(detail, episode, videoUrl);
 
-        if (!selectedEpisode?.play_url) {
+        if (!selectedEpisode) {
+          showStatus(t("app.noVideoToGenerate"));
+          return;
+        }
+
+        let sourceUrl = selectedEpisode.play_url || null;
+
+        if (!sourceUrl && selectedEpisode.id !== undefined && selectedEpisode.has_video) {
+          sourceUrl = await resolveEpisodePlayUrl(detail, {
+            id: selectedEpisode.id,
+            episode: selectedEpisode.episode_no,
+            hasVideo: selectedEpisode.has_video
+          });
+        }
+
+        if (!sourceUrl) {
           showStatus(t("app.noVideoToGenerate"));
           return;
         }
@@ -514,7 +556,7 @@ function AdminApp() {
         }
 
         const result = await generatePromo({
-          url: selectedEpisode.play_url,
+          url: sourceUrl,
           title: detail.title || t("common.promo"),
           ep: episodeNo,
           dur: duration,
@@ -535,7 +577,7 @@ function AdminApp() {
             title: result.title || detail.title || t("common.promo"),
             episode: episodeNo,
             duration,
-            source_url: selectedEpisode.play_url,
+            source_url: sourceUrl,
             prompt,
             caption: result.caption || null,
             files: result.files || null,
@@ -550,25 +592,44 @@ function AdminApp() {
         showStatus(t("app.cantReachGenerator"));
       }
     },
-    [generatePromo, getGenerationState, loadGenerated, resolveDramaForGeneration, showStatus, t]
+    [generatePromo, getGenerationState, loadGenerated, resolveDramaForGeneration, resolveEpisodePlayUrl, showStatus, t]
   );
 
   const generateBatch = useCallback(
     async (drama: DramaRecord, duration: number) => {
       try {
         const detail = await resolveDramaForGeneration(drama);
-        const items = toEpisodeRecords(detail)
-          .filter((episode) => Boolean(episode.play_url))
+        const candidates = toEpisodeRecords(detail)
+          .filter(isPlayableEpisode)
           .filter((episode) => !getGenerationState(detail, episode).disabled)
-          .map((episode) => ({
-            url: episode.play_url || "",
-            title: detail.title || t("common.promo"),
-            ep: episode.episode_no,
-            dur: duration,
-            cover_image: detail.cover_image_url || episode.poster_url || undefined,
-            drama_id: detail.id,
-            episode_id: episode.id
-          }));
+        const resolvedItems = await Promise.all(
+          candidates.map(async (episode): Promise<PromoRequest | null> => {
+            let sourceUrl = episode.play_url || null;
+
+            if (!sourceUrl && episode.id !== undefined && episode.has_video) {
+              sourceUrl = await resolveEpisodePlayUrl(detail, {
+                id: episode.id,
+                episode: episode.episode_no,
+                hasVideo: episode.has_video
+              });
+            }
+
+            if (!sourceUrl) {
+              return null;
+            }
+
+            return {
+              url: sourceUrl,
+              title: detail.title || t("common.promo"),
+              ep: episode.episode_no,
+              dur: duration,
+              cover_image: detail.cover_image_url || episode.poster_url || undefined,
+              drama_id: detail.id,
+              episode_id: episode.id
+            };
+          })
+        );
+        const items = resolvedItems.filter((item): item is PromoRequest => item !== null);
 
         if (!items.length) {
           showStatus(t("app.noBatchEpisodes"));
@@ -581,7 +642,7 @@ function AdminApp() {
         showStatus(t("app.cantReachGenerator"));
       }
     },
-    [client, getGenerationState, resolveDramaForGeneration, showStatus, t]
+    [client, getGenerationState, resolveDramaForGeneration, resolveEpisodePlayUrl, showStatus, t]
   );
 
   const downloadEpisode = useCallback(
@@ -679,6 +740,7 @@ function AdminApp() {
               total={boardTotal}
               votes={votes}
               onDownloadEpisode={downloadEpisode}
+              onResolveEpisodePlayUrl={resolveEpisodePlayUrl}
               onGenerate={generateForDrama}
               onGenerateBatch={generateBatch}
               getGenerationState={getGenerationState}

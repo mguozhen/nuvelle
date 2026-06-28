@@ -18,9 +18,10 @@ import type { DramaRecord, GenerationEpisodeRef, GenerationState, VoteVerdict } 
 type EpisodeOption = {
   id?: number;
   episode: number;
-  iframeSrc: string;
-  posterUrl: string;
-  url: string;
+  iframeSrc?: string | null;
+  posterUrl?: string | null;
+  url?: string | null;
+  hasVideo?: boolean;
   generationStatus?: string | null;
   generationProgress?: number;
 };
@@ -29,6 +30,7 @@ type DramaModalProps = {
   drama: DramaRecord | null;
   duration: number;
   onDownloadEpisode: (drama: DramaRecord, episode: EpisodeOption) => void | Promise<void>;
+  onResolveEpisodePlayUrl: (drama: DramaRecord, episode: EpisodeOption) => Promise<string | null>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
@@ -36,11 +38,12 @@ type DramaModalProps = {
   onVote: (drama: DramaRecord, verdict: VoteVerdict) => void;
 };
 
-export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
+export function DramaModal({ drama, duration, onDownloadEpisode, onResolveEpisodePlayUrl, onGenerate, onGenerateBatch, getGenerationState, onOpenChange, onVote }: DramaModalProps) {
   const { formatCompact, formatDate, t } = useI18n();
   const [playRequestKey, setPlayRequestKey] = useState(0);
   const [prompt, setPrompt] = useState("");
   const [selectedEpisodeNo, setSelectedEpisodeNo] = useState<number | null>(null);
+  const [signedPlayUrls, setSignedPlayUrls] = useState<Record<number, string>>({});
   const episodes = useMemo<EpisodeOption[]>(() => {
     if (!drama) {
       return [];
@@ -53,6 +56,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
           iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
           posterUrl: episode.poster_url || "",
+          hasVideo: episode.has_video ?? Boolean(episode.play_url || episode.iframe_src),
           generationStatus: episode.generation_status || null,
           generationProgress: episode.generation_progress || 0
         }))
@@ -65,6 +69,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
           iframeSrc: episode.iframe_src || "",
           url: episode.play_url || "",
           posterUrl: episode.poster_url || "",
+          hasVideo: episode.has_video ?? Boolean(episode.play_url || episode.iframe_src),
           generationStatus: episode.generation_status || null,
           generationProgress: episode.generation_progress || 0
         }))
@@ -72,18 +77,20 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
           episode: Number(episode),
           iframeSrc: "",
           url,
-          posterUrl: ""
+          posterUrl: "",
+          hasVideo: Boolean(url)
         }));
 
     const combined = fromEpisodeList.length ? fromEpisodeList : fromEpisodes;
 
     if (!combined.length && drama.video_url) {
-      return [{ episode: 1, iframeSrc: "", posterUrl: "", url: drama.video_url }];
+      return [{ episode: 1, iframeSrc: "", posterUrl: "", url: drama.video_url, hasVideo: true }];
     }
 
     return combined.sort((a, b) => a.episode - b.episode);
   }, [drama]);
   const selectedEpisode = episodes.find((episode) => episode.episode === selectedEpisodeNo) || episodes[0];
+  const selectedEpisodeUrl = selectedEpisode ? signedPlayUrls[selectedEpisode.episode] || selectedEpisode.url || "" : "";
   const selectedGeneration = drama && selectedEpisode
     ? getGenerationState(drama, {
         id: selectedEpisode.id || selectedEpisode.episode,
@@ -92,7 +99,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
         generation_progress: selectedEpisode.generationProgress
       })
     : { disabled: false };
-  const playableEpisodes = episodes.filter((episode) => episode.url || episode.iframeSrc);
+  const playableEpisodes = episodes.filter((episode) => episode.url || episode.iframeSrc || (episode.hasVideo && episode.id !== undefined));
   const allPlayableEpisodesGenerated = drama
     ? Boolean(playableEpisodes.length) && playableEpisodes.every((episode) =>
       getGenerationState(drama, {
@@ -115,11 +122,26 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
     setSelectedEpisodeNo(null);
     setPlayRequestKey(0);
     setPrompt("");
+    setSignedPlayUrls({});
   }, [drama?.id]);
 
-  const playEpisode = (episodeNo: number) => {
-    setSelectedEpisodeNo(episodeNo);
-    setPlayRequestKey((current) => current + 1);
+  const playEpisode = (episode: EpisodeOption) => {
+    setSelectedEpisodeNo(episode.episode);
+
+    if (episode.url || episode.iframeSrc || signedPlayUrls[episode.episode]) {
+      setPlayRequestKey((current) => current + 1);
+      return;
+    }
+
+    void onResolveEpisodePlayUrl(drama!, episode)
+      .then((url) => {
+        if (!url) {
+          return;
+        }
+        setSignedPlayUrls((current) => ({ ...current, [episode.episode]: url }));
+        setPlayRequestKey((current) => current + 1);
+      })
+      .catch(() => undefined);
   };
   const generationStatusClass = (status?: string | null) => {
     if (status === "done") {
@@ -152,7 +174,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
                 poster={selectedEpisode?.posterUrl || drama.cover_image_url}
                 playRequestKey={playRequestKey}
                 title={drama.title}
-                url={selectedEpisode?.url || drama.video_url}
+                url={selectedEpisodeUrl || drama.video_url}
               />
               <div className="min-h-0 lg:flex lg:flex-col">
                 <div className="flex flex-wrap gap-2">
@@ -219,7 +241,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
                         generation_status: episode.generationStatus,
                         generation_progress: episode.generationProgress
                       });
-                      const isPlayable = Boolean(episode.url || episode.iframeSrc);
+                      const isPlayable = Boolean(episode.url || episode.iframeSrc || (episode.hasVideo && episode.id !== undefined));
 
                       return (
                         <div
@@ -237,7 +259,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
                           tabIndex={isPlayable ? 0 : -1}
                           onClick={() => {
                             if (isPlayable) {
-                              playEpisode(episode.episode);
+                              playEpisode(episode);
                             }
                           }}
                           onKeyDown={(event) => {
@@ -245,7 +267,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
                               return;
                             }
                             event.preventDefault();
-                            playEpisode(episode.episode);
+                            playEpisode(episode);
                           }}
                         >
                           <span className="w-14 text-sm font-bold text-[#ff5fbf]">EP {episode.episode}</span>
@@ -261,7 +283,7 @@ export function DramaModal({ drama, duration, onDownloadEpisode, onGenerate, onG
                             </span>
                           </div>
                           <div className="col-span-2 flex flex-wrap justify-end gap-2 sm:col-span-1">
-                            {episode.url ? (
+                            {episode.url || (episode.hasVideo && episode.id !== undefined) ? (
                               <Button
                                 aria-label={t("detail.downloadEpisode", { episode: episode.episode })}
                                 className="whitespace-nowrap"

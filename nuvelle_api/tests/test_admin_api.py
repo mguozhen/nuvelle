@@ -226,6 +226,52 @@ def test_admin_drama_detail_only_includes_transferred_episodes(client: TestClien
     assert [episode["id"] for episode in episodes] == [transferred_episode.id]
 
 
+def test_admin_lists_gcs_backed_webeye_video_without_play_url(client: TestClient, db: Session) -> None:
+    drama = Drama(
+        title="Webeye GCS Only",
+        platform="Webeye",
+        language="Chinese",
+        cover_image_url="https://example.com/webeye-cover.jpg",
+        video_transfer_status="transferred",
+    )
+    db.add(drama)
+    db.flush()
+    episode = DramaEpisode(
+        drama_id=drama.id,
+        episode_no=1,
+        play_url=None,
+        gcs_uri="gs://video-bucket/videos/webeye/sha256/webeye-ep1.mp4",
+        video_content_length=123,
+        video_transfer_status="transferred",
+    )
+    db.add(episode)
+    db.commit()
+    headers = auth_header(client, db, "webeye-list@example.com", "JOIN-WEBEYE-LIST")
+
+    listing = client.get("/api/v1/admin/dramas?platform=Webeye&has_video=true", headers=headers)
+    detail = client.get(f"/api/v1/admin/dramas/{drama.id}", headers=headers)
+
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    assert listing.json()["items"][0]["id"] == drama.id
+    assert listing.json()["items"][0]["has_video"] is True
+    assert detail.status_code == 200
+    assert detail.json()["episodes"] == [
+        {
+            "id": episode.id,
+            "episode_no": 1,
+            "chapter_id": None,
+            "t_chapter_id": None,
+            "play_url": None,
+            "poster_url": None,
+            "iframe_src": None,
+            "generation_status": None,
+            "generation_progress": 0,
+            "has_video": True,
+        }
+    ]
+
+
 def test_admin_episode_download_redirects_to_signed_url(
     client: TestClient,
     db: Session,
@@ -260,6 +306,75 @@ def test_admin_episode_download_redirects_to_signed_url(
         "location": episode.gcs_uri,
         "filename": "",
         "download_filename": "Download Episode-ep-1.mp4",
+        "expires_in": 600,
+    }
+
+
+def test_admin_episode_download_url_allows_gcs_backed_episode_without_play_url(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.services.promo_asset_store import PromoAssetStore
+
+    drama, episode = seed_drama(db, "Download GCS Only", platform="Webeye", video_url="")
+    drama.video_url = None
+    episode.play_url = None
+    episode.gcs_uri = "gs://video-bucket/videos/webeye/sha256/download-gcs-only.mp4"
+    episode.video_content_length = 123
+    db.commit()
+    headers = auth_header(client, db, "episode-download-gcs@example.com", "JOIN-EP-DOWNLOAD-GCS")
+
+    def fake_signed_download_url(self, location, filename, *, download_filename, expires_in):
+        assert location == episode.gcs_uri
+        assert filename == ""
+        assert download_filename == "Download GCS Only-ep-1.mp4"
+        assert expires_in == 600
+        return "https://storage.example/signed-download"
+
+    monkeypatch.setattr(PromoAssetStore, "signed_download_url", fake_signed_download_url, raising=False)
+
+    response = client.get(
+        f"/api/v1/admin/dramas/{drama.id}/episodes/{episode.id}/download-url",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"url": "https://storage.example/signed-download"}
+
+
+def test_admin_episode_play_url_returns_inline_signed_url(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.services.promo_asset_store import PromoAssetStore
+
+    drama, episode = seed_drama(db, "Play GCS Only", platform="Webeye", video_url="")
+    drama.video_url = None
+    episode.play_url = None
+    episode.gcs_uri = "gs://video-bucket/videos/webeye/sha256/play-gcs-only.mp4"
+    episode.video_content_length = 123
+    db.commit()
+    headers = auth_header(client, db, "episode-play-gcs@example.com", "JOIN-EP-PLAY-GCS")
+    seen: dict[str, object] = {}
+
+    def fake_signed_inline_url(self, location, filename, *, expires_in):
+        seen.update(location=location, filename=filename, expires_in=expires_in)
+        return "https://storage.example/signed-inline-playback"
+
+    monkeypatch.setattr(PromoAssetStore, "signed_inline_url", fake_signed_inline_url, raising=False)
+
+    response = client.get(
+        f"/api/v1/admin/dramas/{drama.id}/episodes/{episode.id}/play-url",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"url": "https://storage.example/signed-inline-playback"}
+    assert seen == {
+        "location": episode.gcs_uri,
+        "filename": "",
         "expires_in": 600,
     }
 

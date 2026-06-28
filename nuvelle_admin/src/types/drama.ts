@@ -39,6 +39,7 @@ export type DramaEpisodeRecord = {
   play_url?: string | null;
   poster_url?: string | null;
   iframe_src?: string | null;
+  has_video?: boolean;
   generation_status?: string | null;
   generation_progress?: number;
 };

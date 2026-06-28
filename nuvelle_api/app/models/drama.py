@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -71,4 +71,4 @@ class DramaEpisode(TimestampMixin, Base):
     video_transfer_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     video_transfer_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     video_transfer_error: Mapped[str | None] = mapped_column(Text)
-    video_content_length: Mapped[int | None] = mapped_column(Integer)
+    video_content_length: Mapped[int | None] = mapped_column(BigInteger)

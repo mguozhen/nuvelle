@@ -50,6 +50,14 @@ class ObjectStorageBackend(Protocol):
         expires_in: int,
     ) -> str | None: ...
 
+    def signed_inline_url(
+        self,
+        location: str,
+        object_name: str,
+        *,
+        expires_in: int,
+    ) -> str | None: ...
+
 
 class ObjectStorage:
     def __init__(
@@ -115,6 +123,19 @@ class ObjectStorage:
             expires_in=expires_in,
         )
 
+    def signed_inline_url(
+        self,
+        location: str,
+        object_name: str,
+        *,
+        expires_in: int,
+    ) -> str | None:
+        return self._backend_for_location(location).signed_inline_url(
+            location,
+            object_name,
+            expires_in=expires_in,
+        )
+
     def _backend_for_location(self, location: str) -> ObjectStorageBackend:
         return self.gcs_backend if is_gcs_uri(location) else self.local_backend
 
@@ -176,6 +197,15 @@ class LocalObjectStorageBackend:
         object_name: str,
         *,
         download_filename: str,
+        expires_in: int,
+    ) -> str | None:
+        return None
+
+    def signed_inline_url(
+        self,
+        location: str,
+        object_name: str,
+        *,
         expires_in: int,
     ) -> str | None:
         return None
@@ -253,13 +283,49 @@ class GcsObjectStorageBackend:
         download_filename: str,
         expires_in: int,
     ) -> str | None:
+        return self._signed_gcs_url(
+            location,
+            object_name,
+            response_disposition=(
+                f'attachment; filename="{safe_content_disposition_filename(download_filename)}"'
+            ),
+            expires_in=expires_in,
+        )
+
+    def signed_inline_url(
+        self,
+        location: str,
+        object_name: str,
+        *,
+        expires_in: int,
+    ) -> str | None:
+        return self._signed_gcs_url(
+            location,
+            object_name,
+            response_disposition="inline",
+            expires_in=expires_in,
+        )
+
+    def _signed_gcs_url(
+        self,
+        location: str,
+        object_name: str,
+        *,
+        response_disposition: str,
+        expires_in: int,
+    ) -> str | None:
         bucket_name, full_object_name = gcs_object_name(location, object_name)
         full_object_name = full_object_name.strip("/")
         if not bucket_name or not full_object_name:
             return None
 
         blob = self._bucket(bucket_name).blob(full_object_name)
-        kwargs = self._signed_url_kwargs(download_filename=download_filename, expires_in=expires_in)
+        kwargs = {
+            "version": "v4",
+            "expiration": timedelta(seconds=max(1, expires_in)),
+            "method": "GET",
+            "response_disposition": response_disposition,
+        }
         try:
             return blob.generate_signed_url(**kwargs)
         except AttributeError as exc:
@@ -276,16 +342,6 @@ class GcsObjectStorageBackend:
                 service_account_email=service_account_email,
                 access_token=access_token,
             )
-
-    def _signed_url_kwargs(self, *, download_filename: str, expires_in: int) -> dict[str, object]:
-        return {
-            "version": "v4",
-            "expiration": timedelta(seconds=max(1, expires_in)),
-            "method": "GET",
-            "response_disposition": (
-                f'attachment; filename="{safe_content_disposition_filename(download_filename)}"'
-            ),
-        }
 
     def _iam_signing_identity(self) -> tuple[str, str] | None:
         import google.auth

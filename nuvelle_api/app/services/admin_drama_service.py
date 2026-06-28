@@ -330,7 +330,6 @@ class AdminDramaService:
         return (
             DramaEpisode.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
             DramaEpisode.gcs_uri.is_not(None),
-            DramaEpisode.play_url.is_not(None),
         )
 
     @staticmethod
@@ -374,6 +373,10 @@ class AdminDramaService:
             play_url=episode.play_url,
             poster_url=episode.poster_url,
             iframe_src=episode.iframe_src,
+            has_video=bool(
+                episode.video_transfer_status == TRANSFERRED_VIDEO_STATUS
+                and episode.gcs_uri
+            ),
             generation_status=generation_status,
             generation_progress=cls.generation_progress(generation_status),
         )

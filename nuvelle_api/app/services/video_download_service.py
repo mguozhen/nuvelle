@@ -27,7 +27,6 @@ class VideoDownloadService:
                 DramaEpisode.id == episode_id,
                 DramaEpisode.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
                 DramaEpisode.gcs_uri.is_not(None),
-                DramaEpisode.play_url.is_not(None),
             )
         ).first()
         if row is None:
@@ -44,6 +43,34 @@ class VideoDownloadService:
             raise HTTPException(
                 status_code=409,
                 detail="signed download URL is not available for this episode",
+            )
+        return url
+
+    def episode_play_url(self, _user: AdminUser, drama_id: int, episode_id: int) -> str:
+        row = self.db.execute(
+            select(Drama, DramaEpisode)
+            .join(DramaEpisode, DramaEpisode.drama_id == Drama.id)
+            .where(
+                Drama.id == drama_id,
+                Drama.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+                DramaEpisode.id == episode_id,
+                DramaEpisode.video_transfer_status == TRANSFERRED_VIDEO_STATUS,
+                DramaEpisode.gcs_uri.is_not(None),
+            )
+        ).first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="episode video not found")
+
+        _drama, episode = row
+        url = self.asset_store.signed_inline_url(
+            episode.gcs_uri or "",
+            "",
+            expires_in=self.settings.signed_download_url_ttl_seconds,
+        )
+        if not url:
+            raise HTTPException(
+                status_code=409,
+                detail="signed playback URL is not available for this episode",
             )
         return url
 

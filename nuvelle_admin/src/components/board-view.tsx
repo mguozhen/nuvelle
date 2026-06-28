@@ -31,7 +31,8 @@ type BoardViewProps = {
   pageSize: number;
   total: number;
   votes: Record<string, VoteVerdict>;
-  onDownloadEpisode: (drama: DramaRecord, episode: { id?: number; episode: number; url: string }) => void | Promise<void>;
+  onDownloadEpisode: (drama: DramaRecord, episode: { id?: number; episode: number; url?: string | null }) => void | Promise<void>;
+  onResolveEpisodePlayUrl: (drama: DramaRecord, episode: { id?: number; episode: number; url?: string | null; hasVideo?: boolean }) => Promise<string | null>;
   onGenerate: (drama: DramaRecord, duration: number, prompt?: string, episode?: number, videoUrl?: string) => void | Promise<void>;
   onGenerateBatch: (drama: DramaRecord, duration: number) => void | Promise<void>;
   getGenerationState: (drama: DramaRecord, episode?: GenerationEpisodeRef) => GenerationState;
@@ -96,6 +97,7 @@ export function BoardView({
   total,
   votes,
   onDownloadEpisode,
+  onResolveEpisodePlayUrl,
   onGenerate,
   onGenerateBatch,
   getGenerationState,
@@ -273,6 +275,7 @@ export function BoardView({
         drama={selectedDrama}
         duration={duration}
         onDownloadEpisode={onDownloadEpisode}
+        onResolveEpisodePlayUrl={onResolveEpisodePlayUrl}
         onGenerate={onGenerate}
         onGenerateBatch={onGenerateBatch}
         getGenerationState={getGenerationState}

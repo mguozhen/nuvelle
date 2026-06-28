@@ -44,6 +44,24 @@ const drama = {
   ]
 };
 const dramaSummary = { ...drama, episodes: undefined, episode_list: undefined };
+const webeyeDrama = {
+  ...drama,
+  id: 2,
+  title: "Webeye Demo",
+  platform: "Webeye",
+  video_url: null,
+  episodes: [
+    {
+      id: 20,
+      episode_no: 1,
+      play_url: null,
+      poster_url: "https://example.com/webeye-poster.jpg",
+      iframe_src: null,
+      has_video: true
+    }
+  ]
+};
+const webeyeDramaSummary = { ...webeyeDrama, episodes: undefined, episode_list: undefined };
 
 function json(data: unknown, init?: ResponseInit) {
   return Promise.resolve(new Response(JSON.stringify(data), init));
@@ -84,12 +102,16 @@ function installFetchMock(options: { boardResponse?: (url: string) => Promise<Re
     if (url.includes("/admin/dramas?")) {
       return options.boardResponse?.(url) ?? json({ items: [dramaSummary], total: 1 });
     }
-    if (url.endsWith("/admin/dramas/1")) {
+    if (url.match(/\/admin\/dramas\/\d+$/)) {
       return options.detailResponse?.() ?? json(drama);
     }
     const episodeDownloadUrlMatch = url.match(/\/admin\/dramas\/1\/episodes\/(\d+)\/download-url$/);
     if (episodeDownloadUrlMatch) {
       return json({ url: `https://storage.example/signed-episode-${episodeDownloadUrlMatch[1]}` });
+    }
+    const episodePlayUrlMatch = url.match(/\/admin\/dramas\/\d+\/episodes\/(\d+)\/play-url$/);
+    if (episodePlayUrlMatch) {
+      return json({ url: `https://storage.example/signed-play-${episodePlayUrlMatch[1]}.mp4` });
     }
     const generatedDownloadUrlMatch = url.match(/\/promo\/jobs\/([^/]+)\/files\/teaser\.mp4\/download-url$/);
     if (generatedDownloadUrlMatch) {
@@ -126,19 +148,22 @@ function installFetchMock(options: { boardResponse?: (url: string) => Promise<Re
     if (url.endsWith("/promo/jobs")) {
       return json({ id: "job-2", job_id: "job-2", status: "queued" });
     }
+    if (url.endsWith("/promo/batches")) {
+      return json({ batch_id: "batch-1" });
+    }
     return json({}, { status: 404 });
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
 
-async function registerAndLoad(user = userEvent.setup()) {
+async function registerAndLoad(user = userEvent.setup(), expectedTitle = "Demo Drama") {
   await user.click(screen.getByRole("button", { name: /create account/i }));
   await user.type(screen.getByPlaceholderText(/invite code/i), "JOIN");
   await user.type(screen.getByPlaceholderText(/email/i), "promoter@example.com");
   await user.type(screen.getByPlaceholderText(/password/i), "secret123");
   await user.click(screen.getByRole("button", { name: /register/i }));
-  await waitFor(() => expect(screen.getByText("Demo Drama")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(expectedTitle)).toBeInTheDocument());
   return user;
 }
 
@@ -465,6 +490,68 @@ describe("admin app", () => {
         dur: 30,
         ep: 2,
         video_url: "https://cdn.example/ep2.mp4"
+      })
+    );
+  });
+
+  it("plays a Webeye GCS-backed episode by requesting a signed play URL", async () => {
+    const fetchMock = installFetchMock({
+      boardResponse: () => json({ items: [webeyeDramaSummary], total: 1 }),
+      detailResponse: () => json(webeyeDrama)
+    });
+    const playMock = vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user, "Webeye Demo");
+
+    await user.click(screen.getByRole("button", { name: /details/i }));
+    const playEpisode = await screen.findByRole("button", { name: /play ep 1/i });
+
+    await user.click(playEpisode);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas/2/episodes/20/play-url",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    const video = await screen.findByLabelText("Webeye Demo video");
+    await waitFor(() => expect((video as HTMLVideoElement).src).toBe("https://storage.example/signed-play-20.mp4"));
+    await waitFor(() => expect(playMock).toHaveBeenCalled());
+  });
+
+  it("batch-generates Webeye GCS-backed episodes with signed play URLs", async () => {
+    const fetchMock = installFetchMock({
+      boardResponse: () => json({ items: [webeyeDramaSummary], total: 1 }),
+      detailResponse: () => json(webeyeDrama)
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await registerAndLoad(user, "Webeye Demo");
+
+    await user.click(screen.getByRole("button", { name: /details/i }));
+    await user.click(await screen.findByRole("button", { name: /generate all available episodes/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/admin/dramas/2/episodes/20/play-url",
+        expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token-1" }) })
+      )
+    );
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        "http://localhost:8000/api/v1/promo/batches",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining("https://storage.example/signed-play-20.mp4")
+        })
+      )
+    );
+    const batchCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/promo/batches"));
+    expect(JSON.parse(String(batchCall?.[1]?.body))).toEqual(
+      expect.objectContaining({
+        episodes: { "1": "https://storage.example/signed-play-20.mp4" },
+        title: "Webeye Demo"
       })
     );
   });

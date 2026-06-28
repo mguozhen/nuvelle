@@ -112,6 +112,15 @@ export class PromoBackendClient {
     );
   }
 
+  getAdminEpisodePlayUrl(dramaId: string | number, episodeId: string | number): Promise<SignedDownloadUrlResponse> {
+    return this.request<SignedDownloadUrlResponse>(
+      `/admin/dramas/${encodeURIComponent(String(dramaId))}/episodes/${encodeURIComponent(String(episodeId))}/play-url`,
+      {
+        headers: this.headers(false)
+      }
+    );
+  }
+
   swipeNext(): Promise<DramaRecord> {
     return this.request<DramaRecord>("/admin/swipe/next", {
       headers: this.headers(false)

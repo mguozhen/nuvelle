@@ -29,6 +29,7 @@ class AdminEpisodeRead(BaseModel):
     play_url: str | None = None
     poster_url: str | None = None
     iframe_src: str | None = None
+    has_video: bool = False
     generation_status: str | None = None
     generation_progress: int = 0
 

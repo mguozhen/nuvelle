@@ -60,3 +60,16 @@ class PromoAssetStore:
             download_filename=download_filename,
             expires_in=expires_in,
         )
+
+    def signed_inline_url(
+        self,
+        location: str,
+        filename: str,
+        *,
+        expires_in: int,
+    ) -> str | None:
+        return self.storage.signed_inline_url(
+            location,
+            filename,
+            expires_in=expires_in,
+        )

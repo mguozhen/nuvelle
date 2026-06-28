@@ -83,6 +83,17 @@ def get_admin_episode_download_url(
     return SignedDownloadUrlResponse(url=url)
 
 
+@router.get("/dramas/{drama_id}/episodes/{episode_id}/play-url", response_model=SignedDownloadUrlResponse)
+def get_admin_episode_play_url(
+    drama_id: int,
+    episode_id: int,
+    db: DbSession,
+    user: CurrentUser,
+) -> SignedDownloadUrlResponse:
+    url = VideoDownloadService(db).episode_play_url(user, drama_id, episode_id)
+    return SignedDownloadUrlResponse(url=url)
+
+
 @router.get("/dramas/{drama_id}/episodes/{episode_id}/download", response_model=None)
 def download_admin_episode(
     drama_id: int,
