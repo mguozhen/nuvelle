@@ -1,10 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import WebsiteHome from "../components/website-home";
 
 describe("website home page", () => {
+  afterEach(() => {
+    delete window.fbq;
+  });
+
   it("renders catalog sections and opens a drama modal", async () => {
     const user = userEvent.setup();
     render(<WebsiteHome locale="en" />);
@@ -34,6 +38,43 @@ describe("website home page", () => {
     await user.type(screen.getByPlaceholderText("Search dramas"), "mafia");
     expect(screen.getByText("Results")).toBeInTheDocument();
     expect(screen.getByText("Mafia Wife")).toBeInTheDocument();
+  });
+
+  it("tracks drama detail views and app-intent leads with Meta Pixel", async () => {
+    const user = userEvent.setup();
+    const fbq = vi.fn();
+    window.fbq = fbq;
+    const requestAnimationFrame = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 0;
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn()
+    });
+
+    render(<WebsiteHome locale="en" />);
+    await user.click(screen.getAllByText("The CEO's Secret Wife")[0]);
+    await user.click(screen.getByRole("button", { name: "Get the App" }));
+
+    expect(fbq).toHaveBeenCalledWith(
+      "track",
+      "ViewContent",
+      expect.objectContaining({
+        content_name: "The CEO's Secret Wife",
+        content_category: "Hidden Identity",
+        content_ids: ["ceo_secret_wife"]
+      })
+    );
+    expect(fbq).toHaveBeenCalledWith(
+      "track",
+      "Lead",
+      expect.objectContaining({
+        content_name: "The CEO's Secret Wife",
+        source: "modal_get_app"
+      })
+    );
+    requestAnimationFrame.mockRestore();
   });
 
   it("supports carousel controls and closes the detail dialog", async () => {

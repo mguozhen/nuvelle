@@ -54,6 +54,7 @@ BLOGGER_ACCESS_KEY_SECRET="${BLOGGER_ACCESS_KEY_SECRET:-nuvelle-blogger-access-k
 DOMAIN_ROOT="${DOMAIN_ROOT:-nuvelle.ai}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.$DOMAIN_ROOT}"
 VIDEO_PUBLIC_BASE_URL="${VIDEO_PUBLIC_BASE_URL:-https://$CDN_DOMAIN}"
+NEXT_PUBLIC_META_PIXEL_ID="${NEXT_PUBLIC_META_PIXEL_ID:-4457720874494573}"
 GOOGLE_SITE_VERIFICATION_TXT="${GOOGLE_SITE_VERIFICATION_TXT:-google-site-verification=5VahbGzMPJdrTqND3LmWmOpXWhEuuC4ZkYMD4cGfpm8}"
 USE_CUSTOM_API_DOMAIN="${USE_CUSTOM_API_DOMAIN:-false}"
 PROMO_CDN_PUBLIC_READ="${PROMO_CDN_PUBLIC_READ:-true}"
@@ -912,6 +913,10 @@ build_frontend_package() {
   if [[ "$package" == "nuvelle_admin" ]]; then
     resolve_api_url_for_frontend
     VITE_NUVELLE_API_URL="$API_URL/api/v1" pnpm --filter "$package" build
+  elif [[ "$package" == "nuvelle_website" ]]; then
+    NEXT_PUBLIC_SITE_ORIGIN="https://$DOMAIN_ROOT" \
+      NEXT_PUBLIC_META_PIXEL_ID="${NEXT_PUBLIC_META_PIXEL_ID:-}" \
+      pnpm --filter "$package" build
   else
     pnpm --filter "$package" build
   fi
@@ -1005,6 +1010,9 @@ deploy_website_service() {
     "NEXT_PUBLIC_SITE_ORIGIN=https://$DOMAIN_ROOT"
     "BLOG_PAGE_SIZE=${BLOG_PAGE_SIZE:-12}"
   )
+  if [[ -n "${NEXT_PUBLIC_META_PIXEL_ID:-}" ]]; then
+    env_vars+=("NEXT_PUBLIC_META_PIXEL_ID=$NEXT_PUBLIC_META_PIXEL_ID")
+  fi
   local language_env
   local env_arg
 

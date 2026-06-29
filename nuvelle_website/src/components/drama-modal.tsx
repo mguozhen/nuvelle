@@ -15,6 +15,7 @@ import type { Drama } from "@/data/dramas";
 import { statForDrama } from "@/data/dramas";
 import type { WebsiteCopy } from "@/lib/i18n";
 import { posterPath } from "@/lib/site/seo";
+import { trackAppLead } from "@/lib/tracking/meta-pixel";
 
 type DramaModalProps = {
   drama: Drama | null;
@@ -38,10 +39,12 @@ export function DramaModal({ drama, onClose, onGetApp, copy }: DramaModalProps) 
     }
 
     if (drama.affiliateUrl && drama.affiliateUrl !== "#") {
+      trackAppLead("affiliate_watch_episode", drama);
       window.open(drama.affiliateUrl, "_blank", "noopener,noreferrer");
       return;
     }
 
+    trackAppLead("modal_watch_episode", drama);
     onGetApp();
   }
 
@@ -103,7 +106,15 @@ export function DramaModal({ drama, onClose, onGetApp, copy }: DramaModalProps) 
                   <Play className="h-4 w-4 fill-current" />
                   {copy.watchEpisode}
                 </Button>
-                <Button type="button" size="lg" variant="outline" onClick={onGetApp}>
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => {
+                    trackAppLead("modal_get_app", drama);
+                    onGetApp();
+                  }}
+                >
                   <Download className="h-4 w-4" />
                   {copy.getApp}
                 </Button>

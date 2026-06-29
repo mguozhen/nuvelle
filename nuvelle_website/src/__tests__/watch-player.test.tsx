@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WatchDramaPlayer } from "../components/watch-drama-player";
 
 const drama = {
@@ -38,6 +38,10 @@ const drama = {
 };
 
 describe("watch drama player", () => {
+  afterEach(() => {
+    delete window.fbq;
+  });
+
   it("plays the first episode and switches between transferred episodes", async () => {
     const user = userEvent.setup();
     render(<WatchDramaPlayer drama={drama} locale="en" />);
@@ -50,6 +54,23 @@ describe("watch drama player", () => {
     expect(screen.getByLabelText("Playable Drama episode 2")).toHaveAttribute(
       "src",
       "https://cdn.nuvelle.ai/videos/reelshort/42/episodes/0002.mp4"
+    );
+  });
+
+  it("tracks watch-page content views with Meta Pixel", () => {
+    const fbq = vi.fn();
+    window.fbq = fbq;
+
+    render(<WatchDramaPlayer drama={drama} locale="en" />);
+
+    expect(fbq).toHaveBeenCalledWith(
+      "track",
+      "ViewContent",
+      expect.objectContaining({
+        content_name: "Playable Drama",
+        content_category: "Romance",
+        content_ids: ["42"]
+      })
     );
   });
 });

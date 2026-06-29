@@ -19,6 +19,7 @@ import {
 } from "@/data/dramas";
 import { blogPath } from "@/lib/blog/urls";
 import { categoryRowKeys, homePathForLocale, type LocaleKey, websiteCopy } from "@/lib/i18n";
+import { trackAppLead, trackDramaViewContent } from "@/lib/tracking/meta-pixel";
 
 const searchDisplayAliases: Record<string, string> = {
   mafia_wife: "Mafia Wife"
@@ -40,7 +41,13 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
   const homeHref = homePathForLocale(locale);
 
   function openDrama(drama: Drama) {
+    trackDramaViewContent(drama);
     setSelectedDrama(drama);
+  }
+
+  function handleGetApp(source: string) {
+    trackAppLead(source);
+    scrollToApp();
   }
 
   function appAndClose() {
@@ -67,7 +74,7 @@ export default function WebsiteHome({ locale }: WebsiteHomeProps) {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
-          <Button type="button" variant="gradient" onClick={scrollToApp}>
+          <Button type="button" variant="gradient" onClick={() => handleGetApp("header_get_app")}>
             <Smartphone className="h-4 w-4" />
             {copy.hero.getApp}
           </Button>

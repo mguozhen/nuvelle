@@ -214,8 +214,13 @@ BLOGGER_API_URL=https://blogger-api-5qjldqffdq-uc.a.run.app
 BLOGGER_SITE_SLUG=nuvelle
 BLOGGER_LANGUAGE=en
 NEXT_PUBLIC_SITE_ORIGIN=https://nuvelle.ai
+NEXT_PUBLIC_META_PIXEL_ID=4457720874494573
 BLOG_PAGE_SIZE=12
 ```
+
+`NEXT_PUBLIC_META_PIXEL_ID` is the public Pixel/Dataset ID from Meta Events
+Manager. Do not place Conversions API access tokens in `NEXT_PUBLIC_*`
+environment variables.
 
 `BLOGGER_ACCESS_KEY` is injected from Secret Manager as
 `nuvelle-blogger-access-key`. On the first deploy, set `BLOGGER_ACCESS_KEY` in

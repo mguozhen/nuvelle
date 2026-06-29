@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Play } from "lucide-react";
 import type { PublicDramaDetail, PublicDramaEpisode } from "@/lib/dramas/api";
 import { homePathForLocale, type LocaleKey } from "@/lib/i18n";
+import { trackDramaViewContent } from "@/lib/tracking/meta-pixel";
 
 type WatchDramaPlayerProps = {
   drama: PublicDramaDetail;
@@ -19,6 +20,16 @@ export function WatchDramaPlayer({ drama, locale }: WatchDramaPlayerProps) {
   const selectedEpisode =
     playableEpisodes.find((episode) => episode.id === selectedEpisodeId) ?? playableEpisodes[0] ?? null;
   const homeHref = homePathForLocale(locale);
+
+  useEffect(() => {
+    trackDramaViewContent({
+      id: drama.id,
+      title: drama.title,
+      genre: drama.genre,
+      platform: drama.platform,
+      language: drama.language
+    });
+  }, [drama.genre, drama.id, drama.language, drama.platform, drama.title]);
 
   return (
     <main className="min-h-screen bg-[#080a12] text-white">
